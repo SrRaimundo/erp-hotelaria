@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { exigirPermissao } from "../nucleo/permissoes.js";
+import { exigirAlgumaPermissao, exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
 import { ErroDominio } from "../shared/erros.js";
 import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrogarSinal, type Mudanca } from "./alteracao.js";
@@ -146,6 +146,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   const idParam = z.object({ id: texto });
 
   app.get("/api/contas/:id", async (req) => {
+    exigirAlgumaPermissao(req.usuario, ["conta.lancar", "caixa.operar"]);
     const id = idParam.parse(req.params).id;
     return { saldo: await saldo(ctx, id), extrato: await extrato(ctx, id) };
   });
@@ -186,14 +187,24 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     return { id };
   });
 
-  // Consultas: qualquer usuário com sessão.
+  // Consultas da recepção: exigem reservas.gerenciar (governança usa /api/governanca e /api/quartos).
   app.get("/api/mapa", async (req) => {
+    gerenciar(req);
     const q = z.object({ inicio: data, fim: data, categoriaId: texto.optional() }).parse(req.query);
     return mapaOcupacao(ctx, q);
   });
-  app.get("/api/painel", async () => painelDoDia(ctx));
-  app.get("/api/busca", async (req) => buscaUniversal(ctx, z.object({ q: z.string().default("") }).parse(req.query).q));
-  app.get("/api/hospedes/:id/historico", async (req) => historicoEstadias(ctx, idParam.parse(req.params).id));
+  app.get("/api/painel", async (req) => {
+    gerenciar(req);
+    return painelDoDia(ctx);
+  });
+  app.get("/api/busca", async (req) => {
+    gerenciar(req);
+    return buscaUniversal(ctx, z.object({ q: z.string().default("") }).parse(req.query).q);
+  });
+  app.get("/api/hospedes/:id/historico", async (req) => {
+    gerenciar(req);
+    return historicoEstadias(ctx, idParam.parse(req.params).id);
+  });
 
   const corpoMotivo = z.object({ motivo: texto });
   app.get("/api/governanca", async (req) => {

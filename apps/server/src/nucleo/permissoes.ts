@@ -38,3 +38,9 @@ export function exigirPermissao(u: UsuarioSessao, p: string): void {
     throw new ErroDominio("SEM_PERMISSAO", "Você não tem permissão para realizar esta ação.", { permissao: p });
   }
 }
+
+export function exigirAlgumaPermissao(u: UsuarioSessao, ps: string[]): void {
+  if (!ps.some((p) => u.permissoes.includes(p))) {
+    throw new ErroDominio("SEM_PERMISSAO", "Você não tem permissão para realizar esta ação.", { permissoes: ps });
+  }
+}

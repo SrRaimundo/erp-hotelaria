@@ -260,7 +260,7 @@ describe("rotas da conta", () => {
     expect(pg.statusCode).toBe(200);
     expect((await obterReserva(ctx, r.id)).estado).toBe("confirmada");
 
-    const c = await app.inject({ method: "GET", url, headers: gov });
+    const c = await app.inject({ method: "GET", url, headers: rec });
     expect(c.statusCode).toBe(200);
     expect(c.json().saldo).toEqual({ debitos: 4400, creditos: 27000, saldo: -22600 });
     expect(c.json().extrato).toHaveLength(3);
@@ -272,6 +272,6 @@ describe("rotas da conta", () => {
     expect((await app.inject({ method: "POST", url: `/api/lancamentos/${idL}/estornar`, headers: rec, payload: { motivo: "Erro", supervisor: admin } })).statusCode).toBe(422);
     const idP = pg.json().id;
     expect((await app.inject({ method: "POST", url: `/api/pagamentos/${idP}/estornar`, headers: rec, payload: { motivo: "Erro", supervisor: admin } })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url, headers: gov })).json().saldo).toEqual({ debitos: 3000, creditos: 0, saldo: 3000 });
+    expect((await app.inject({ method: "GET", url, headers: rec })).json().saldo).toEqual({ debitos: 3000, creditos: 0, saldo: 3000 });
   });
 });

@@ -97,4 +97,25 @@ describe("API HTTP base", () => {
     expect(u.json()).not.toHaveProperty("senha");
     expect((await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "ana", senha: "s" } })).statusCode).toBe(201);
   });
+
+  test("I6: trocar a própria senha", async () => {
+    const { ctx, app, admin } = await cenario();
+    const trocar = (payload: object, headers = admin) => app.inject({ method: "PUT", url: "/api/usuarios/me/senha", headers, payload });
+    const errada = await trocar({ senhaAtual: "x", novaSenha: "nova-senha" });
+    expect(errada.statusCode).toBe(422);
+    expect(errada.json().codigo).toBe("CREDENCIAIS_INVALIDAS");
+    expect((await trocar({ senhaAtual: "admin", novaSenha: "12345" })).statusCode).toBe(400);
+    expect((await trocar({ senhaAtual: "admin123", novaSenha: "admin123" })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PUT", url: "/api/usuarios/me/senha", payload: { senhaAtual: "admin", novaSenha: "nova-senha" } })).statusCode).toBe(401);
+    const ok = await trocar({ senhaAtual: "admin", novaSenha: "nova-senha" });
+    expect(ok.statusCode).toBe(204);
+    expect((await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "admin", senha: "admin" } })).statusCode).toBe(422);
+    const login = await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "admin", senha: "nova-senha" } });
+    expect(login.statusCode).toBe(201);
+    expect(login.json().usuario.trocarSenha).toBe(false);
+    const aud = await ctx.db.selectFrom("auditoria").selectAll().where("acao", "=", "usuario.trocar_senha").execute();
+    expect(aud).toHaveLength(1);
+    expect(aud[0]).toMatchObject({ ator: "usuario-admin", alvo_id: "usuario-admin" });
+    expect(aud[0]!.dados).not.toContain("nova-senha");
+  });
 });

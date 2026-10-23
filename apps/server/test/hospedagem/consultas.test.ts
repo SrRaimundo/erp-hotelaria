@@ -155,14 +155,25 @@ describe("histórico e rotas", () => {
     expect(h.map((x) => x.reservaId)).toEqual([f.id]);
   });
 
-  test("rotas exigem sessão e respondem a qualquer perfil", async () => {
+  test("I5: consultas exigem sessão e reservas.gerenciar; governança só vê quartos", async () => {
     const app = criarApp(ctx);
+    const r = await reserva({});
     expect((await app.inject({ method: "GET", url: "/api/painel" })).statusCode).toBe(401);
     const gov = await entrarComo(ctx, "governanca");
-    expect((await app.inject({ method: "GET", url: "/api/painel", headers: gov })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url: "/api/mapa?inicio=2026-11-01&fim=2026-11-30", headers: gov })).statusCode).toBe(200);
-    const b = await app.inject({ method: "GET", url: "/api/busca?q=maria", headers: gov });
+    const rec = await entrarComo(ctx, "recepcao");
+    const restritas = [
+      `/api/contas/${r.contaId}`, "/api/hospedes", "/api/hospedes?q=maria", "/api/hospedes/h1/historico",
+      "/api/busca?q=maria", "/api/mapa?inicio=2026-11-01&fim=2026-11-30", "/api/painel",
+    ];
+    for (const url of restritas) {
+      const g = await app.inject({ method: "GET", url, headers: gov });
+      expect([url, g.statusCode]).toEqual([url, 403]);
+      expect([url, (await app.inject({ method: "GET", url, headers: rec })).statusCode]).toEqual([url, 200]);
+    }
+    for (const url of ["/api/governanca", "/api/quartos", "/api/categorias"]) {
+      expect([url, (await app.inject({ method: "GET", url, headers: gov })).statusCode]).toEqual([url, 200]);
+    }
+    const b = await app.inject({ method: "GET", url: "/api/busca?q=smith", headers: rec });
     expect(b.json()).toHaveLength(1);
-    expect((await app.inject({ method: "GET", url: "/api/hospedes/h1/historico", headers: gov })).statusCode).toBe(200);
   });
 });

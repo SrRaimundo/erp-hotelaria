@@ -58,3 +58,22 @@ export async function verificarCredenciais(ctx: Contexto, login: string, senha: 
   }
   return l.id;
 }
+
+export const TAM_MIN_SENHA = 6;
+
+/** O próprio usuário troca a senha: confere a atual, grava o novo hash e desliga o aviso de troca obrigatória. */
+export async function trocarSenha(ctx: Contexto, usuarioId: string, senhaAtual: string, novaSenha: string): Promise<void> {
+  if (novaSenha.length < TAM_MIN_SENHA) {
+    throw new ErroDominio("SENHA_INVALIDA", `A nova senha deve ter pelo menos ${TAM_MIN_SENHA} caracteres.`);
+  }
+  if (novaSenha === senhaAtual) throw new ErroDominio("SENHA_INVALIDA", "A nova senha deve ser diferente da senha atual.");
+  const l = await ctx.db.selectFrom("usuarios").select(["senha_hash", "senha_salt"]).where("id", "=", usuarioId).executeTakeFirst();
+  if (!l || !(await senhaConfere(senhaAtual, l.senha_hash, l.senha_salt))) {
+    throw new ErroDominio("CREDENCIAIS_INVALIDAS", "A senha atual não confere. Confira e tente de novo.");
+  }
+  const { hash, salt } = await hashSenha(novaSenha);
+  await emTransacao(ctx, async (tx) => {
+    await tx.db.updateTable("usuarios").set({ senha_hash: hash, senha_salt: salt, trocar_senha: 0 }).where("id", "=", usuarioId).execute();
+    await auditar(tx, { ator: usuarioId, acao: "usuario.trocar_senha", alvoTipo: "usuario", alvoId: usuarioId });
+  });
+}

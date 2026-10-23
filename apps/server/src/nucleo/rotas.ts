@@ -10,7 +10,7 @@ import { obterConfig, salvarConfig, type ConfigPousada } from "./pousada.js";
 import { criarProduto, listarProdutos } from "./produtos.js";
 import { criarQuarto, listarQuartos } from "./quartos.js";
 import { entrar, sair } from "./sessoes.js";
-import { criarUsuario } from "./usuarios.js";
+import { criarUsuario, TAM_MIN_SENHA, trocarSenha } from "./usuarios.js";
 
 const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM");
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -77,6 +77,9 @@ const corpoProduto = z.object({
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
 const corpoAbrirCaixa = z.object({ valorInicial: centavos });
 const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
+const corpoTrocaSenha = z
+  .object({ senhaAtual: z.string().min(1, "Campo obrigatório"), novaSenha: z.string().min(TAM_MIN_SENHA, `Use pelo menos ${TAM_MIN_SENHA} caracteres`) })
+  .refine((c) => c.novaSenha !== c.senhaAtual, { message: "A nova senha deve ser diferente da atual", path: ["novaSenha"] });
 const corpoLogin = z.object({ login: z.string().min(1), senha: z.string().min(1) });
 
 export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
@@ -112,6 +115,7 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
   });
 
   app.get("/api/hospedes", async (req) => {
+    exigirPermissao(req.usuario, "reservas.gerenciar");
     const { q } = z.object({ q: z.string().default("") }).parse(req.query);
     return buscarHospedes(ctx, q);
   });
@@ -131,6 +135,12 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
   app.post("/api/usuarios", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
     return res.status(201).send(await criarUsuario(ctx, corpoUsuario.parse(req.body), req.usuario.id));
+  });
+
+  app.put("/api/usuarios/me/senha", async (req, res) => {
+    const { senhaAtual, novaSenha } = corpoTrocaSenha.parse(req.body);
+    await trocarSenha(ctx, req.usuario.id, senhaAtual, novaSenha);
+    return res.status(204).send();
   });
 
   app.post("/api/caixa/abrir", async (req, res) => {

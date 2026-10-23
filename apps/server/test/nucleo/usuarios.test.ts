@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { criarContextoTeste } from "../ajuda.js";
-import { exigirPermissao } from "../../src/nucleo/permissoes.js";
+import { exigirAlgumaPermissao, exigirPermissao } from "../../src/nucleo/permissoes.js";
 import { entrar, sair, sessaoPorToken } from "../../src/nucleo/sessoes.js";
 import { autorizarSupervisor } from "../../src/nucleo/supervisor.js";
 import { criarUsuario } from "../../src/nucleo/usuarios.js";
@@ -37,6 +37,8 @@ describe("usuários, sessão e supervisor", () => {
     const gov = (await entrar(ctx, "gov", "123")).usuario;
     expect(gov.permissoes).toEqual(["quartos.situacao"]);
     expect(() => exigirPermissao(gov, "caixa.operar")).toThrowError(expect.objectContaining({ codigo: "SEM_PERMISSAO" }));
+    expect(() => exigirAlgumaPermissao(gov, ["conta.lancar", "caixa.operar"])).toThrowError(expect.objectContaining({ codigo: "SEM_PERMISSAO" }));
+    expect(() => exigirAlgumaPermissao(gov, ["caixa.operar", "quartos.situacao"])).not.toThrow();
   });
 
   test("supervisor exige motivo e permissão", async () => {
