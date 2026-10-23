@@ -57,3 +57,7 @@ export async function obterProdutoPorCodigo(ctx: Contexto, codigo: string): Prom
   if (!l) throw new ErroDominio("PRODUTO_NAO_ENCONTRADO", `Produto ${codigo} não encontrado.`);
   return paraProduto(l);
 }
+
+export async function listarProdutos(ctx: Contexto): Promise<Produto[]> {
+  return (await ctx.db.selectFrom("produtos").selectAll().orderBy("nome").orderBy("id").execute()).map(paraProduto);
+}

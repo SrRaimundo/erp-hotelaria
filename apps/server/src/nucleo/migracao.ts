@@ -1,5 +1,7 @@
 import { sql } from "kysely";
 import type { Migracao } from "../shared/banco.js";
+import { PERFIS_PADRAO } from "./permissoes.js";
+import { hashSenhaSync } from "./usuarios.js";
 
 export const migracaoNucleo: Migracao = {
   nome: "0200_nucleo",
@@ -93,5 +95,47 @@ export const migracaoNucleoCadastros: Migracao = {
     for (const [i, [codigo, nome]] of formas.entries()) {
       await db.insertInto("formas_pagamento").values({ id: `forma-${codigo}`, codigo, nome, ativa: 1, ordem: i }).execute();
     }
+  },
+};
+
+export const migracaoNucleoUsuarios: Migracao = {
+  nome: "0220_nucleo_usuarios",
+  async up(db) {
+    await db.schema
+      .createTable("perfis")
+      .addColumn("nome", "text", (c) => c.primaryKey())
+      .addColumn("limite_desconto", "integer", (c) => c.notNull())
+      .execute();
+    await db.schema
+      .createTable("perfil_permissoes")
+      .addColumn("perfil", "text", (c) => c.notNull().references("perfis.nome"))
+      .addColumn("permissao", "text", (c) => c.notNull())
+      .addPrimaryKeyConstraint("perfil_permissoes_pk", ["perfil", "permissao"])
+      .execute();
+    await db.schema
+      .createTable("usuarios")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("nome", "text", (c) => c.notNull())
+      .addColumn("login", "text", (c) => c.notNull().unique())
+      .addColumn("senha_hash", "text", (c) => c.notNull())
+      .addColumn("senha_salt", "text", (c) => c.notNull())
+      .addColumn("perfil", "text", (c) => c.notNull().references("perfis.nome"))
+      .addColumn("trocar_senha", "integer", (c) => c.notNull().defaultTo(0))
+      .execute();
+    await db.schema
+      .createTable("sessoes")
+      .addColumn("token", "text", (c) => c.primaryKey())
+      .addColumn("usuario_id", "text", (c) => c.notNull().references("usuarios.id"))
+      .addColumn("criada_em", "text", (c) => c.notNull())
+      .execute();
+    for (const p of PERFIS_PADRAO) {
+      await db.insertInto("perfis").values({ nome: p.nome, limite_desconto: p.limiteDesconto }).execute();
+      for (const permissao of p.permissoes) await db.insertInto("perfil_permissoes").values({ perfil: p.nome, permissao }).execute();
+    }
+    const { hash, salt } = hashSenhaSync("admin");
+    await db
+      .insertInto("usuarios")
+      .values({ id: "usuario-admin", nome: "Administrador", login: "admin", senha_hash: hash, senha_salt: salt, perfil: "admin", trocar_senha: 1 })
+      .execute();
   },
 };
