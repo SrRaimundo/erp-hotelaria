@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { alertasAbertos, resolverAlerta } from "../infra/alertas.js";
 import { exigirAlgumaPermissao, exigirPermissao } from "../nucleo/permissoes.js";
 import { data, estadiaPermitida, MSG_ESTADIA_LONGA } from "../http/validacao.js";
 import type { Contexto } from "../shared/contexto.js";
@@ -226,6 +227,14 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   app.get("/api/painel", async (req) => {
     gerenciar(req);
     return painelDoDia(ctx);
+  });
+  app.post("/api/alertas/:id/resolver", async (req) => {
+    gerenciar(req);
+    const { id } = idParam.parse(req.params);
+    const aberto = (await alertasAbertos(ctx)).some((a) => a.id === id);
+    if (!aberto) throw new ErroDominio("ALERTA_NAO_ENCONTRADO", "Alerta não encontrado ou já resolvido.");
+    await resolverAlerta(ctx, id, req.usuario.id);
+    return { ok: true };
   });
   app.get("/api/busca", async (req) => {
     gerenciar(req);

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "../../src/hospedagem/consultas.js";
+import { registrarPagamento } from "../../src/hospedagem/conta.js";
+import { colocarEmManutencao } from "../../src/hospedagem/governanca.js";
+import { abrirCaixa } from "../../src/nucleo/caixa.js";
 import { criarReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { criarApp } from "../../src/http/app.js";
 import { criarCategoria } from "../../src/nucleo/categorias.js";
@@ -106,6 +109,121 @@ describe("painel do dia", () => {
   test("antes da virada o dia hoteleiro é o anterior", async () => {
     ctx.relogio.definir("2026-11-10T05:00:00Z"); // 02:00 em São Paulo
     expect((await painelDoDia(ctx)).dia).toBe("2026-11-09");
+  });
+});
+
+describe("painel do dia ampliado", () => {
+  const dia = "2026-11-10";
+
+  test("ocupação e números do dia", async () => {
+    await criarQuarto(ctx, { numero: "33", categoriaId: lux }, "u1"); // 10 quartos
+    await colocarEmManutencao(ctx, (await ctx.db.selectFrom("quartos").select("id").where("numero", "=", "33").executeTakeFirstOrThrow()).id, "Ar-condicionado", recepcao);
+    const kid = ["2020-01-01"];
+    await reserva({ chegada: "2026-11-09", saida: "2026-11-12", adultos: 2, criancasNascimento: kid }, "hospedada");
+    await reserva({ chegada: "2026-11-09", saida: "2026-11-12", adultos: 2, criancasNascimento: kid }, "hospedada");
+    await reserva({ chegada: "2026-11-09", saida: "2026-11-12", adultos: 2 }, "hospedada");
+    await reserva({ categoriaId: lux, chegada: "2026-11-10", saida: "2026-11-12", adultos: 1 }, "hospedada");
+    await reserva({ chegada: "2026-11-10", saida: "2026-11-11" }, "confirmada");
+    await reserva({ categoriaId: lux, chegada: "2026-11-08", saida: "2026-11-11" }, "pre_reserva");
+    await reserva({ chegada: "2026-11-10", saida: "2026-11-11" }, "cancelada");
+    const p = await painelDoDia(ctx);
+    expect(p.ocupacao).toEqual({ ocupados: 6, total: 9, percentual: 67 });
+    expect(p.numeros).toEqual({
+      chegadas: 1, chegadasJaHospedadas: 1, saidas: 0, hospedados: 4, pessoasHospedadas: 9,
+      quartosSujos: 0, quartosManutencao: 1, livresHoje: 3,
+    });
+    expect(p.chegadas).toHaveLength(2); // confirmada + já hospedada
+    expect(p.chegadas.map((c) => c.estado).sort()).toEqual(["confirmada", "hospedada"]);
+  });
+
+  test("chegada mostra sinal pendente e pendência de FNRH", async () => {
+    await salvarHospede(ctx, { id: "h3", nome: "Ana Sem Documento", documentoTipo: "cpf", documento: null, nascimento: "1992-02-02", nacionalidade: "BR" }, "u1");
+    const pre = await reserva({ titularId: "h3", chegada: dia, saida: "2026-11-12", adultos: 2, criancasNascimento: ["2020-01-01"] }, "pre_reserva");
+    await ctx.db.updateTable("reservas").set({ valor_sinal: 27000 }).where("id", "=", pre.id).execute();
+    await abrirCaixa(ctx, recepcao.id, 0);
+    await registrarPagamento(ctx, { contaId: pre.contaId, reservaId: pre.id, formaCodigo: "pix", valor: 10000 }, recepcao);
+    await salvarHospede(ctx, { id: "h4", nome: "Completa", documentoTipo: "cpf", documento: "111.444.777-35", nascimento: "1980-05-05", nacionalidade: "BR", telefone: "(48) 90000-0000", endereco: { logradouro: "Rua A", cidade: "Floripa", uf: "SC", pais: "BR" } }, "u1");
+    const ok = await reserva({ titularId: "h4", chegada: dia, saida: "2026-11-11" }, "confirmada");
+    const p = await painelDoDia(ctx);
+    const c = p.chegadas.find((x) => x.reservaId === pre.id)!;
+    expect(c).toMatchObject({ estado: "pre_reserva", noites: 2, adultos: 2, criancas: 1, canal: "Balcão", sinalPendente: 17000, pendenciasFnrh: true, titular: "Ana Sem Documento" });
+    const o = p.chegadas.find((x) => x.reservaId === ok.id)!;
+    expect(o).toMatchObject({ sinalPendente: 0, pendenciasFnrh: false });
+  });
+
+  test("saída mostra saldo da conta", async () => {
+    const r = await reserva({ chegada: "2026-11-08", saida: dia, quartoId: q12 }, "hospedada");
+    await ctx.db.insertInto("lancamentos").values({
+      id: "l1", conta_id: r.contaId, reserva_id: r.id, tipo: "extra", origem: "hospedagem", produto_id: null,
+      descricao: "Jantar", quantidade: 1, valor: 15000, data_ref: null, estorna_id: null, instante: "2026-11-09T10:00:00Z", usuario: "u1",
+    }).execute();
+    const p = await painelDoDia(ctx);
+    expect(p.saidas).toHaveLength(1);
+    expect(p.saidas[0]).toMatchObject({ reservaId: r.id, contaId: r.contaId, saldo: 15000, quartoNumero: "12" });
+    expect(p.numeros.saidas).toBe(1);
+  });
+
+  test("fila de atenção: sinal antes de chegada atrasada antes de alerta, com ações", async () => {
+    await salvarHospede(ctx, { id: "h1", nome: "Maria Silva", documentoTipo: "cpf", documento: "529.982.247-25", nascimento: "1990-01-01", nacionalidade: "BR", telefone: "(48) 99812-3344" }, "u1");
+    const pre = await reserva({ chegada: "2026-11-12", saida: "2026-11-14" }, "pre_reserva");
+    await ctx.db.updateTable("reservas").set({ valor_sinal: 27000, prazo_sinal: "2026-11-11T10:00:00.000Z" }).where("id", "=", pre.id).execute();
+    const atrasada = await reserva({ chegada: "2026-11-09", saida: "2026-11-11" }, "confirmada");
+    await ctx.db.insertInto("alertas").values({ id: "al1", tipo: "x", alvo_tipo: "reserva", alvo_id: pre.id, mensagem: "Algo errado", criado_em: "2026-11-10T10:00:00Z", resolvido_em: null, resolvido_por: null }).execute();
+    await ctx.db.insertInto("alertas").values({ id: "al2", tipo: "y", alvo_tipo: "conta", alvo_id: atrasada.contaId, mensagem: "Conta com saldo", criado_em: "2026-11-10T11:00:00Z", resolvido_em: null, resolvido_por: null }).execute();
+    const p = await painelDoDia(ctx);
+    expect(p.atencao.map((a) => a.tipo)).toEqual(["sinal_vencendo", "chegada_atrasada", "alerta", "alerta"]);
+    expect(p.atencao[0]).toMatchObject({
+      id: `sinal:${pre.id}`, titulo: "Sinal vence amanhã às 07:00", reservaId: pre.id, acoes: ["registrar_sinal", "prorrogar_sinal"],
+      detalhe: `Reserva #${pre.codigo} · Maria Silva · 12/11–14/11 · faltam R$ 270,00`,
+    });
+    expect(p.atencao[1]).toMatchObject({
+      id: `atraso:${atrasada.id}`, titulo: "Chegada atrasada", acoes: ["marcar_no_show", "abrir_reserva"], telefone: "(48) 99812-3344",
+      detalhe: `Reserva #${atrasada.codigo} · Maria Silva · era para 09/11, qto sem quarto`,
+    });
+    expect(p.atencao[2]).toMatchObject({ id: "al1", titulo: "Algo errado", detalhe: "", reservaId: pre.id, contaId: null, acoes: ["abrir_reserva", "resolver_alerta"] });
+    expect(p.atencao[3]).toMatchObject({ id: "al2", contaId: atrasada.contaId, reservaId: atrasada.id, acoes: ["abrir_conta", "resolver_alerta"] });
+  });
+
+  test("sinal que vence hoje diz só a hora", async () => {
+    const pre = await reserva({ chegada: "2026-11-12", saida: "2026-11-14" }, "pre_reserva");
+    await ctx.db.updateTable("reservas").set({ valor_sinal: 1000, prazo_sinal: "2026-11-10T20:00:00.000Z" }).where("id", "=", pre.id).execute();
+    expect((await painelDoDia(ctx)).atencao[0]!.titulo).toBe("Sinal vence às 17:00");
+  });
+
+  test("governança traz motivo da manutenção", async () => {
+    await colocarEmManutencao(ctx, q13, "Vazamento no banheiro", recepcao);
+    await mudarSituacaoQuarto(ctx, q12, "ocupado", "u1");
+    await mudarSituacaoQuarto(ctx, q12, "sujo", "u1");
+    const p = await painelDoDia(ctx);
+    expect(p.governanca).toEqual([
+      { quartoId: q12, numero: "12", situacao: "sujo", motivo: null },
+      { quartoId: q13, numero: "13", situacao: "em_manutencao", motivo: "Vazamento no banheiro" },
+    ]);
+  });
+
+  test("próximos dias: exatamente dois", async () => {
+    await reserva({ chegada: "2026-11-11", saida: "2026-11-12" }, "confirmada");
+    await reserva({ chegada: "2026-11-09", saida: "2026-11-11" }, "hospedada");
+    const p = await painelDoDia(ctx);
+    expect(p.proximosDias).toEqual([
+      { dia: "2026-11-11", chegadas: 1, saidas: 1, ocupacaoPct: 11 },
+      { dia: "2026-11-12", chegadas: 0, saidas: 1, ocupacaoPct: 0 },
+    ]);
+  });
+
+  test("resolver alerta pela API", async () => {
+    const app = criarApp(ctx);
+    const rec = await entrarComo(ctx, "recepcao");
+    const gov = await entrarComo(ctx, "governanca");
+    await ctx.db.insertInto("alertas").values({ id: "al1", tipo: "x", alvo_tipo: "reserva", alvo_id: "r", mensagem: "m", criado_em: "2026-11-10T10:00:00Z", resolvido_em: null, resolvido_por: null }).execute();
+    expect((await app.inject({ method: "POST", url: "/api/alertas/al1/resolver" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/alertas/al1/resolver", headers: gov })).statusCode).toBe(403);
+    const ok = await app.inject({ method: "POST", url: "/api/alertas/al1/resolver", headers: rec });
+    expect([ok.statusCode, ok.json()]).toEqual([200, { ok: true }]);
+    expect((await painelDoDia(ctx)).alertas).toEqual([]);
+    const outra = await app.inject({ method: "POST", url: "/api/alertas/al1/resolver", headers: rec });
+    expect([outra.statusCode, outra.json().codigo]).toEqual([422, "ALERTA_NAO_ENCONTRADO"]);
+    expect((await app.inject({ method: "POST", url: "/api/alertas/nada/resolver", headers: rec })).json().codigo).toBe("ALERTA_NAO_ENCONTRADO");
   });
 });
 
