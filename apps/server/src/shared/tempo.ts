@@ -11,6 +11,20 @@ function deUtc(ms: number): Data {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/** Maior estadia aceita, em noites. */
+export const MAX_NOITES = 365;
+
+/** Dias de a até b (b − a); negativo se b vem antes. */
+export function diasEntre(a: Data, b: Data): number {
+  return Math.round((paraUtc(b) - paraUtc(a)) / DIA_MS);
+}
+
+/** AAAA-MM-DD que existe no calendário (rejeita 2026-02-30, 2026-13-01). */
+export function dataValida(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  return deUtc(paraUtc(s)) === s;
+}
+
 export function somarDias(d: Data, n: number): Data {
   return deUtc(paraUtc(d) + n * DIA_MS);
 }

@@ -81,6 +81,7 @@ describe("API HTTP base", () => {
 
     const base = { nome: "Maria Souza", documentoTipo: "cpf", documento: "529.982.247-25", nacionalidade: "Brasil" };
     expect((await app.inject({ method: "POST", url: "/api/hospedes", headers: rec, payload: { ...base, nascimento: "01/02/1990" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/hospedes", headers: rec, payload: { ...base, nascimento: "1990-02-30" } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: "/api/hospedes", headers: rec, payload: { ...base, documentoTipo: "rg", nascimento: null } })).statusCode).toBe(400);
     const h = await app.inject({ method: "POST", url: "/api/hospedes", headers: rec, payload: { ...base, nascimento: "1990-02-01" } });
     expect(h.statusCode).toBe(201);

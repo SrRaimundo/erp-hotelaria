@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { data } from "../http/validacao.js";
 import type { Contexto } from "../shared/contexto.js";
 import { abrirCaixa, fecharCaixa, turnoAberto } from "./caixa.js";
 import { criarCategoria, listarCategorias } from "./categorias.js";
@@ -13,7 +14,6 @@ import { entrar, sair } from "./sessoes.js";
 import { criarUsuario, TAM_MIN_SENHA, trocarSenha } from "./usuarios.js";
 
 const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM");
-const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
 const centavos = z.number().int().min(0);
 const naoNegativo = z.number().min(0);
 const texto = z.string().trim().min(1, "Campo obrigatório");

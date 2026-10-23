@@ -9,7 +9,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { diaHoteleiro, noites as datasDasNoites, type Data } from "../shared/tempo.js";
-import { cotar } from "../tarifas/cotacao.js";
+import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
 import { verificarRestricoes, type Violacao } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
 import { alertarSaldoOrfao } from "./conta.js";
@@ -53,6 +53,7 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   const adultos = m.adultos ?? atual.adultos;
   const criancasNascimento = m.criancasNascimento ?? atual.criancasNascimento;
   if (!(chegada < saida)) throw new ErroDominio("DATAS_INVALIDAS", "A saída deve ser depois da chegada. Corrija as datas.");
+  exigirEstadiaPermitida(chegada, saida);
   if (atual.estado === "hospedada" && chegada !== atual.chegada) {
     throw new ErroDominio("CHEGADA_NAO_ALTERAVEL", "O hóspede já chegou: não é possível mudar a data de chegada.");
   }

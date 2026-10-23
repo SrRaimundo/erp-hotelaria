@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
+import { data, estadiaPermitida, MSG_ESTADIA_LONGA } from "../http/validacao.js";
 import { cotar } from "./cotacao.js";
 import {
   listarCanais, listarFaixasCrianca, listarFaixasOcupacao, listarPacotes, listarPercentuaisDiaSemana,
@@ -9,9 +10,8 @@ import {
   salvarPacote, salvarPercentualDiaSemana, salvarRestricao, salvarTabelaBase, salvarTemporada,
 } from "./regras.js";
 
-const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
 const centavos = z.number().int().min(0);
-const percentual = z.number(); // pode ser negativo (desconto)
+const percentual = z.number().gt(-100, "O percentual deve ser maior que −100"); // pode ser negativo (desconto)
 const limite = z.number().min(0).max(100);
 const texto = z.string().trim().min(1, "Campo obrigatório");
 const porAdultos = z.object({ 1: centavos, 2: centavos, 3: centavos });
@@ -47,7 +47,9 @@ const corpoSimular = z.object({
   categoriaId: texto, chegada: data, saida: data,
   hospedes: z.object({ adultos: z.number().int().min(1), criancasNascimento: z.array(data).default([]) }),
   canal: texto, ignorarReservaId: z.string().optional(),
-}).refine((p) => p.saida > p.chegada, { message: "A saída deve ser depois da chegada.", path: ["saida"] });
+})
+  .refine((p) => p.saida > p.chegada, { message: "A saída deve ser depois da chegada.", path: ["saida"] })
+  .refine(estadiaPermitida, { message: MSG_ESTADIA_LONGA, path: ["saida"] });
 
 export function registrarRotasTarifas(app: FastifyInstance, ctx: Contexto): void {
   const gerenciar = (req: { usuario: Parameters<typeof exigirPermissao>[0] }) => exigirPermissao(req.usuario, "tarifas.gerenciar");

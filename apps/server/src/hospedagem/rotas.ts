@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { exigirAlgumaPermissao, exigirPermissao } from "../nucleo/permissoes.js";
+import { data, estadiaPermitida, MSG_ESTADIA_LONGA } from "../http/validacao.js";
 import type { Contexto } from "../shared/contexto.js";
+import { diasEntre } from "../shared/tempo.js";
 import { ErroDominio } from "../shared/erros.js";
 import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrogarSinal, type Mudanca } from "./alteracao.js";
 import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagamento, saldo } from "./conta.js";
@@ -12,7 +14,6 @@ import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } 
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
-const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
 const texto = z.string().trim().min(1, "Campo obrigatório");
 
 const corpoReserva = z.object({
@@ -28,7 +29,12 @@ const corpoReserva = z.object({
   descontoPercentual: z.number().min(0).max(100).optional(),
   grupoId: texto.optional(),
   autorizacao: z.object({ motivo: z.string(), supervisor: z.object({ login: texto, senha: z.string() }) }).optional(),
-});
+}).refine(estadiaPermitida, { message: MSG_ESTADIA_LONGA, path: ["saida"] });
+const MAX_DIAS_MAPA = 366;
+const queryMapa = z
+  .object({ inicio: data, fim: data, categoriaId: texto.optional() })
+  .refine((q) => q.inicio <= q.fim, { message: "O fim deve ser igual ou depois do início.", path: ["fim"] })
+  .refine((q) => diasEntre(q.inicio, q.fim) <= MAX_DIAS_MAPA, { message: `Consulte no máximo ${MAX_DIAS_MAPA} dias por vez.`, path: ["fim"] });
 const supervisor = z.object({ login: texto, senha: z.string() });
 const corpoSensivel = z.object({ motivo: z.string(), supervisor });
 const corpoAlteracao = z.object({
@@ -190,7 +196,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   // Consultas da recepção: exigem reservas.gerenciar (governança usa /api/governanca e /api/quartos).
   app.get("/api/mapa", async (req) => {
     gerenciar(req);
-    const q = z.object({ inicio: data, fim: data, categoriaId: texto.optional() }).parse(req.query);
+    const q = queryMapa.parse(req.query);
     return mapaOcupacao(ctx, q);
   });
   app.get("/api/painel", async (req) => {

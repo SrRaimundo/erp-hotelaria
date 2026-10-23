@@ -177,3 +177,16 @@ describe("histórico e rotas", () => {
     expect(b.json()).toHaveLength(1);
   });
 });
+
+describe("validação do período do mapa", () => {
+  test("I7/I8: mapa recusa data impossível, fim antes do início e período acima de 366 dias", async () => {
+    const app = criarApp(ctx);
+    const rec = await entrarComo(ctx, "recepcao");
+    const mapa = (q: string) => app.inject({ method: "GET", url: `/api/mapa?${q}`, headers: rec });
+    expect((await mapa("inicio=2026-02-30&fim=2026-03-10")).statusCode).toBe(400);
+    expect((await mapa("inicio=2026-11-10&fim=2026-11-09")).statusCode).toBe(400);
+    expect((await mapa("inicio=2026-01-01&fim=2027-01-03")).statusCode).toBe(400);
+    expect((await mapa("inicio=2026-01-01&fim=2027-01-02")).statusCode).toBe(200);
+    expect((await mapa("inicio=2026-11-10&fim=2026-11-10")).statusCode).toBe(200);
+  });
+});

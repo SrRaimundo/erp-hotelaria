@@ -2,7 +2,7 @@ import { obterConfig } from "../nucleo/pousada.js";
 import type { Contexto } from "../shared/contexto.js";
 import type { Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
-import { diaDaSemana, noites, type Data } from "../shared/tempo.js";
+import { diaDaSemana, diasEntre, MAX_NOITES, noites, type Data } from "../shared/tempo.js";
 import { calcularNoite } from "./calculo.js";
 import { ocupacaoCategoria } from "./ocupacao.js";
 import {
@@ -23,7 +23,14 @@ export type PedidoCotacao = {
 
 export type Cotacao = { noites: ValorNoite[]; total: Centavos; violacoes: Violacao[] };
 
+export function exigirEstadiaPermitida(chegada: Data, saida: Data): void {
+  if (diasEntre(chegada, saida) > MAX_NOITES) {
+    throw new ErroDominio("ESTADIA_LONGA_DEMAIS", `A estadia pode ter no máximo ${MAX_NOITES} noites. Encurte o período.`, { chegada, saida });
+  }
+}
+
 export async function cotar(ctx: Contexto, p: PedidoCotacao): Promise<Cotacao> {
+  exigirEstadiaPermitida(p.chegada, p.saida);
   const base = (await listarTabelasBase(ctx)).find((t) => t.categoriaId === p.categoriaId);
   if (!base) {
     throw new ErroDominio(

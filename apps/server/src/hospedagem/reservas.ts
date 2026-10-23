@@ -8,7 +8,7 @@ import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 import { idadeEm, type Data } from "../shared/tempo.js";
-import { cotar } from "../tarifas/cotacao.js";
+import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
 import { listarCanais } from "../tarifas/regras.js";
 import { verificarRestricoes } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
@@ -109,6 +109,7 @@ export async function criarReserva(ctx: Contexto, d: NovaReserva, usuario: Usuar
   if (!(d.chegada < d.saida)) {
     throw new ErroDominio("DATAS_INVALIDAS", "A saída deve ser depois da chegada. Corrija as datas.");
   }
+  exigirEstadiaPermitida(d.chegada, d.saida);
   await exigirTitular(ctx, d.titularId);
   if (!(await listarCanais(ctx)).some((c) => c.nome === d.canal)) {
     throw new ErroDominio("CANAL_INEXISTENTE", `O canal "${d.canal}" não está cadastrado. Escolha um canal existente.`, { canal: d.canal });

@@ -10,6 +10,7 @@ import {
   salvarRestricao, salvarTabelaBase, salvarTemporada,
 } from "../../src/tarifas/regras.js";
 import { verificarRestricoes } from "../../src/tarifas/restricoes.js";
+import { somarDias } from "../../src/shared/tempo.js";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 const casal = { adultos: 2, criancasNascimento: [] as string[] };
@@ -180,5 +181,37 @@ describe("rotas", () => {
     expect((await app.inject({ method: "GET", url: "/api/tarifas/tabelas-base", headers: adm })).json()).toHaveLength(1);
     const canais = (await app.inject({ method: "GET", url: "/api/tarifas/canais", headers: adm })).json();
     expect(canais.map((c: any) => c.nome)).toContain("Balcão");
+  });
+});
+
+describe("validações de entrada", () => {
+  test("I8: simulação limitada a 365 noites", async () => {
+    const app = criarApp(ctx);
+    const h = await entrarComo(ctx, "recepcao");
+    const pedido = { categoriaId: std, chegada: "2026-11-11", saida: somarDias("2026-11-11", 366), hospedes: casal, canal: "Balcão" };
+    expect((await app.inject({ method: "POST", url: "/api/tarifas/simular", headers: h, payload: pedido })).statusCode).toBe(400);
+    await expect(cotar(ctx, pedido)).rejects.toMatchObject({ codigo: "ESTADIA_LONGA_DEMAIS" });
+    const ok = await app.inject({ method: "POST", url: "/api/tarifas/simular", headers: h, payload: { ...pedido, saida: somarDias("2026-11-11", 365) } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().noites).toHaveLength(365);
+  });
+
+  test("I7: data impossível na simulação e na restrição", async () => {
+    const app = criarApp(ctx);
+    const adm = await entrarComo(ctx, "admin");
+    expect((await app.inject({ method: "POST", url: "/api/tarifas/simular", headers: adm, payload: { categoriaId: std, chegada: "2026-02-30", saida: "2026-03-02", hospedes: casal, canal: "Balcão" } })).statusCode).toBe(400);
+    const restricao = { categoriaId: std, data: "2026-02-30", minNoites: null, fechadoChegada: true, fechadoSaida: false, fechadoVenda: false };
+    expect((await app.inject({ method: "PUT", url: "/api/tarifas/restricoes", headers: adm, payload: restricao })).statusCode).toBe(400);
+  });
+
+  test("percentuais devem ser maiores que −100", async () => {
+    const app = criarApp(ctx);
+    const adm = await entrarComo(ctx, "admin");
+    const put = (url: string, payload: unknown) => app.inject({ method: "PUT", url: `/api/tarifas/${url}`, headers: adm, payload: payload as object });
+    expect((await put("canais", { nome: "Grátis", percentual: -100, exigeSinal: false })).statusCode).toBe(400);
+    expect((await put("dias-semana", { dia: 1, percentual: -100 })).statusCode).toBe(400);
+    expect((await put("faixas-ocupacao", [{ acimaDe: 0, percentual: -120 }])).statusCode).toBe(400);
+    expect((await put("temporadas", { nome: "T", inicio: "2026-12-01", fim: "2026-12-10", prioridade: 1, percentual: -100 })).statusCode).toBe(400);
+    expect((await put("canais", { nome: "Promo", percentual: -99.5, exigeSinal: false })).statusCode).toBe(200);
   });
 });

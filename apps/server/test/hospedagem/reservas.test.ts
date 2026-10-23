@@ -9,6 +9,8 @@ import { salvarConfig } from "../../src/nucleo/pousada.js";
 import { criarQuarto } from "../../src/nucleo/quartos.js";
 import { carregarUsuarioSessao } from "../../src/nucleo/sessoes.js";
 import { salvarCanal, salvarRestricao, salvarTabelaBase } from "../../src/tarifas/regras.js";
+import { alterarReserva } from "../../src/hospedagem/alteracao.js";
+import { somarDias } from "../../src/shared/tempo.js";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 let ctx: Awaited<ReturnType<typeof criarContextoTeste>>;
@@ -239,5 +241,31 @@ describe("rotas", () => {
     expect((await app.inject({ method: "GET", url: "/api/reservas/nada", headers: rec })).statusCode).toBe(422);
     expect((await app.inject({ method: "POST", url: "/api/grupos", headers: rec, payload: { titularId: "h1", cobranca: "unica" } })).statusCode).toBe(200);
     expect((await app.inject({ method: "POST", url: "/api/grupos", headers: gov, payload: { titularId: "h1", cobranca: "unica" } })).statusCode).toBe(403);
+  });
+});
+
+describe("datas impossíveis e estadia longa", () => {
+  test("I7: datas que não existem no calendário são recusadas (400)", async () => {
+    const app = criarApp(ctx);
+    const rec = await entrarComo(ctx, "recepcao");
+    for (const chegada of ["2026-02-30", "2026-13-01", "2026-04-31", "2026-00-10"]) {
+      const res = await app.inject({ method: "POST", url: "/api/reservas", headers: rec, payload: { ...dados, chegada, saida: "2027-01-05" } });
+      expect([chegada, res.statusCode]).toEqual([chegada, 400]);
+    }
+    const bissexto = await app.inject({ method: "POST", url: "/api/reservas", headers: rec, payload: { ...dados, chegada: "2028-02-29", saida: "2028-03-01" } });
+    expect(bissexto.statusCode).toBe(200);
+    expect(await ctx.db.selectFrom("reservas").selectAll().execute()).toHaveLength(1);
+  });
+
+  test("I8: no máximo 365 noites (rota e domínio)", async () => {
+    const app = criarApp(ctx);
+    const rec = await entrarComo(ctx, "recepcao");
+    const longa = { ...dados, saida: somarDias(dados.chegada, 366) };
+    expect((await app.inject({ method: "POST", url: "/api/reservas", headers: rec, payload: longa })).statusCode).toBe(400);
+    await expect(criarReserva(ctx, longa, recepcao)).rejects.toMatchObject({ codigo: "ESTADIA_LONGA_DEMAIS" });
+    const r = await criarReserva(ctx, dados, recepcao);
+    await expect(alterarReserva(ctx, r.id, { saida: somarDias(dados.chegada, 366) }, recepcao)).rejects.toMatchObject({ codigo: "ESTADIA_LONGA_DEMAIS" });
+    const max = await alterarReserva(ctx, r.id, { saida: somarDias(dados.chegada, 365) }, recepcao);
+    expect(max.saida).toBe(somarDias(dados.chegada, 365));
   });
 });
