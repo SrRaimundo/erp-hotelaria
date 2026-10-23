@@ -3,6 +3,7 @@ import { resolverAlerta } from "../infra/alertas.js";
 import { registrarEvento } from "../infra/outbox.js";
 import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import { obterConfig } from "../nucleo/pousada.js";
+import { mudarSituacaoQuarto, obterQuarto } from "../nucleo/quartos.js";
 import { autorizarSupervisor } from "../nucleo/supervisor.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
@@ -73,16 +74,31 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
 
   const periodo = datasDasNoites(chegada, saida);
   const congeladas = new Map(atual.noites.map((n) => [n.data, n]));
+  const manuais = m.precosManuais ?? [];
+
+  // Noites com diária lançada (estornada ou não) já foram cobradas: mantêm o valor congelado,
+  // não aceitam preço manual e não podem sair do período.
+  const lancadas = new Set(
+    (await c.db.selectFrom("lancamentos").select("data_ref").where("reserva_id", "=", reservaId).where("tipo", "=", "diaria").execute())
+      .map((l) => l.data_ref as Data),
+  );
+  for (const d of lancadas) {
+    if (!periodo.includes(d) || manuais.some((p) => p.data === d)) {
+      const dia = d.split("-").reverse().slice(0, 2).join("/");
+      throw new ErroDominio("NOITE_JA_LANCADA", `A diária de ${dia} já foi cobrada na conta: essa noite não pode ser alterada nem removida da estadia.`, { data: d });
+    }
+  }
+
   const recotarTudo =
     categoriaId !== atual.categoriaId || adultos !== atual.adultos || !mesmasCriancas(criancasNascimento, atual.criancasNascimento);
   const hospedes = { adultos, criancasNascimento };
   const pedido = { categoriaId, chegada, saida, canal: atual.canal, hospedes, ignorarReservaId: atual.id };
-  const precisaCotar = recotarTudo || periodo.some((d) => !congeladas.has(d));
+  const fixa = (d: Data) => (lancadas.has(d) ? congeladas.get(d) : undefined);
+  const precisaCotar = periodo.some((d) => !fixa(d) && (recotarTudo || !congeladas.has(d)));
   const cotacao = precisaCotar ? await cotar(c, pedido) : undefined;
   const cotadas = new Map((cotacao?.noites ?? []).map((n) => [n.data, n]));
-  let noites: ValorNoite[] = periodo.map((d) => (recotarTudo ? cotadas.get(d)! : (congeladas.get(d) ?? cotadas.get(d)!)));
+  let noites: ValorNoite[] = periodo.map((d) => fixa(d) ?? (recotarTudo ? cotadas.get(d)! : (congeladas.get(d) ?? cotadas.get(d)!)));
 
-  const manuais = m.precosManuais ?? [];
   for (const p of manuais) {
     if (!periodo.includes(p.data) || !Number.isInteger(p.valor) || p.valor < 0) {
       throw new ErroDominio("PRECO_MANUAL_INVALIDO", `Não é possível ajustar o preço de ${p.data.split("-").reverse().join("/")}: use uma noite da estadia e um valor em centavos.`, p);
@@ -93,17 +109,6 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
       const p = manuais.find((x) => x.data === n.data);
       return p ? { data: n.data, valor: p.valor, passos: [...n.passos, { rotulo: "Ajuste manual", valor: p.valor }] } : n;
     });
-  }
-
-  // Diárias já lançadas são definitivas: a noite não pode sumir nem mudar de valor (correção só por estorno).
-  const lancadas = await c.db.selectFrom("lancamentos").select(["data_ref", "valor"])
-    .where("reserva_id", "=", reservaId).where("tipo", "=", "diaria").execute();
-  for (const l of lancadas) {
-    const nova = noites.find((n) => n.data === l.data_ref);
-    if (!nova || nova.valor !== l.valor) {
-      const dia = (l.data_ref ?? "").split("-").reverse().slice(0, 2).join("/");
-      throw new ErroDominio("NOITE_JA_LANCADA", `A diária de ${dia} já foi lançada na conta e não pode ser alterada. Para corrigir, estorne o lançamento antes.`, { data: l.data_ref });
-    }
   }
 
   const periodoMudou = chegada !== atual.chegada || saida !== atual.saida || categoriaId !== atual.categoriaId;
@@ -153,6 +158,15 @@ export async function alterarReserva(
     await verificarDisponibilidade(tx, {
       categoriaId: novo.categoriaId, quartoId: novo.quartoId ?? undefined, chegada: novo.chegada, saida: novo.saida, ignorarReservaId: atual.id,
     });
+    // Hóspede já no quarto: a troca ocupa o quarto novo (que precisa estar livre) e deixa o antigo para limpeza.
+    if (atual.estado === "hospedada" && novo.quartoId && novo.quartoId !== atual.quartoId) {
+      const destino = await obterQuarto(tx, novo.quartoId);
+      if (destino.situacao !== "livre") {
+        throw new ErroDominio("QUARTO_INDISPONIVEL", `O quarto ${destino.numero} não está livre (${destino.situacao.replace("_", " ")}). Escolha outro quarto.`, { situacao: destino.situacao });
+      }
+      await mudarSituacaoQuarto(tx, destino.id, "ocupado", usuario.id);
+      if (atual.quartoId) await mudarSituacaoQuarto(tx, atual.quartoId, "sujo", usuario.id);
+    }
 
     let valorSinal = atual.valorSinal;
     if (atual.estado === "pre_reserva") {

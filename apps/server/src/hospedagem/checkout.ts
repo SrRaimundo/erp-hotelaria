@@ -8,7 +8,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
-import { dataLocal, horaLocal, type Data } from "../shared/tempo.js";
+import { dataLocal, horaLocal, somarDias, type Data } from "../shared/tempo.js";
 import { extrato, lancar, registrarPagamento, saldo, type LinhaExtrato } from "./conta.js";
 import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 import { lancarDiariasPendentes } from "./virada.js";
@@ -36,8 +36,10 @@ async function planejar(ctx: Contexto, reservaId: string, cobrarLate: boolean) {
   if (dataSaida > r.saida) {
     throw new ErroDominio("ESTADIA_EXCEDIDA", "O hóspede ficou além da data de saída da reserva. Prorrogue a reserva antes de fazer o check-out.", { saida: r.saida, hoje: dataSaida });
   }
-  const saidaAntecipada = dataSaida < r.saida;
-  const hoje: Data = dataSaida; // saída efetiva
+  // Toda estadia cobra ao menos uma noite: sair no próprio dia da chegada (day use) não remove a primeira diária.
+  const minima = somarDias(r.chegada, 1);
+  const hoje: Data = dataSaida < minima ? minima : dataSaida; // saída efetiva
+  const saidaAntecipada = hoje < r.saida;
   const noites = await ctx.db.selectFrom("reserva_noites").select(["data", "valor", "passos"])
     .where("reserva_id", "=", reservaId).where("data", ">=", r.chegada).where("data", "<", hoje).orderBy("data").execute();
   const feitas = new Set(
@@ -46,7 +48,7 @@ async function planejar(ctx: Contexto, reservaId: string, cobrarLate: boolean) {
   const pendentes = noites.filter((n) => !feitas.has(n.data) && n.valor >= 1);
 
   let taxa = 0;
-  if (cobrarLate && !saidaAntecipada && horaLocal(agora, config.fuso) > config.horaCheckout) {
+  if (cobrarLate && dataSaida === r.saida && horaLocal(agora, config.fuso) > config.horaCheckout) {
     const regra = config.lateCheckout;
     const ultima = noites.at(-1)?.valor ?? 0;
     taxa = regra.tipo === "fixo" ? regra.valor : arredondarCentavos((ultima * regra.valor) / 100);
