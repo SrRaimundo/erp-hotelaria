@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
 import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrogarSinal } from "../../src/hospedagem/alteracao.js";
 import { criarReserva, obterReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
+import { processarVirada } from "../../src/hospedagem/virada.js";
 import { criarAlerta } from "../../src/infra/alertas.js";
 import { criarCategoria } from "../../src/nucleo/categorias.js";
 import type { UsuarioSessao } from "../../src/nucleo/permissoes.js";
@@ -132,6 +133,21 @@ describe("alteração", () => {
     const aud = await ctx.db.selectFrom("auditoria").selectAll().where("alvo_id", "=", r.id).where("acao", "=", "reserva.alterar").executeTakeFirstOrThrow();
     expect(aud.motivo).toBe("Cortesia");
     expect(aud.supervisor_id).not.toBeNull();
+  });
+
+  test("noite já lançada na conta não aceita preço manual nem corte do período", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await ctx.db.updateTable("reservas").set({ estado: "hospedada", quarto_id: q12 }).where("id", "=", r.id).execute();
+    ctx.relogio.definir("2026-11-22T07:00:00Z");
+    expect(await processarVirada(ctx)).toBe(2);
+    const manual = { precosManuais: [{ data: "2026-11-21", valor: 20000 }] };
+    await expect(alterarReserva(ctx, r.id, manual, recepcao, aut("Cortesia"))).rejects.toMatchObject({ codigo: "NOITE_JA_LANCADA" });
+    await expect(previaAlteracao(ctx, r.id, manual)).rejects.toMatchObject({ codigo: "NOITE_JA_LANCADA" });
+    await expect(alterarReserva(ctx, r.id, { saida: "2026-11-21" }, recepcao)).rejects.toMatchObject({ codigo: "NOITE_JA_LANCADA" });
+    // noite ainda não lançada pode mudar; esticar mantém as lançadas
+    await alterarReserva(ctx, r.id, { precosManuais: [{ data: "2026-11-22", valor: 20000 }] }, recepcao, aut("Cortesia"));
+    await alterarReserva(ctx, r.id, { saida: "2026-11-22" }, recepcao);
+    expect((await obterReserva(ctx, r.id)).noites.map((n) => n.valor)).toEqual([30000, 30000]);
   });
 
   test("Review Focus 5: arrastar sobre outra reserva é rejeitado e a original fica intacta", async () => {

@@ -87,13 +87,23 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
     if (!periodo.includes(p.data) || !Number.isInteger(p.valor) || p.valor < 0) {
       throw new ErroDominio("PRECO_MANUAL_INVALIDO", `Não é possível ajustar o preço de ${p.data.split("-").reverse().join("/")}: use uma noite da estadia e um valor em centavos.`, p);
     }
-    // TODO(Task 13): rejeitar com NOITE_JA_LANCADA quando a diária de p.data já estiver lançada na conta.
   }
   if (manuais.length > 0) {
     noites = noites.map((n) => {
       const p = manuais.find((x) => x.data === n.data);
       return p ? { data: n.data, valor: p.valor, passos: [...n.passos, { rotulo: "Ajuste manual", valor: p.valor }] } : n;
     });
+  }
+
+  // Diárias já lançadas são definitivas: a noite não pode sumir nem mudar de valor (correção só por estorno).
+  const lancadas = await c.db.selectFrom("lancamentos").select(["data_ref", "valor"])
+    .where("reserva_id", "=", reservaId).where("tipo", "=", "diaria").execute();
+  for (const l of lancadas) {
+    const nova = noites.find((n) => n.data === l.data_ref);
+    if (!nova || nova.valor !== l.valor) {
+      const dia = (l.data_ref ?? "").split("-").reverse().slice(0, 2).join("/");
+      throw new ErroDominio("NOITE_JA_LANCADA", `A diária de ${dia} já foi lançada na conta e não pode ser alterada. Para corrigir, estorne o lançamento antes.`, { data: l.data_ref });
+    }
   }
 
   const periodoMudou = chegada !== atual.chegada || saida !== atual.saida || categoriaId !== atual.categoriaId;
