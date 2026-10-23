@@ -6,6 +6,7 @@ import { ErroDominio } from "../shared/erros.js";
 import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrogarSinal, type Mudanca } from "./alteracao.js";
 import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagamento, saldo } from "./conta.js";
 import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
+import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -46,6 +47,12 @@ const queryPrevia = z.object({
   criancasNascimento: z.string().optional(), // datas separadas por vírgula
 });
 const corpoProrrogacao = corpoSensivel.extend({ novoPrazo: z.string().datetime() });
+const corpoCheckin = z.object({
+  quartoId: texto,
+  acompanhantes: z.array(texto).default([]),
+  cobrarEarlyCheckin: z.boolean().optional(),
+  recalcularPreco: z.boolean().optional(),
+});
 const corpoGrupo = z.object({ titularId: texto, cobranca: z.enum(["unica", "separada"]) });
 
 export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): void {
@@ -98,7 +105,18 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     return obterReserva(ctx, id);
   });
 
-  const corpoLancamento = z.object({
+  app.get("/api/reservas/:id/quartos-sugeridos", async (req) => {
+    exigirPermissao(req.usuario, "hospedagem.checkin");
+    return sugerirQuartos(ctx, z.object({ id: texto }).parse(req.params).id);
+  });
+  app.post("/api/reservas/:id/checkin", async (req) => {
+    exigirPermissao(req.usuario, "hospedagem.checkin");
+    const id = z.object({ id: texto }).parse(req.params).id;
+    await fazerCheckin(ctx, { reservaId: id, ...corpoCheckin.parse(req.body) }, req.usuario);
+    return obterReserva(ctx, id);
+  });
+
+  const corpoLancamento =z.object({
     tipo: z.literal("extra"),
     produtoCodigo: texto.optional(),
     descricao: texto.optional(),

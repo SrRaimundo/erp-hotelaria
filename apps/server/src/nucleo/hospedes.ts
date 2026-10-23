@@ -38,7 +38,7 @@ export function cpfValido(cpf: string): boolean {
   return true;
 }
 
-function paraHospede(l: any): Hospede {
+export function paraHospede(l: any): Hospede {
   const h: Hospede = {
     id: l.id,
     nome: l.nome,
