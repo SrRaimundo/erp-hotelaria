@@ -156,12 +156,14 @@ export async function criarReserva(ctx: Contexto, d: NovaReserva, usuario: Usuar
 
     const canal = (await listarCanais(tx)).find((c) => c.nome === d.canal)!;
     const agora = tx.relogio.agora();
-    const comSinal = config.sinal.exigir && canal.exigeSinal;
-    const valorSinal = comSinal
+    const exigeSinal = config.sinal.exigir && canal.exigeSinal;
+    const valorSinal = exigeSinal
       ? config.sinal.tipo === "percentual"
         ? arredondarCentavos((total * config.sinal.percentual) / 100)
         : noites[0]!.valor
       : 0;
+    // Sinal zero já está pago: a reserva nasce confirmada.
+    const comSinal = exigeSinal && valorSinal > 0;
     const prazoSinal = comSinal ? new Date(agora.getTime() + config.sinal.prazoHoras * 3_600_000).toISOString() : null;
 
     // Conta: grupo de cobrança única compartilha a conta; senão, conta nova.

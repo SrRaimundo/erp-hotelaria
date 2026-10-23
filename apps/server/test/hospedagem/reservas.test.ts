@@ -55,6 +55,12 @@ describe("criação", () => {
     expect((await criarReserva(ctx, { ...dados, chegada: "2026-12-01", saida: "2026-12-02" }, recepcao)).codigo).toBe(2);
   });
 
+  test("sinal de 0% nasce confirmada", async () => {
+    await salvarConfig(ctx, { sinal: { ...SINAL, percentual: 0 } }, "u1");
+    const r = await criarReserva(ctx, dados, recepcao);
+    expect(r).toMatchObject({ estado: "confirmada", valorSinal: 0, prazoSinal: null });
+  });
+
   test("sinal pela primeira diária", async () => {
     await salvarConfig(ctx, { sinal: { ...SINAL, tipo: "primeira_diaria" } }, "u1");
     expect((await criarReserva(ctx, dados, recepcao)).valorSinal).toBe(30000);

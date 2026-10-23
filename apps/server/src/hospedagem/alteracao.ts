@@ -12,7 +12,7 @@ import { diaHoteleiro, noites as datasDasNoites, type Data } from "../shared/tem
 import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
 import { verificarRestricoes, type Violacao } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
-import { alertarSaldoOrfao } from "./conta.js";
+import { alertarSaldoOrfao, confirmarSeSinalPago } from "./conta.js";
 import { verificarDisponibilidade } from "./disponibilidade.js";
 import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 import { obterReserva, verificarCapacidade, type Reserva, type ReservaDetalhe } from "./reservas.js";
@@ -192,6 +192,8 @@ export async function alterarReserva(
       dados: { antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, valorSinal, ajusteManual: mudanca.precosManuais ?? [] },
     });
     await registrarEvento(tx, "hospedagem.ReservaAlterada", { reservaId: atual.id, antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo });
+    // Sinal recalculado pode já estar coberto pelo que foi pago.
+    if (atual.estado === "pre_reserva") await confirmarSeSinalPago(tx, atual.id, usuario.id, { alteracao: true });
     const { noites: _n, total: _t, pago: _p, ...reserva } = await obterReserva(tx, atual.id);
     return reserva;
   });

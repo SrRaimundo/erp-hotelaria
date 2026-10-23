@@ -139,6 +139,18 @@ describe("busca universal", () => {
     expect((await buscaUniversal(ctx, String(r.codigo))).find((x) => x.id === r.id)!.acoes).toEqual(["abrir"]);
   });
 
+  test("I9: busca pelo nome traz as reservas em aberto do hóspede antes do cadastro", async () => {
+    const confirmada = await reserva({}, "confirmada");
+    await reserva({ chegada: "2026-10-01", saida: "2026-10-03" }, "finalizada");
+    await reserva({ titularId: "h2" }, "confirmada");
+    const res = await buscaUniversal(ctx, "maria");
+    expect(res.map((x) => [x.tipo, x.id])).toEqual([["reserva", confirmada.id], ["hospede", "h1"]]);
+    expect(res[0]).toEqual({
+      tipo: "reserva", id: confirmada.id, acoes: ["abrir", "checkin"],
+      rotulo: `Reserva #${confirmada.codigo} — Maria Silva (20/11–23/11)`,
+    });
+  });
+
   test("limita a 10 resultados e ignora consulta vazia", async () => {
     for (let i = 0; i < 12; i++) await salvarHospede(ctx, { id: `x${i}`, nome: `Pedro ${i}`, documentoTipo: "passaporte", documento: `P${i}`, nascimento: null, nacionalidade: "BR" }, "u1");
     expect(await buscaUniversal(ctx, "pedro")).toHaveLength(10);

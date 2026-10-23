@@ -121,6 +121,17 @@ const ACOES_RESERVA: Partial<Record<EstadoReserva, string[]>> = {
 };
 
 const diaMes = (d: Data) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const ESTADOS_EM_ABERTO: EstadoReserva[] = ["pre_reserva", "confirmada", "hospedada"];
+const camposBusca = ["r.id", "r.codigo", "r.estado", "r.chegada", "r.saida", "h.nome as titular"] as const;
+
+function resultadoReserva(x: { id: string; codigo: number; estado: string; chegada: Data; saida: Data; titular: string }): ResultadoBusca {
+  return {
+    tipo: "reserva",
+    id: x.id,
+    rotulo: `Reserva #${x.codigo} — ${x.titular} (${diaMes(x.chegada)}–${diaMes(x.saida)})`,
+    acoes: ACOES_RESERVA[x.estado as EstadoReserva] ?? ["abrir"],
+  };
+}
 
 function rotuloHospede(h: Hospede): string {
   if (!h.documento) return h.nome;
@@ -128,7 +139,10 @@ function rotuloHospede(h: Hospede): string {
   return `${h.nome} — ${h.documento}`;
 }
 
-/** Dígitos curtos (≤ 4): quarto e código de reserva. Demais termos: nome, CPF ou documento do hóspede. */
+/**
+ * Dígitos curtos (≤ 4): quarto e código de reserva. Demais termos: nome, CPF ou documento do hóspede,
+ * precedidos das reservas em aberto em que ele é titular. Ordem: quartos, reservas, hóspedes.
+ */
 export async function buscaUniversal(ctx: Contexto, q: string): Promise<ResultadoBusca[]> {
   const termo = q.trim();
   if (!termo) return [];
@@ -137,20 +151,20 @@ export async function buscaUniversal(ctx: Contexto, q: string): Promise<Resultad
   if (/^\d{1,4}$/.test(termo)) {
     const quartos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("numero", "=", termo).orderBy("id").execute();
     for (const x of quartos) r.push({ tipo: "quarto", id: x.id, rotulo: `Quarto ${x.numero}`, acoes: ["ver_quarto"] });
-    const reservas = await reservasComTitular(ctx)
-      .select(["r.id", "r.codigo", "r.estado", "r.chegada", "r.saida", "h.nome as titular"])
-      .where("r.codigo", "=", Number(termo))
-      .execute();
-    for (const x of reservas) {
-      r.push({
-        tipo: "reserva",
-        id: x.id,
-        rotulo: `Reserva #${x.codigo} — ${x.titular} (${diaMes(x.chegada)}–${diaMes(x.saida)})`,
-        acoes: ACOES_RESERVA[x.estado as EstadoReserva] ?? ["abrir"],
-      });
-    }
+    const reservas = await reservasComTitular(ctx).select(camposBusca).where("r.codigo", "=", Number(termo)).execute();
+    for (const x of reservas) r.push(resultadoReserva(x));
   } else {
-    for (const h of await buscarHospedes(ctx, termo)) {
+    const hospedes = await buscarHospedes(ctx, termo);
+    if (hospedes.length > 0) {
+      const reservas = await reservasComTitular(ctx)
+        .select(camposBusca)
+        .where("r.titular_id", "in", hospedes.map((h) => h.id))
+        .where("r.estado", "in", ESTADOS_EM_ABERTO)
+        .limit(LIMITE_BUSCA)
+        .execute();
+      for (const x of reservas) r.push(resultadoReserva(x));
+    }
+    for (const h of hospedes) {
       r.push({ tipo: "hospede", id: h.id, rotulo: rotuloHospede(h), acoes: ["nova_reserva", "ver_historico"] });
     }
   }

@@ -121,6 +121,17 @@ async function turnoDoPagamento(tx: Contexto, formaCodigo: string, usuarioId: st
   return (await exigirCaixaAberto(tx, usuarioId)).id;
 }
 
+/** Pré-reserva cujo sinal já está pago passa a confirmada. Roda na transação do chamador. */
+export async function confirmarSeSinalPago(tx: Contexto, reservaId: string, ator: string, dados: object = {}): Promise<boolean> {
+  const r = await tx.db.selectFrom("reservas").select(["estado", "valor_sinal"]).where("id", "=", reservaId).executeTakeFirst();
+  if (!r || r.estado !== "pre_reserva" || (await pagoNaReserva(tx, reservaId)) < r.valor_sinal) return false;
+  transicionar(r.estado, "confirmada");
+  await tx.db.updateTable("reservas").set({ estado: "confirmada" }).where("id", "=", reservaId).execute();
+  await auditar(tx, { ator, acao: "reserva.confirmar", alvoTipo: "reserva", alvoId: reservaId, dados: { valorSinal: r.valor_sinal, ...dados } });
+  await registrarEvento(tx, "hospedagem.ReservaConfirmada", { reservaId });
+  return true;
+}
+
 export async function registrarPagamento(
   ctx: Contexto,
   d: { contaId: string; reservaId?: string; formaCodigo: string; valor: Centavos },
@@ -168,14 +179,8 @@ export async function registrarPagamento(
           tipo: "pagamento_reserva_cancelada", alvoTipo: "reserva", alvoId: d.reservaId,
           mensagem: "Entrou um pagamento em uma reserva cancelada. Confira com o hóspede e providencie a devolução ou a reativação.",
         });
-      } else if (reserva.estado === "pre_reserva" && (await pagoNaReserva(tx, d.reservaId)) >= reserva.valor_sinal) {
-        transicionar(reserva.estado, "confirmada");
-        await tx.db.updateTable("reservas").set({ estado: "confirmada" }).where("id", "=", d.reservaId).execute();
-        await auditar(tx, {
-          ator: usuario.id, acao: "reserva.confirmar", alvoTipo: "reserva", alvoId: d.reservaId,
-          dados: { valorSinal: reserva.valor_sinal, pagamentoId: id },
-        });
-        await registrarEvento(tx, "hospedagem.ReservaConfirmada", { reservaId: d.reservaId });
+      } else {
+        await confirmarSeSinalPago(tx, d.reservaId, usuario.id, { pagamentoId: id });
       }
     }
     return id;

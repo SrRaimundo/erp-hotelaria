@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
-import { cancelarReserva } from "../../src/hospedagem/alteracao.js";
+import { alterarReserva, cancelarReserva } from "../../src/hospedagem/alteracao.js";
 import { estornarLancamento, estornarPagamento, extrato, lancar, pagoNaReserva, registrarPagamento, saldo } from "../../src/hospedagem/conta.js";
 import { criarReserva, obterReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { alertasAbertos } from "../../src/infra/alertas.js";
@@ -52,6 +52,18 @@ describe("conta do hóspede", () => {
     expect(aud.map((a) => a.acao)).toContain("reserva.confirmar");
     const mov = await ctx.db.selectFrom("movimentos_caixa").select(["forma_codigo", "valor"]).execute();
     expect(mov).toEqual([{ forma_codigo: "pix", valor: 27000 }]);
+  });
+
+  test("alteração que reduz o sinal abaixo do já pago confirma a pré-reserva", async () => {
+    const r = await criarReserva(ctx, dados, recepcao); // sinal 27000
+    await abrirCaixa(ctx, recepcao.id, 0);
+    await registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "pix", valor: 20000 }, recepcao);
+    expect((await obterReserva(ctx, r.id)).estado).toBe("pre_reserva");
+    const alterada = await alterarReserva(ctx, r.id, { saida: "2026-11-22" }, recepcao); // 60000 → sinal 18000
+    expect(alterada).toMatchObject({ estado: "confirmada", valorSinal: 18000 });
+    const aud = await ctx.db.selectFrom("auditoria").select("acao").where("alvo_id", "=", r.id).execute();
+    expect(aud.map((a) => a.acao)).toContain("reserva.confirmar");
+    expect(await ctx.db.selectFrom("outbox").select("tipo").where("tipo", "=", "hospedagem.ReservaConfirmada").execute()).toHaveLength(1);
   });
 
   test("pagamento parcial não confirma; o complemento confirma", async () => {
