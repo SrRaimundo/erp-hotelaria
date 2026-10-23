@@ -8,7 +8,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
-import { diaHoteleiro, horaLocal, type Data } from "../shared/tempo.js";
+import { dataLocal, horaLocal, type Data } from "../shared/tempo.js";
 import { extrato, lancar, registrarPagamento, saldo, type LinhaExtrato } from "./conta.js";
 import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 import { lancarDiariasPendentes } from "./virada.js";
@@ -31,11 +31,13 @@ async function planejar(ctx: Contexto, reservaId: string, cobrarLate: boolean) {
   }
   const config = await obterConfig(ctx);
   const agora = ctx.relogio.agora();
-  const hoje: Data = diaHoteleiro(agora, config.fuso, config.viradaDia);
-  if (hoje > r.saida) {
-    throw new ErroDominio("ESTADIA_EXCEDIDA", "O hóspede ficou além da data de saída da reserva. Prorrogue a reserva antes de fazer o check-out.", { saida: r.saida, hoje });
+  // A saída vale pela data do calendário (não pelo dia hoteleiro): às 01:00 do dia da saída a última noite já foi dormida.
+  const dataSaida: Data = dataLocal(agora, config.fuso);
+  if (dataSaida > r.saida) {
+    throw new ErroDominio("ESTADIA_EXCEDIDA", "O hóspede ficou além da data de saída da reserva. Prorrogue a reserva antes de fazer o check-out.", { saida: r.saida, hoje: dataSaida });
   }
-  const saidaAntecipada = hoje < r.saida;
+  const saidaAntecipada = dataSaida < r.saida;
+  const hoje: Data = dataSaida; // saída efetiva
   const noites = await ctx.db.selectFrom("reserva_noites").select(["data", "valor", "passos"])
     .where("reserva_id", "=", reservaId).where("data", ">=", r.chegada).where("data", "<", hoje).orderBy("data").execute();
   const feitas = new Set(
@@ -98,6 +100,9 @@ export async function fazerCheckout(ctx: Contexto, pedido: PedidoCheckout, usuar
     }
 
     for (const p of pedido.pagamentos) {
+      if (p.formaCodigo === "faturado") {
+        throw new ErroDominio("FATURADO_VIA_CAMPO_PROPRIO", "O valor faturado deve ser informado no campo \"faturado\", com o nome e o documento do responsável.");
+      }
       await registrarPagamento(tx, { contaId: r.conta_id, reservaId: r.id, formaCodigo: p.formaCodigo, valor: p.valor }, usuario);
     }
     if (pedido.faturado) {

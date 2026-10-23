@@ -141,6 +141,37 @@ describe("check-out", () => {
     expect(aud.map((a) => a.acao)).toContain("reserva.saida_antecipada");
   });
 
+  test.each(["01:00", "03:00"])("janela da virada (%s no dia da saída): cobra a última noite, sem saída antecipada", async (hora) => {
+    const r = await hospedar(dados); // saída 13/11
+    ctx.relogio.definir(as("2026-11-13", hora));
+    const previa = await previaCheckout(ctx, r.id);
+    expect(previa.saidaAntecipada).toBe(false);
+    expect(previa.saldo).toBe(90000);
+    await fazerCheckout(ctx, { reservaId: r.id, pagamentos: [{ formaCodigo: "pix", valor: 90000 }] }, recepcao);
+    const d = await obterReserva(ctx, r.id);
+    expect(d.saida).toBe("2026-11-13");
+    expect(d.noites).toHaveLength(3);
+    const diarias = await ctx.db.selectFrom("lancamentos").select("data_ref").where("tipo", "=", "diaria").orderBy("data_ref").execute();
+    expect(diarias.map((x) => x.data_ref)).toEqual(["2026-11-10", "2026-11-11", "2026-11-12"]);
+    const aud = await ctx.db.selectFrom("auditoria").select("acao").where("alvo_id", "=", r.id).execute();
+    expect(aud.map((a) => a.acao)).not.toContain("reserva.saida_antecipada");
+  });
+
+  test("01:00 do dia seguinte à saída é estadia excedida", async () => {
+    const r = await hospedar(dados);
+    ctx.relogio.definir(as("2026-11-14", "01:00"));
+    await expect(previaCheckout(ctx, r.id)).rejects.toMatchObject({ codigo: "ESTADIA_EXCEDIDA" });
+    await expect(fazerCheckout(ctx, { reservaId: r.id, pagamentos: [] }, recepcao)).rejects.toMatchObject({ codigo: "ESTADIA_EXCEDIDA" });
+  });
+
+  test("forma faturado só entra pelo campo próprio", async () => {
+    const r = await hospedar(dados);
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    await expect(fazerCheckout(ctx, { reservaId: r.id, pagamentos: [{ formaCodigo: "faturado", valor: 90000 }] }, recepcao))
+      .rejects.toMatchObject({ codigo: "FATURADO_VIA_CAMPO_PROPRIO" });
+    expect(await pagamentos()).toHaveLength(0);
+  });
+
   test("late checkout após o horário (fixo e percentual)", async () => {
     await salvarConfig(ctx, { lateCheckout: { tipo: "fixo", valor: 7000 } }, "u1");
     const r = await hospedar(dados);
