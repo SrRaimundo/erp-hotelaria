@@ -59,6 +59,9 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   if (!categoria) throw new ErroDominio("CATEGORIA_NAO_ENCONTRADA", "Categoria não encontrada. Escolha uma categoria existente.");
   // Trocar de categoria sem indicar quarto desfaz a atribuição de quarto.
   const quartoId = m.quartoId !== undefined ? m.quartoId : categoriaId === atual.categoriaId ? atual.quartoId : null;
+  if (atual.estado === "hospedada" && !quartoId) {
+    throw new ErroDominio("QUARTO_OBRIGATORIO_HOSPEDADA", "O hóspede já está no quarto: informe o quarto de destino para trocar de quarto ou de categoria.");
+  }
   if (quartoId) {
     const quarto = await c.db.selectFrom("quartos").select("categoria_id").where("id", "=", quartoId).executeTakeFirst();
     if (!quarto) throw new ErroDominio("QUARTO_NAO_ENCONTRADO", "Quarto não encontrado.");

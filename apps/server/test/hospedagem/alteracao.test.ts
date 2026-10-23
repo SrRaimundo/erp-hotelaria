@@ -80,6 +80,46 @@ describe("alteração", () => {
     expect(d.valorSinal).toBe(27000);
   });
 
+  test("trocar de categoria recota todas as noites sem desconto e trata o quarto", async () => {
+    const sup = (await criarCategoria(ctx, { nome: "Superior", maxAdultos: 3, maxCriancas: 1, comodidades: [] }, "u1")).id;
+    await salvarTabelaBase(ctx, { categoriaId: sup, porAdultos: { 1: 40000, 2: 50000, 3: 60000 }, adultoExtra: 9000 }, "u1");
+    const qs1 = (await criarQuarto(ctx, { numero: "21", categoriaId: sup }, "u1")).id;
+    const r = await criarReserva(ctx, { ...dados, quartoId: q12, descontoPercentual: 10, autorizacao: aut() }, recepcao);
+    expect((await obterReserva(ctx, r.id)).noites.map((n) => n.valor)).toEqual([27000, 27000, 27000]);
+
+    await alterarReserva(ctx, r.id, { categoriaId: sup }, recepcao);
+    let d = await obterReserva(ctx, r.id);
+    expect(d.categoriaId).toBe(sup);
+    expect(d.quartoId).toBeNull();
+    expect(d.noites.map((n) => n.valor)).toEqual([50000, 50000, 50000]);
+    expect(d.noites[0]!.passos.some((p) => p.rotulo.startsWith("Desconto"))).toBe(false);
+
+    await alterarReserva(ctx, r.id, { categoriaId: std, quartoId: q12 }, recepcao);
+    await alterarReserva(ctx, r.id, { categoriaId: sup, quartoId: qs1 }, recepcao);
+    d = await obterReserva(ctx, r.id);
+    expect(d.quartoId).toBe(qs1);
+    expect(d.noites.map((n) => n.valor)).toEqual([50000, 50000, 50000]);
+  });
+
+  test("mudar as crianças recota todas as noites", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await salvarTabelaBase(ctx, { categoriaId: std, porAdultos: { 1: 1, 2: 41000, 3: 3 }, adultoExtra: 1 }, "u1");
+    await alterarReserva(ctx, r.id, { criancasNascimento: ["2024-01-01"] }, recepcao);
+    const d = await obterReserva(ctx, r.id);
+    expect(d.criancasNascimento).toEqual(["2024-01-01"]);
+    expect(d.noites.map((n) => n.valor)).toEqual([41000, 41000, 41000]);
+  });
+
+  test("hospedada não fica sem quarto", async () => {
+    const r = await criarReserva(ctx, { ...dados, quartoId: q12 }, recepcao);
+    await ctx.db.updateTable("reservas").set({ estado: "hospedada" }).where("id", "=", r.id).execute();
+    await expect(alterarReserva(ctx, r.id, { quartoId: null }, recepcao)).rejects.toMatchObject({ codigo: "QUARTO_OBRIGATORIO_HOSPEDADA" });
+    const sup = (await criarCategoria(ctx, { nome: "Superior", maxAdultos: 3, maxCriancas: 1, comodidades: [] }, "u1")).id;
+    await salvarTabelaBase(ctx, { categoriaId: sup, porAdultos: { 1: 1, 2: 50000, 3: 3 }, adultoExtra: 1 }, "u1");
+    await expect(alterarReserva(ctx, r.id, { categoriaId: sup }, recepcao)).rejects.toMatchObject({ codigo: "QUARTO_OBRIGATORIO_HOSPEDADA" });
+    expect((await obterReserva(ctx, r.id)).quartoId).toBe(q12);
+  });
+
   test("preço manual exige supervisor e aparece no detalhamento", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
     const m = { precosManuais: [{ data: "2026-11-21", valor: 20000 }] };
@@ -98,8 +138,14 @@ describe("alteração", () => {
     const r1 = await criarReserva(ctx, { ...dados, quartoId: q12 }, recepcao);
     const r2 = await criarReserva(ctx, { ...dados, quartoId: q13 }, recepcao);
     const quartoDaR2 = (await obterReserva(ctx, r2.id)).quartoId!;
-    await expect(alterarReserva(ctx, r1.id, { quartoId: quartoDaR2 }, recepcao)).rejects.toMatchObject({ codigo: "QUARTO_INDISPONIVEL" });
-    expect((await obterReserva(ctx, r1.id)).quartoId).toBe(q12);
+    const antes = await obterReserva(ctx, r1.id);
+    await expect(alterarReserva(ctx, r1.id, { quartoId: quartoDaR2, saida: "2026-11-25" }, recepcao)).rejects.toMatchObject({ codigo: "QUARTO_INDISPONIVEL" });
+    const depois = await obterReserva(ctx, r1.id);
+    expect(depois.quartoId).toBe(q12);
+    expect(depois).toEqual(antes); // saida, total, noites e valorSinal intactos
+    expect(depois.saida).toBe("2026-11-23");
+    expect(await ctx.db.selectFrom("outbox").select("tipo").where("tipo", "=", "hospedagem.ReservaAlterada").execute()).toHaveLength(0);
+    expect(await ctx.db.selectFrom("auditoria").select("acao").where("alvo_id", "=", r1.id).where("acao", "=", "reserva.alterar").execute()).toHaveLength(0);
   });
 
   test("restrição no novo período exige supervisor", async () => {
@@ -111,7 +157,7 @@ describe("alteração", () => {
   });
 
   test("estados e datas: hospedada não muda chegada; cancelada não altera; datas inválidas", async () => {
-    const r = await criarReserva(ctx, dados, recepcao);
+    const r = await criarReserva(ctx, { ...dados, quartoId: q12 }, recepcao);
     await expect(alterarReserva(ctx, r.id, { saida: "2026-11-20" }, recepcao)).rejects.toMatchObject({ codigo: "DATAS_INVALIDAS" });
     await ctx.db.updateTable("reservas").set({ estado: "hospedada" }).where("id", "=", r.id).execute();
     await expect(alterarReserva(ctx, r.id, { chegada: "2026-11-21" }, recepcao)).rejects.toMatchObject({ codigo: "CHEGADA_NAO_ALTERAVEL" });
@@ -124,7 +170,7 @@ describe("alteração", () => {
 describe("cancelamento, no-show e sinal", () => {
   test("cancelar exige supervisor e motivo; resolve alertas e libera o quarto", async () => {
     const r = await criarReserva(ctx, { ...dados, quartoId: q12 }, recepcao);
-    await criarAlerta(ctx, { tipo: "sinal_vencendo", alvoTipo: "reserva", alvoId: r.id, mensagem: "x" });
+    await criarAlerta(ctx, { tipo: "sinal_vencido", alvoTipo: "reserva", alvoId: r.id, mensagem: "x" });
     await expect(cancelarReserva(ctx, r.id, recepcao, undefined)).rejects.toMatchObject({ codigo: "SUPERVISOR_NECESSARIO" });
     await expect(cancelarReserva(ctx, r.id, recepcao, { motivo: " ", supervisor: admin })).rejects.toMatchObject({ codigo: "MOTIVO_OBRIGATORIO" });
     expect((await obterReserva(ctx, r.id)).estado).toBe("pre_reserva");
@@ -163,7 +209,7 @@ describe("cancelamento, no-show e sinal", () => {
   test("prorrogar sinal zera o aviso e resolve o alerta", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
     await ctx.db.updateTable("reservas").set({ aviso_sinal_em: "2026-11-11T00:00:00.000Z" }).where("id", "=", r.id).execute();
-    await criarAlerta(ctx, { tipo: "sinal_vencendo", alvoTipo: "reserva", alvoId: r.id, mensagem: "x" });
+    await criarAlerta(ctx, { tipo: "sinal_vencido", alvoTipo: "reserva", alvoId: r.id, mensagem: "x" });
     await expect(prorrogarSinal(ctx, r.id, "2026-11-09T00:00:00.000Z", recepcao, aut())).rejects.toMatchObject({ codigo: "PRAZO_INVALIDO" });
     await expect(prorrogarSinal(ctx, r.id, "2026-11-15T12:00:00.000Z", recepcao, undefined)).rejects.toMatchObject({ codigo: "SUPERVISOR_NECESSARIO" });
     await prorrogarSinal(ctx, r.id, "2026-11-15T12:00:00.000Z", recepcao, aut("Aguardando PIX"));
