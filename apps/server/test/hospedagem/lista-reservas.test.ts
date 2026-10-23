@@ -58,6 +58,13 @@ describe("listarReservas", () => {
     expect(p2.total).toBe(3);
   });
 
+  test("q trata % e _ literalmente", async () => {
+    await tres();
+    expect((await listarReservas(ctx, { q: "50%" })).itens).toHaveLength(0);
+    expect((await listarReservas(ctx, { q: "_" })).itens).toHaveLength(0);
+    expect((await listarReservas(ctx, { q: "%" })).total).toBe(0);
+  });
+
   test("item traz total da estadia e categoria", async () => {
     await tres();
     const r = await listarReservas(ctx, { q: "maria" });
