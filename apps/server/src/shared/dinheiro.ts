@@ -6,7 +6,7 @@ export function aplicarPercentual(v: number, pct: number): number {
 }
 
 function meioParaLongeDoZero(v: number): number {
-  return Math.sign(v) * Math.round(Math.abs(v));
+  return Math.sign(v) * Math.round(Math.abs(v)) || 0; // || 0 evita -0
 }
 
 export function arredondarCentavos(v: number): Centavos {

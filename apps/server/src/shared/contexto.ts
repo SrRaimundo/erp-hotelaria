@@ -24,6 +24,13 @@ export async function emTransacao<T>(ctx: Contexto, fn: (tx: Contexto) => Promis
   const resultado = await ctx.db.transaction().execute((trx) =>
     fn({ ...ctx, db: trx, eventosPendentes: pendentes }),
   );
-  for (const e of pendentes) ctx.barramento.publicar(e);
+  for (const e of pendentes) {
+    try {
+      ctx.barramento.publicar(e);
+    } catch (erro) {
+      // O commit já ocorreu: um assinante com defeito não pode derrubar quem chamou nem os demais eventos.
+      console.error("Falha ao publicar evento após o commit:", erro);
+    }
+  }
   return resultado;
 }

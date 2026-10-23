@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { sql } from "kysely";
 import { abrirBanco, migrar } from "../../src/shared/banco.js";
 import { novoId } from "../../src/shared/ids.js";
@@ -57,4 +57,22 @@ test("emTransacao descarta eventos e desfaz em caso de erro", async () => {
   expect(vistos).toEqual([]);
   const { rows } = await sql`select * from x`.execute(ctx.db);
   expect(rows).toEqual([]);
+});
+
+test("assinante que lança não derruba emTransacao nem os demais eventos", async () => {
+  const ctx = await criarContextoTeste();
+  const vistos: unknown[] = [];
+  (ctx.barramento as any).publicar = (e: any) => {
+    if (e.tipo === "ruim") throw new Error("assinante falhou");
+    vistos.push(e);
+  };
+  const erro = vi.spyOn(console, "error").mockImplementation(() => {});
+  const r = await emTransacao(ctx, async (tx) => {
+    tx.eventosPendentes.push({ tipo: "ruim" }, { tipo: "bom" });
+    return 42;
+  });
+  expect(r).toBe(42);
+  expect(vistos).toEqual([{ tipo: "bom" }]);
+  expect(erro).toHaveBeenCalledTimes(1);
+  erro.mockRestore();
 });

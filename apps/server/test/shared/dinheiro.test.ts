@@ -9,6 +9,7 @@ test("cadeia de percentuais do exemplo da spec", () => {
 test("arredondarCentavos meio para longe do zero", () => {
   expect(arredondarCentavos(100.5)).toBe(101);
   expect(arredondarCentavos(-100.5)).toBe(-101);
+  expect(arredondarCentavos(-0.4)).toBe(0); // toBe usa Object.is: não aceita -0
 });
 test("arredondarReal", () => {
   expect(arredondarReal(45540)).toBe(45500);
