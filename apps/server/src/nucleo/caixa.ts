@@ -48,6 +48,32 @@ export async function registrarMovimento(
     .execute();
 }
 
+export type ResumoCaixa = {
+  turno: Turno;
+  movimentos: { forma: string; valor: Centavos; origemTipo: string; instante: string }[];
+  esperadoPorForma: Record<string, Centavos>;
+};
+
+/** Turno aberto do usuário com seus movimentos e o valor esperado por forma (dinheiro inclui o valor inicial). */
+export async function resumoCaixa(ctx: Contexto, usuarioId: string): Promise<ResumoCaixa | null> {
+  const turno = await turnoAberto(ctx, usuarioId);
+  if (!turno) return null;
+  const ls = await ctx.db
+    .selectFrom("movimentos_caixa")
+    .select(["forma_codigo", "valor", "origem_tipo", "instante"])
+    .where("turno_id", "=", turno.id)
+    .orderBy("instante")
+    .orderBy("id")
+    .execute();
+  const esperadoPorForma: Record<string, Centavos> = { dinheiro: turno.valorInicial };
+  for (const m of ls) esperadoPorForma[m.forma_codigo] = (esperadoPorForma[m.forma_codigo] ?? 0) + m.valor;
+  return {
+    turno,
+    movimentos: ls.map((m) => ({ forma: m.forma_codigo, valor: m.valor, origemTipo: m.origem_tipo, instante: m.instante })),
+    esperadoPorForma,
+  };
+}
+
 export async function abrirCaixa(ctx: Contexto, usuarioId: string, valorInicial: Centavos): Promise<Turno> {
   return emTransacao(ctx, async (tx) => {
     if (await turnoAberto(tx, usuarioId)) {

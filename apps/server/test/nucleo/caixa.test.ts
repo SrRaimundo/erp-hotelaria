@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
 import { criarApp } from "../../src/http/app.js";
-import { abrirCaixa, exigirCaixaAberto, fecharCaixa, registrarMovimento, turnoAberto } from "../../src/nucleo/caixa.js";
+import { abrirCaixa, exigirCaixaAberto, fecharCaixa, registrarMovimento, resumoCaixa, turnoAberto } from "../../src/nucleo/caixa.js";
 import { emTransacao } from "../../src/shared/contexto.js";
 
 const u = "usuario-admin";
@@ -84,11 +84,26 @@ describe("API de caixa", () => {
     const abre = await app.inject({ method: "POST", url: "/api/caixa/abrir", headers: rec, payload: { valorInicial: 5000 } });
     expect(abre.statusCode).toBe(201);
     const atual = await app.inject({ method: "GET", url: "/api/caixa/atual", headers: rec });
-    expect(atual.json()).toMatchObject({ valorInicial: 5000, fechadoEm: null });
+    expect(atual.json()).toMatchObject({ turno: { valorInicial: 5000, fechadoEm: null }, movimentos: [], esperadoPorForma: { dinheiro: 5000 } });
     const invalido = await app.inject({ method: "POST", url: "/api/caixa/abrir", headers: rec, payload: { valorInicial: 10.5 } });
     expect(invalido.statusCode).toBe(400);
     const fecha = await app.inject({ method: "POST", url: "/api/caixa/fechar", headers: rec, payload: { contados: { dinheiro: 4000 } } });
     expect(fecha.statusCode).toBe(200);
     expect(fecha.json().porForma).toEqual([{ forma: "dinheiro", esperado: 5000, contado: 4000, diferenca: -1000 }]);
+  });
+});
+
+describe("resumo do caixa", () => {
+  test("caixa atual traz movimentos e esperado por forma", async () => {
+    expect(await resumoCaixa(ctx, u)).toBeNull();
+    await abrirCaixa(ctx, u, 10000);
+    await emTransacao(ctx, async (tx) => {
+      const t = await exigirCaixaAberto(tx, u);
+      await registrarMovimento(tx, t.id, { formaCodigo: "pix", valor: 27000, origemTipo: "pagamento", origemId: "p1" });
+    });
+    const r = (await resumoCaixa(ctx, u))!;
+    expect(r.esperadoPorForma).toEqual({ dinheiro: 10000, pix: 27000 });
+    expect(r.movimentos).toEqual([{ forma: "pix", valor: 27000, origemTipo: "pagamento", instante: "2026-11-10T15:00:00.000Z" }]);
+    expect(r.turno.valorInicial).toBe(10000);
   });
 });

@@ -74,7 +74,7 @@ export function registrarRotasTarifas(app: FastifyInstance, ctx: Contexto): void
     return salvarPercentualDiaSemana(ctx, corpoDia.parse(req.body), req.usuario.id);
   });
 
-  app.get("/api/tarifas/canais", async (req) => { gerenciar(req); return listarCanais(ctx); });
+  app.get("/api/tarifas/canais", async () => listarCanais(ctx)); // leitura: qualquer sessão
   app.put("/api/tarifas/canais", async (req) => {
     gerenciar(req);
     return salvarCanal(ctx, corpoCanal.parse(req.body), req.usuario.id);

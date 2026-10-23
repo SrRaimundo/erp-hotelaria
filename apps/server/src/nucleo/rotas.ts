@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { data } from "../http/validacao.js";
 import type { Contexto } from "../shared/contexto.js";
-import { abrirCaixa, fecharCaixa, turnoAberto } from "./caixa.js";
+import { abrirCaixa, fecharCaixa, resumoCaixa } from "./caixa.js";
 import { criarCategoria, listarCategorias } from "./categorias.js";
 import { listarFormas } from "./formas-pagamento.js";
 import { buscarHospedes, salvarHospede } from "./hospedes.js";
@@ -155,6 +155,6 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
   });
   app.get("/api/caixa/atual", async (req) => {
     exigirPermissao(req.usuario, "caixa.operar");
-    return turnoAberto(ctx, req.usuario.id);
+    return resumoCaixa(ctx, req.usuario.id);
   });
 }

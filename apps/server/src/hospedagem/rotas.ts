@@ -12,6 +12,7 @@ import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
 import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } from "./governanca.js";
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
+import { listarReservas } from "./lista-reservas.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const texto = z.string().trim().min(1, "Campo obrigatório");
@@ -67,6 +68,25 @@ const corpoCheckout = z.object({
   faturado: z.object({ nome: texto, documento: texto, valor: z.number().int().min(1) }).optional(),
   cobrarLateCheckout: z.boolean().optional(),
 });
+const ESTADOS = ["pre_reserva", "confirmada", "hospedada", "finalizada", "cancelada", "no_show"] as const;
+const queryLista = z
+  .object({
+    inicio: data.optional(),
+    fim: data.optional(),
+    estado: z.string().optional(),
+    canal: z.string().optional(),
+    q: z.string().optional(),
+    pagina: z.coerce.number().int().min(1).optional(),
+    porPagina: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .transform(({ estado, ...resto }, ctx) => {
+    const estados = estado ? z.array(z.enum(ESTADOS)).safeParse(estado.split(",")) : undefined;
+    if (estados && !estados.success) {
+      ctx.addIssue({ code: "custom", message: "Estado de reserva inválido", path: ["estado"] });
+      return z.NEVER;
+    }
+    return { ...resto, estados: estados?.data };
+  });
 const corpoGrupo = z.object({ titularId: texto, cobranca: z.enum(["unica", "separada"]) });
 
 export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): void {
@@ -75,6 +95,10 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   app.post("/api/reservas", async (req) => {
     gerenciar(req);
     return criarReserva(ctx, corpoReserva.parse(req.body), req.usuario);
+  });
+  app.get("/api/reservas", async (req) => {
+    gerenciar(req);
+    return listarReservas(ctx, queryLista.parse(req.query));
   });
   app.get("/api/reservas/:id", async (req) => {
     gerenciar(req);
