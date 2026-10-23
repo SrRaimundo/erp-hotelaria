@@ -1,7 +1,7 @@
 import { auditar } from "../infra/auditoria.js";
 import { criarAlerta } from "../infra/alertas.js";
 import { registrarEvento } from "../infra/outbox.js";
-import { exigirCaixaAberto, registrarMovimento } from "../nucleo/caixa.js";
+import { exigirCaixaAberto, registrarMovimento, turnoAberto } from "../nucleo/caixa.js";
 import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import { autorizarSupervisor } from "../nucleo/supervisor.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
@@ -113,16 +113,28 @@ export async function pagoNaReserva(ctx: Contexto, reservaId: string): Promise<C
   return Number(l?.total ?? 0);
 }
 
+/** Faturado é cobrado depois do responsável: não entra no caixa (sem movimento) e não exige caixa aberto. */
+const FATURADO = "faturado";
+
+async function turnoDoPagamento(tx: Contexto, formaCodigo: string, usuarioId: string): Promise<string | null> {
+  if (formaCodigo === FATURADO) return (await turnoAberto(tx, usuarioId))?.id ?? null;
+  return (await exigirCaixaAberto(tx, usuarioId)).id;
+}
+
 export async function registrarPagamento(
   ctx: Contexto,
   d: { contaId: string; reservaId?: string; formaCodigo: string; valor: Centavos },
   usuario: UsuarioSessao,
+  opcoes: { permitirFaturado?: boolean } = {},
 ): Promise<string> {
   if (!Number.isInteger(d.valor) || d.valor <= 0) {
     throw new ErroDominio("VALOR_INVALIDO", "Valor inválido. Informe um valor maior que zero, em centavos.");
   }
+  if (d.formaCodigo === FATURADO && !opcoes.permitirFaturado) {
+    throw new ErroDominio("FATURADO_SOMENTE_NO_CHECKOUT", "O pagamento faturado só pode ser registrado no check-out, com o nome e o documento do responsável.");
+  }
   return emTransacao(ctx, async (tx) => {
-    const turno = await exigirCaixaAberto(tx, usuario.id);
+    const turnoId = await turnoDoPagamento(tx, d.formaCodigo, usuario.id);
     await exigirContaAberta(tx, d.contaId);
     const forma = await tx.db.selectFrom("formas_pagamento").select("ativa").where("codigo", "=", d.formaCodigo).executeTakeFirst();
     if (!forma) throw new ErroDominio("FORMA_NAO_ENCONTRADA", "Forma de pagamento não encontrada.", { formaCodigo: d.formaCodigo });
@@ -139,9 +151,11 @@ export async function registrarPagamento(
     const id = novoId();
     await tx.db.insertInto("pagamentos").values({
       id, conta_id: d.contaId, reserva_id: d.reservaId ?? null, forma_codigo: d.formaCodigo, valor: d.valor,
-      estorna_id: null, turno_id: turno.id, instante: tx.relogio.agora().toISOString(), usuario: usuario.id,
+      estorna_id: null, turno_id: turnoId, instante: tx.relogio.agora().toISOString(), usuario: usuario.id,
     }).execute();
-    await registrarMovimento(tx, turno.id, { formaCodigo: d.formaCodigo, valor: d.valor, origemTipo: "pagamento", origemId: id });
+    if (d.formaCodigo !== FATURADO) {
+      await registrarMovimento(tx, turnoId!, { formaCodigo: d.formaCodigo, valor: d.valor, origemTipo: "pagamento", origemId: id });
+    }
     await auditar(tx, {
       ator: usuario.id, acao: "conta.pagar", alvoTipo: "pagamento", alvoId: id,
       dados: { contaId: d.contaId, reservaId: d.reservaId ?? null, formaCodigo: d.formaCodigo, valor: d.valor },
@@ -184,13 +198,15 @@ export async function estornarPagamento(
     const ja = await tx.db.selectFrom("pagamentos").select("id").where("estorna_id", "=", pagamentoId).executeTakeFirst();
     if (ja) throw new ErroDominio("JA_ESTORNADO", "Este pagamento já foi estornado.", { pagamentoId });
     await exigirContaAberta(tx, o.conta_id);
-    const turno = await exigirCaixaAberto(tx, usuario.id);
+    const turnoId = await turnoDoPagamento(tx, o.forma_codigo, usuario.id);
     const id = novoId();
     await tx.db.insertInto("pagamentos").values({
       id, conta_id: o.conta_id, reserva_id: o.reserva_id, forma_codigo: o.forma_codigo, valor: -o.valor,
-      estorna_id: o.id, turno_id: turno.id, instante: tx.relogio.agora().toISOString(), usuario: usuario.id,
+      estorna_id: o.id, turno_id: turnoId, instante: tx.relogio.agora().toISOString(), usuario: usuario.id,
     }).execute();
-    await registrarMovimento(tx, turno.id, { formaCodigo: o.forma_codigo, valor: -o.valor, origemTipo: "pagamento", origemId: id });
+    if (o.forma_codigo !== FATURADO) {
+      await registrarMovimento(tx, turnoId!, { formaCodigo: o.forma_codigo, valor: -o.valor, origemTipo: "pagamento", origemId: id });
+    }
     await auditar(tx, {
       ator: usuario.id, acao: "conta.estornar_pagamento", alvoTipo: "pagamento", alvoId: pagamentoId,
       motivo: aut.motivo, supervisorId: aut.supervisorId, dados: { estornoId: id, valor: -o.valor },

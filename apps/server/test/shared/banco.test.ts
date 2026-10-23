@@ -76,3 +76,26 @@ test("assinante que lança não derruba emTransacao nem os demais eventos", asyn
   expect(erro).toHaveBeenCalledTimes(1);
   erro.mockRestore();
 });
+
+test("0440: pagamentos aceita turno nulo e preserva dados, estornos e índices", async () => {
+  const { todasMigracoes } = await import("../../src/shared/migracoes.js");
+  const db = abrirBanco(":memory:");
+  await migrar(db, todasMigracoes.filter((m) => m.nome < "0440"));
+  await db.insertInto("hospedes").values({ id: "h1", nome: "T", nome_busca: "t", documento_tipo: "cpf", documento: "1", nacionalidade: "BR" }).execute();
+  await db.insertInto("contas").values({ id: "c1", titular_id: "h1", situacao: "aberta" }).execute();
+  await db.insertInto("turnos_caixa").values({ id: "t1", usuario_id: "usuario-admin", aberto_em: "2026-01-01T00:00:00Z", valor_inicial: 0 }).execute();
+  const base = { conta_id: "c1", reserva_id: null, forma_codigo: "pix", turno_id: "t1", instante: "2026-01-01T00:00:00Z", usuario: "u" };
+  await db.insertInto("pagamentos").values({ ...base, id: "p1", valor: 100, estorna_id: null }).execute();
+  await db.insertInto("pagamentos").values({ ...base, id: "p2", valor: -100, estorna_id: "p1" }).execute();
+
+  await migrar(db, todasMigracoes);
+  expect(await db.selectFrom("pagamentos").select(["id", "estorna_id", "turno_id"]).orderBy("id").execute()).toEqual([
+    { id: "p1", estorna_id: null, turno_id: "t1" },
+    { id: "p2", estorna_id: "p1", turno_id: "t1" },
+  ]);
+  await db.insertInto("pagamentos").values({ ...base, id: "p3", forma_codigo: "faturado", valor: 50, estorna_id: null, turno_id: null }).execute();
+  expect((await sql`PRAGMA foreign_key_check`.execute(db)).rows).toEqual([]);
+  await expect(db.insertInto("pagamentos").values({ ...base, id: "p4", valor: -100, estorna_id: "p1" }).execute()).rejects.toThrow(/UNIQUE/);
+  await expect(db.insertInto("pagamentos").values({ ...base, id: "p5", valor: 1, estorna_id: "nao-existe" }).execute()).rejects.toThrow(/FOREIGN KEY/);
+  await db.destroy();
+});

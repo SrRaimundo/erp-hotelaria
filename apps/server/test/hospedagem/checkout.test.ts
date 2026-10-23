@@ -6,7 +6,7 @@ import { fazerCheckout, previaCheckout } from "../../src/hospedagem/checkout.js"
 import { extrato, lancar, saldo } from "../../src/hospedagem/conta.js";
 import { criarGrupo, criarReserva, obterReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { processarVirada } from "../../src/hospedagem/virada.js";
-import { abrirCaixa } from "../../src/nucleo/caixa.js";
+import { abrirCaixa, fecharCaixa } from "../../src/nucleo/caixa.js";
 import { criarCategoria } from "../../src/nucleo/categorias.js";
 import { ativarForma } from "../../src/nucleo/formas-pagamento.js";
 import { salvarHospede } from "../../src/nucleo/hospedes.js";
@@ -114,6 +114,30 @@ describe("check-out", () => {
     expect((await pagamentos()).map((p) => p.forma_codigo).sort()).toEqual(["faturado", "pix"]);
     expect(await ctx.db.selectFrom("outbox").select("tipo").where("tipo", "=", "hospedagem.ValorAReceberCriado").execute()).toHaveLength(1);
     expect((await obterReserva(ctx, r.id)).estado).toBe("finalizada");
+  });
+
+  test("I2: faturado não entra no caixa nem no fechamento", async () => {
+    const r = await hospedar(dados);
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    await fazerCheckout(ctx, {
+      reservaId: r.id, pagamentos: [{ formaCodigo: "pix", valor: 40000 }],
+      faturado: { nome: "Empresa X", documento: "12345678000199", valor: 50000 },
+    }, recepcao);
+    const movs = await ctx.db.selectFrom("movimentos_caixa").select(["forma_codigo", "valor"]).execute();
+    expect(movs).toEqual([{ forma_codigo: "pix", valor: 40000 }]);
+    const rel = await fecharCaixa(ctx, recepcao.id, { dinheiro: 0, pix: 40000 });
+    expect(rel.porForma.map((f) => f.forma)).not.toContain("faturado");
+    expect(rel.porForma.every((f) => f.diferenca === 0)).toBe(true);
+  });
+
+  test("I2: check-out só faturado não exige caixa aberto", async () => {
+    const r = await hospedar(dados);
+    await fecharCaixa(ctx, recepcao.id, {});
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    await fazerCheckout(ctx, { reservaId: r.id, pagamentos: [], faturado: { nome: "Empresa X", documento: "1", valor: 90000 } }, recepcao);
+    expect((await obterReserva(ctx, r.id)).estado).toBe("finalizada");
+    const [p] = await pagamentos();
+    expect(p).toMatchObject({ forma_codigo: "faturado", valor: 90000, turno_id: null });
   });
 
   test("faturado exige a forma ativa e desfaz tudo", async () => {

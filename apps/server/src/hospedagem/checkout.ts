@@ -109,7 +109,7 @@ export async function fazerCheckout(ctx: Contexto, pedido: PedidoCheckout, usuar
     }
     if (pedido.faturado) {
       const f = pedido.faturado;
-      await registrarPagamento(tx, { contaId: r.conta_id, reservaId: r.id, formaCodigo: "faturado", valor: f.valor }, usuario);
+      await registrarPagamento(tx, { contaId: r.conta_id, reservaId: r.id, formaCodigo: "faturado", valor: f.valor }, usuario, { permitirFaturado: true });
       const id = novoId();
       await tx.db.insertInto("valores_a_receber").values({
         id, conta_id: r.conta_id, reserva_id: r.id, responsavel_nome: f.nome, responsavel_documento: f.documento,

@@ -111,3 +111,31 @@ export const migracaoHospedagemReceber: Migracao = {
       .execute();
   },
 };
+
+/**
+ * Pagamento faturado não passa pelo caixa: turno_id passa a aceitar nulo.
+ * SQLite não altera NOT NULL; a tabela é recriada (a autorreferência aponta para a nova tabela e o RENAME a ajusta).
+ */
+export const migracaoHospedagemFaturadoSemTurno: Migracao = {
+  nome: "0440_hospedagem_faturado_sem_turno",
+  async up(db) {
+    await sql`CREATE TABLE pagamentos_novo (
+      id text PRIMARY KEY,
+      conta_id text NOT NULL REFERENCES contas(id),
+      reserva_id text REFERENCES reservas(id),
+      forma_codigo text NOT NULL,
+      valor integer NOT NULL,
+      estorna_id text REFERENCES pagamentos_novo(id),
+      turno_id text REFERENCES turnos_caixa(id),
+      instante text NOT NULL,
+      usuario text NOT NULL
+    )`.execute(db);
+    await sql`INSERT INTO pagamentos_novo (id, conta_id, reserva_id, forma_codigo, valor, estorna_id, turno_id, instante, usuario)
+      SELECT id, conta_id, reserva_id, forma_codigo, valor, estorna_id, turno_id, instante, usuario FROM pagamentos`.execute(db);
+    await sql`DROP TABLE pagamentos`.execute(db);
+    await sql`ALTER TABLE pagamentos_novo RENAME TO pagamentos`.execute(db);
+    await sql`CREATE UNIQUE INDEX pagamentos_estorno_unico ON pagamentos (estorna_id) WHERE estorna_id IS NOT NULL`.execute(db);
+    await db.schema.createIndex("pagamentos_conta").on("pagamentos").column("conta_id").execute();
+    await db.schema.createIndex("pagamentos_reserva").on("pagamentos").column("reserva_id").execute();
+  },
+};

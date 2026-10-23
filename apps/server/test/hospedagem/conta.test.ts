@@ -184,6 +184,35 @@ describe("conta do hóspede", () => {
   });
 });
 
+describe("faturado e estorno de pagamento", () => {
+  test("I2: faturado só entra pelo check-out", async () => {
+    const app = criarApp(ctx);
+    const rec = await entrarComo(ctx, "recepcao");
+    const r = await criarReserva(ctx, dados, recepcao);
+    await abrirCaixa(ctx, recepcao.id, 0);
+    await expect(registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "faturado", valor: 1000 }, recepcao))
+      .rejects.toMatchObject({ codigo: "FATURADO_SOMENTE_NO_CHECKOUT" });
+    const res = await app.inject({ method: "POST", url: `/api/contas/${r.contaId}/pagamentos`, headers: rec, payload: { reservaId: r.id, formaCodigo: "faturado", valor: 1000 } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().codigo).toBe("FATURADO_SOMENTE_NO_CHECKOUT");
+    expect(await ctx.db.selectFrom("pagamentos").selectAll().execute()).toHaveLength(0);
+  });
+
+  test("estornar pagamento exige caixa.operar", async () => {
+    await ctx.db.insertInto("perfis").values({ nome: "lancador", limite_desconto: 0 }).execute();
+    await ctx.db.insertInto("perfil_permissoes").values({ perfil: "lancador", permissao: "conta.lancar" }).execute();
+    await criarUsuario(ctx, { nome: "Lançador", login: "lancador", senha: "senha-teste", perfil: "lancador" }, "admin");
+    const app = criarApp(ctx);
+    const lanc = { authorization: `Bearer ${(await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "lancador", senha: "senha-teste" } })).json().token}` };
+    const r = await criarReserva(ctx, dados, recepcao);
+    await abrirCaixa(ctx, recepcao.id, 0);
+    const idP = await registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "pix", valor: 1000 }, recepcao);
+    const res = await app.inject({ method: "POST", url: `/api/pagamentos/${idP}/estornar`, headers: lanc, payload: { motivo: "Erro", supervisor: admin } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detalhes).toMatchObject({ permissao: "caixa.operar" });
+  });
+});
+
 describe("rotas da conta", () => {
   test("lançar, pagar, consultar e estornar", async () => {
     const app = criarApp(ctx);

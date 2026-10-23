@@ -181,6 +181,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   });
   app.post("/api/pagamentos/:id/estornar", async (req) => {
     exigirPermissao(req.usuario, "conta.lancar");
+    exigirPermissao(req.usuario, "caixa.operar"); // o estorno movimenta o caixa
     const id = await estornarPagamento(ctx, idParam.parse(req.params).id, req.usuario, corpoSensivel.parse(req.body));
     return { id };
   });
