@@ -286,7 +286,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     alertas,
     ocupacao: { ocupados, total, percentual },
     numeros: {
-      chegadas: chegadas.filter((c) => c.estado !== "hospedada").length,
+      chegadas: chegadas.length,
       chegadasJaHospedadas: chegadas.filter((c) => c.estado === "hospedada").length,
       saidas: saidas.length,
       hospedados: hospedadas.length,

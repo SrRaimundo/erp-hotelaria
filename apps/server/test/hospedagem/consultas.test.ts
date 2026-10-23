@@ -129,7 +129,7 @@ describe("painel do dia ampliado", () => {
     const p = await painelDoDia(ctx);
     expect(p.ocupacao).toEqual({ ocupados: 6, total: 9, percentual: 67 });
     expect(p.numeros).toEqual({
-      chegadas: 1, chegadasJaHospedadas: 1, saidas: 0, hospedados: 4, pessoasHospedadas: 9,
+      chegadas: 2, chegadasJaHospedadas: 1, saidas: 0, hospedados: 4, pessoasHospedadas: 9,
       quartosSujos: 0, quartosManutencao: 1, livresHoje: 3,
     });
     expect(p.chegadas).toHaveLength(2); // confirmada + já hospedada
@@ -149,6 +149,16 @@ describe("painel do dia ampliado", () => {
     expect(c).toMatchObject({ estado: "pre_reserva", noites: 2, adultos: 2, criancas: 1, canal: "Balcão", sinalPendente: 17000, pendenciasFnrh: true, titular: "Ana Sem Documento" });
     const o = p.chegadas.find((x) => x.reservaId === ok.id)!;
     expect(o).toMatchObject({ sinalPendente: 0, pendenciasFnrh: false });
+  });
+
+  test("titular menor de 18 na chegada não exige documento no FNRH", async () => {
+    await salvarHospede(ctx, { id: "h5", nome: "Menor Titular", documentoTipo: "cpf", documento: null, nascimento: "2015-03-03", nacionalidade: "BR" }, "u1");
+    await salvarHospede(ctx, { id: "h6", nome: "Adulto Igual", documentoTipo: "cpf", documento: null, nascimento: "1990-03-03", nacionalidade: "BR" }, "u1");
+    const menor = await reserva({ titularId: "h5", chegada: dia, saida: "2026-11-11" }, "confirmada");
+    const adulto = await reserva({ titularId: "h6", chegada: dia, saida: "2026-11-11" }, "confirmada");
+    const p = await painelDoDia(ctx);
+    expect(p.chegadas.find((x) => x.reservaId === menor.id)!.pendenciasFnrh).toBe(false);
+    expect(p.chegadas.find((x) => x.reservaId === adulto.id)!.pendenciasFnrh).toBe(true);
   });
 
   test("saída mostra saldo da conta", async () => {
