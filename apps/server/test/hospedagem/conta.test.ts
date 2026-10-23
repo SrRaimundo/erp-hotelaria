@@ -8,6 +8,7 @@ import { criarCategoria } from "../../src/nucleo/categorias.js";
 import { abrirCaixa, fecharCaixa } from "../../src/nucleo/caixa.js";
 import { ativarForma } from "../../src/nucleo/formas-pagamento.js";
 import type { UsuarioSessao } from "../../src/nucleo/permissoes.js";
+import { criarUsuario } from "../../src/nucleo/usuarios.js";
 import { criarQuarto } from "../../src/nucleo/quartos.js";
 import { criarProduto } from "../../src/nucleo/produtos.js";
 import { carregarUsuarioSessao } from "../../src/nucleo/sessoes.js";
@@ -90,14 +91,39 @@ describe("conta do hóspede", () => {
 
   test("estorno de pagamento usa o caixa de quem estorna e reduz o pago", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
-    await abrirCaixa(ctx, recepcao.id, 0);
+    const t1 = await abrirCaixa(ctx, recepcao.id, 0);
     const pid = await registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "pix", valor: 27000 }, recepcao);
-    await estornarPagamento(ctx, pid, recepcao, aut);
+    const outroId = await criarUsuario(ctx, { nome: "Outra", login: "outra", senha: "senha-teste", perfil: "recepcao" }, "admin");
+    const outro = (await carregarUsuarioSessao(ctx, typeof outroId === "string" ? outroId : (outroId as any).id))!;
+    const t2 = await abrirCaixa(ctx, outro.id, 0);
+    await estornarPagamento(ctx, pid, outro, aut);
     expect(await pagoNaReserva(ctx, r.id)).toBe(0);
     expect(await saldo(ctx, r.contaId)).toEqual({ debitos: 0, creditos: 0, saldo: 0 });
-    const mov = await ctx.db.selectFrom("movimentos_caixa").select("valor").execute();
-    expect(mov.map((m) => m.valor).sort((a, b) => a - b)).toEqual([-27000, 27000]);
-    await expect(estornarPagamento(ctx, pid, recepcao, aut)).rejects.toMatchObject({ codigo: "JA_ESTORNADO" });
+    const mov = await ctx.db.selectFrom("movimentos_caixa").select(["valor", "turno_id"]).orderBy("valor").execute();
+    expect(mov).toEqual([{ valor: -27000, turno_id: t2.id }, { valor: 27000, turno_id: t1.id }]);
+    await expect(estornarPagamento(ctx, pid, outro, aut)).rejects.toMatchObject({ codigo: "JA_ESTORNADO" });
+  });
+
+  test("estorno de pagamento em conta fechada é rejeitado", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await abrirCaixa(ctx, recepcao.id, 0);
+    const pid = await registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "pix", valor: 27000 }, recepcao);
+    await ctx.db.updateTable("contas").set({ situacao: "fechada" }).where("id", "=", r.contaId).execute();
+    await expect(estornarPagamento(ctx, pid, recepcao, aut)).rejects.toMatchObject({ codigo: "CONTA_FECHADA" });
+  });
+
+  test("lançamento com valor unitário zero ou negativo é rejeitado", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await expect(extra(r.contaId, -5000)).rejects.toMatchObject({ codigo: "VALOR_INVALIDO" });
+    await expect(extra(r.contaId, 0)).rejects.toMatchObject({ codigo: "VALOR_INVALIDO" });
+    expect((await saldo(ctx, r.contaId)).saldo).toBe(0);
+  });
+
+  test("diária exige reserva e noite de referência", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    const base = { contaId: r.contaId, tipo: "diaria" as const, origem: "hospedagem", descricao: "Diária", quantidade: 1, valorUnitario: 30000 };
+    await expect(lancar(ctx, { ...base, dataRef: "2026-11-20" }, "Sistema")).rejects.toMatchObject({ codigo: "DIARIA_INVALIDA" });
+    await expect(lancar(ctx, { ...base, reservaId: r.id }, "Sistema")).rejects.toMatchObject({ codigo: "DIARIA_INVALIDA" });
   });
 
   test("estorno de pagamento exige caixa aberto de quem estorna", async () => {
@@ -174,6 +200,8 @@ describe("rotas da conta", () => {
     const l2 = await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", descricao: "Lavanderia", valorUnitario: 3000, quantidade: 1 } });
     expect(l2.statusCode).toBe(200);
 
+    expect((await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", descricao: "x", valorUnitario: -500, quantidade: 1 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", descricao: "x", valorUnitario: 0, quantidade: 1 } })).statusCode).toBe(400);
     const semCaixa = await app.inject({ method: "POST", url: `${url}/pagamentos`, headers: rec, payload: { reservaId: r.id, formaCodigo: "pix", valor: 27000 } });
     expect(semCaixa.statusCode).toBe(422);
     await abrirCaixa(ctx, recepcao.id, 0);

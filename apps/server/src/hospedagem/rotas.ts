@@ -102,7 +102,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     tipo: z.literal("extra"),
     produtoCodigo: texto.optional(),
     descricao: texto.optional(),
-    valorUnitario: z.number().int().optional(),
+    valorUnitario: z.number().int().min(1).optional(),
     quantidade: z.number().int().min(1),
   });
   const corpoPagamento = z.object({ reservaId: texto.optional(), formaCodigo: texto, valor: z.number().int().min(1) });

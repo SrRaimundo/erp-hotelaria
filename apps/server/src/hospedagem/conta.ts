@@ -49,8 +49,11 @@ export async function lancar(ctx: Contexto, d: NovoLancamento, ator: string): Pr
   if (!Number.isInteger(d.quantidade) || d.quantidade < 1) {
     throw new ErroDominio("QUANTIDADE_INVALIDA", "Quantidade inválida. Informe um número inteiro de 1 em diante.");
   }
-  if (!Number.isInteger(d.valorUnitario)) {
-    throw new ErroDominio("VALOR_INVALIDO", "Valor inválido. Informe o valor em centavos, sem casas decimais.");
+  if (!Number.isInteger(d.valorUnitario) || d.valorUnitario < 1) {
+    throw new ErroDominio("VALOR_INVALIDO", "Valor inválido. Informe um valor maior que zero, em centavos. Para corrigir um lançamento, use o estorno.");
+  }
+  if (d.tipo === "diaria" && (!d.reservaId || !d.dataRef)) {
+    throw new ErroDominio("DIARIA_INVALIDA", "A diária precisa da reserva e da noite a que se refere.");
   }
   return emTransacao(ctx, async (tx) => {
     await exigirContaAberta(tx, d.contaId);
@@ -180,6 +183,7 @@ export async function estornarPagamento(
     }
     const ja = await tx.db.selectFrom("pagamentos").select("id").where("estorna_id", "=", pagamentoId).executeTakeFirst();
     if (ja) throw new ErroDominio("JA_ESTORNADO", "Este pagamento já foi estornado.", { pagamentoId });
+    await exigirContaAberta(tx, o.conta_id);
     const turno = await exigirCaixaAberto(tx, usuario.id);
     const id = novoId();
     await tx.db.insertInto("pagamentos").values({
