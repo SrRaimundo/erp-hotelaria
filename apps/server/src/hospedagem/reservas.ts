@@ -84,6 +84,26 @@ export async function criarGrupo(
   });
 }
 
+/** Capacidade: quem já tem idade de adulto na chegada conta como adulto. */
+export async function verificarCapacidade(
+  ctx: Contexto,
+  categoria: { nome: string; max_adultos: number; max_criancas: number },
+  adultosInformados: number,
+  criancasNascimento: Data[],
+  chegada: Data,
+): Promise<void> {
+  const config = await obterConfig(ctx);
+  const criancas = criancasNascimento.filter((n) => idadeEm(n, chegada) < config.idadeAdulto);
+  const adultos = adultosInformados + (criancasNascimento.length - criancas.length);
+  if (adultos > categoria.max_adultos || criancas.length > categoria.max_criancas) {
+    throw new ErroDominio(
+      "CAPACIDADE_EXCEDIDA",
+      `A categoria ${categoria.nome} comporta no máximo ${categoria.max_adultos} adultos e ${categoria.max_criancas} crianças. Reduza os hóspedes ou escolha outra categoria.`,
+      { adultos, criancas: criancas.length, maxAdultos: categoria.max_adultos, maxCriancas: categoria.max_criancas },
+    );
+  }
+}
+
 export async function criarReserva(ctx: Contexto, d: NovaReserva, usuario: UsuarioSessao): Promise<Reserva> {
   if (!(d.chegada < d.saida)) {
     throw new ErroDominio("DATAS_INVALIDAS", "A saída deve ser depois da chegada. Corrija as datas.");
@@ -102,17 +122,8 @@ export async function criarReserva(ctx: Contexto, d: NovaReserva, usuario: Usuar
     }
   }
 
-  // Capacidade: quem já tem idade de adulto na chegada conta como adulto.
   const config = await obterConfig(ctx);
-  const criancas = d.criancasNascimento.filter((n) => idadeEm(n, d.chegada) < config.idadeAdulto);
-  const adultos = d.adultos + (d.criancasNascimento.length - criancas.length);
-  if (adultos > categoria.max_adultos || criancas.length > categoria.max_criancas) {
-    throw new ErroDominio(
-      "CAPACIDADE_EXCEDIDA",
-      `A categoria ${categoria.nome} comporta no máximo ${categoria.max_adultos} adultos e ${categoria.max_criancas} crianças. Reduza os hóspedes ou escolha outra categoria.`,
-      { adultos, criancas: criancas.length, maxAdultos: categoria.max_adultos, maxCriancas: categoria.max_criancas },
-    );
-  }
+  await verificarCapacidade(ctx, categoria, d.adultos, d.criancasNascimento, d.chegada);
 
   // Autorização de supervisor (scrypt é lento): fora da transação e só quando necessária.
   const desconto = d.descontoPercentual ?? 0;
