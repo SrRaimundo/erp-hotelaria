@@ -16,7 +16,7 @@ async function iniciar(): Promise<void> {
   await migrar(db, todasMigracoes);
 
   const ctx: Contexto = { db, relogio: relogioSistema, barramento: new Barramento(), eventosPendentes: [] };
-  const app = criarApp(ctx);
+  const app = criarApp(ctx, { webDir: config.webDir });
   const agendador = iniciarAgendador(ctx);
 
   let encerrando = false;

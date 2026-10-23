@@ -10,11 +10,25 @@ declare module "fastify" {
   }
 }
 
+/** Caminho (já decodificado, sem maiúsculas) dentro de /api; qualquer dúvida na leitura conta como API. */
+export function ehRotaDaApi(url: string): boolean {
+  let caminho = url.split("?")[0]!;
+  try {
+    caminho = decodeURIComponent(caminho);
+  } catch {
+    return true;
+  }
+  caminho = caminho.toLowerCase();
+  return caminho === "/api" || caminho.startsWith("/api/");
+}
+
 export function registrarAutenticacao(app: FastifyInstance, ctx: Contexto): void {
   app.decorateRequest("usuario");
   app.decorateRequest("token");
   app.addHook("onRequest", async (req, res) => {
     if (req.method === "POST" && req.url.split("?")[0] === "/api/sessoes") return;
+    // Arquivos da interface são públicos; tudo sob /api exige sessão.
+    if ((req.method === "GET" || req.method === "HEAD") && !ehRotaDaApi(req.url)) return;
     const cab = req.headers.authorization ?? "";
     const token = cab.startsWith("Bearer ") ? cab.slice(7).trim() : "";
     const usuario = token ? await sessaoPorToken(ctx, token) : undefined;
