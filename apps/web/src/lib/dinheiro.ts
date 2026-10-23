@@ -4,8 +4,9 @@ function agruparMilhares(inteiro: string): string {
 
 /** Centavos inteiros -> "R$ 1.234,56" (negativos: "−R$ 12,00"). */
 export function formatarReais(centavos: number): string {
-  const negativo = centavos < 0;
-  const abs = Math.abs(Math.round(centavos));
+  const arredondado = Math.round(centavos);
+  const negativo = arredondado < 0;
+  const abs = Math.abs(arredondado);
   const reais = Math.floor(abs / 100);
   const cents = String(abs % 100).padStart(2, "0");
   return `${negativo ? "−" : ""}R$ ${agruparMilhares(String(reais))},${cents}`;

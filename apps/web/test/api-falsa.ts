@@ -6,8 +6,19 @@ export type ChamadaFalsa = { metodo: string; caminho: string; corpo: unknown };
 /** Chamadas feitas desde a última `instalarApiFalsa` (mesmo array, reaproveitado). */
 export const chamadas: ChamadaFalsa[] = [];
 
+/** Rotas chamadas sem estarem previstas; o afterEach de setup.ts reprova o teste se houver alguma. */
+export const rotasNaoPrevistas: string[] = [];
+
+export function verificarRotasNaoPrevistas(): void {
+  if (rotasNaoPrevistas.length === 0) return;
+  const lista = rotasNaoPrevistas.join(", ");
+  rotasNaoPrevistas.length = 0;
+  throw new Error(`API falsa: rota(s) não prevista(s) no teste: ${lista}`);
+}
+
 export function instalarApiFalsa(rotas: Record<string, Rota>): void {
   chamadas.length = 0;
+  rotasNaoPrevistas.length = 0;
   vi.stubGlobal("fetch", async (entrada: RequestInfo | URL, init?: RequestInit) => {
     const metodo = (init?.method ?? "GET").toUpperCase();
     const url = new URL(String(entrada), "http://localhost");
@@ -17,6 +28,7 @@ export function instalarApiFalsa(rotas: Record<string, Rota>): void {
     const chave = `${metodo} ${url.pathname}`;
     if (!(chave in rotas)) {
       // Não lança: o cliente transformaria a exceção em SEM_CONEXAO e esconderia o motivo.
+      rotasNaoPrevistas.push(`${metodo} ${caminho}`);
       const mensagem = `API falsa: rota não prevista no teste: ${metodo} ${caminho}`;
       return new Response(JSON.stringify({ codigo: "API_FALSA_ROTA_NAO_PREVISTA", mensagem }), { status: 599 });
     }

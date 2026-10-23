@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { chamarApi, definirToken, ErroApi } from "../../src/api/cliente";
-import { chamadas, instalarApiFalsa } from "../api-falsa";
+import { chamadas, instalarApiFalsa, rotasNaoPrevistas, verificarRotasNaoPrevistas } from "../api-falsa";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -53,8 +53,24 @@ describe("cliente da API", () => {
     definirToken(null);
     expect(localStorage.getItem("erp.token")).toBeNull();
   });
-  test("rota não prevista na API falsa dá erro claro", async () => {
+  test("rota não prevista na API falsa dá erro claro e reprova a verificação", async () => {
     instalarApiFalsa({});
-    await expect(chamarApi("GET", "/api/nada")).rejects.toThrow(/GET \/api\/nada/);
+    await expect(chamarApi("GET", "/api/nada")).rejects.toMatchObject({ codigo: "API_FALSA_ROTA_NAO_PREVISTA", message: expect.stringContaining("GET /api/nada") });
+    expect(rotasNaoPrevistas).toEqual(["GET /api/nada"]);
+    expect(() => verificarRotasNaoPrevistas()).toThrow("GET /api/nada");
+    expect(rotasNaoPrevistas).toHaveLength(0);
+    expect(() => verificarRotasNaoPrevistas()).not.toThrow();
+  });
+  test("2xx com corpo não JSON vira RESPOSTA_INVALIDA", async () => {
+    vi.stubGlobal("fetch", async () => new Response("<!doctype html><html></html>", { status: 200 }));
+    await expect(chamarApi("GET", "/api/painel")).rejects.toMatchObject({ status: 200, codigo: "RESPOSTA_INVALIDA", message: "Resposta inesperada do servidor." });
+  });
+  test("corpo vazio (204) devolve undefined", async () => {
+    vi.stubGlobal("fetch", async () => new Response(null, { status: 204 }));
+    await expect(chamarApi("DELETE", "/api/x")).resolves.toBeUndefined();
+  });
+  test("falha ao ler o corpo vira SEM_CONEXAO", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, text: async () => { throw new TypeError("terminated"); } }));
+    await expect(chamarApi("GET", "/api/x")).rejects.toMatchObject({ status: 0, codigo: "SEM_CONEXAO" });
   });
 });

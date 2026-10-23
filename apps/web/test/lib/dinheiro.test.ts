@@ -15,10 +15,21 @@ describe("dinheiro", () => {
     expect(lerReais("-12,00")).toBeNull();
     expect(lerReais("1.23,00")).toBeNull();
   });
+  test("lerReais: casos de borda", () => {
+    expect(lerReais("1.234")).toBe(123400);
+    expect(lerReais("1.23")).toBeNull();
+    expect(lerReais("1234.56")).toBeNull();
+    expect(lerReais(" 12 ")).toBe(1200);
+    expect(lerReais("0,5")).toBe(50);
+    expect(lerReais("0")).toBe(0);
+    expect(lerReais("R$1.000,00")).toBe(100000);
+    expect(lerReais("1.000.000,00")).toBe(100000000);
+  });
   test("formatarReais", () => {
     expect(formatarReais(123456)).toBe("R$ 1.234,56");
     expect(formatarReais(-1200)).toBe("−R$ 12,00");
     expect(formatarReais(0)).toBe("R$ 0,00");
+    expect(formatarReais(-0.4)).toBe("R$ 0,00");
     expect(formatarReais(5)).toBe("R$ 0,05");
     expect(formatarReais(100000000)).toBe("R$ 1.000.000,00");
   });

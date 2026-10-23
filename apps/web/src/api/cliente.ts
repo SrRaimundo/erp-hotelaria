@@ -32,19 +32,21 @@ export async function chamarApi<T>(metodo: "GET" | "POST" | "PUT" | "PATCH" | "D
   }
 
   let resposta: Response;
+  let texto: string;
   try {
     resposta = await fetch(caminho, init);
+    texto = await resposta.text();
   } catch {
     throw new ErroApi(0, "SEM_CONEXAO", "Sem conexão com o servidor da pousada.");
   }
 
-  const texto = await resposta.text();
   let dados: unknown = undefined;
+  let jsonValido = true;
   if (texto) {
     try {
       dados = JSON.parse(texto);
     } catch {
-      dados = undefined;
+      jsonValido = false;
     }
   }
 
@@ -58,5 +60,6 @@ export async function chamarApi<T>(metodo: "GET" | "POST" | "PUT" | "PATCH" | "D
       e.detalhes,
     );
   }
+  if (!jsonValido) throw new ErroApi(resposta.status, "RESPOSTA_INVALIDA", "Resposta inesperada do servidor.");
   return dados as T;
 }
