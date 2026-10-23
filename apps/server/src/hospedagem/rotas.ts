@@ -9,6 +9,7 @@ import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
 import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } from "./governanca.js";
+import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -183,6 +184,15 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     const id = await estornarPagamento(ctx, idParam.parse(req.params).id, req.usuario, corpoSensivel.parse(req.body));
     return { id };
   });
+
+  // Consultas: qualquer usuário com sessão.
+  app.get("/api/mapa", async (req) => {
+    const q = z.object({ inicio: data, fim: data, categoriaId: texto.optional() }).parse(req.query);
+    return mapaOcupacao(ctx, q);
+  });
+  app.get("/api/painel", async () => painelDoDia(ctx));
+  app.get("/api/busca", async (req) => buscaUniversal(ctx, z.object({ q: z.string().default("") }).parse(req.query).q));
+  app.get("/api/hospedes/:id/historico", async (req) => historicoEstadias(ctx, idParam.parse(req.params).id));
 
   const corpoMotivo = z.object({ motivo: texto });
   app.get("/api/governanca", async (req) => {

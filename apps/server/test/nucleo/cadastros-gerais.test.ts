@@ -46,6 +46,16 @@ describe("hóspedes, produtos e formas de pagamento", () => {
     expect(await buscarHospedes(ctx, "zzz")).toHaveLength(0);
   });
 
+  test("busca com % e _ trata os curingas como texto literal", async () => {
+    const ctx = await criarContextoTeste();
+    await salvarHospede(ctx, { ...base, nome: "Ana_Maria" }, "u1");
+    await salvarHospede(ctx, { ...base, nome: "AnaXMaria" }, "u1");
+    await salvarHospede(ctx, { ...base, nome: "Bia" }, "u1");
+    expect((await buscarHospedes(ctx, "ana_maria")).map((h) => h.nome)).toEqual(["Ana_Maria"]);
+    expect(await buscarHospedes(ctx, "100%")).toHaveLength(0);
+    expect(await buscarHospedes(ctx, "%")).toHaveLength(0);
+  });
+
   test("pendenciasFnrh de adulto incompleto", () => {
     expect(pendenciasFnrh({ nome: "Ana", documentoTipo: "cpf", documento: null, nascimento: null, nacionalidade: "BR" } as Hospede, true))
       .toEqual(expect.arrayContaining(["documento", "nascimento", "endereco.cidade", "contato"]));

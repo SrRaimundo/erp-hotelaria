@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { auditar } from "../infra/auditoria.js";
 import { registrarEvento } from "../infra/outbox.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
@@ -119,7 +120,7 @@ export async function buscarHospedes(ctx: Contexto, termo: string): Promise<Hosp
     .selectAll()
     .where((eb) =>
       eb.or([
-        eb("nome_busca", "like", padraoNome),
+        sql<boolean>`nome_busca like ${padraoNome} escape '\\'`,
         ...(digitos ? [eb("documento", "like", `%${digitos}%`)] : []),
       ]),
     )
