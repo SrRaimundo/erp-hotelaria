@@ -40,7 +40,8 @@ export function instalarApiFalsa(rotas: Record<string, Rota>): void {
       const { __status: _, ...resto } = valor as Record<string, unknown>;
       envio = resto;
     }
-    return new Response(envio === undefined ? null : JSON.stringify(envio), {
+    const semCorpo = envio === undefined || status === 204;
+    return new Response(semCorpo ? null : JSON.stringify(envio), {
       status,
       headers: { "Content-Type": "application/json" },
     });
