@@ -8,6 +8,7 @@ import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagame
 import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
+import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } from "./governanca.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -133,7 +134,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     return obterReserva(ctx, id);
   });
 
-  const corpoLancamento =z.object({
+  const corpoLancamento = z.object({
     tipo: z.literal("extra"),
     produtoCodigo: texto.optional(),
     descricao: texto.optional(),
@@ -182,4 +183,23 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     const id = await estornarPagamento(ctx, idParam.parse(req.params).id, req.usuario, corpoSensivel.parse(req.body));
     return { id };
   });
+
+  const corpoMotivo = z.object({ motivo: texto });
+  app.get("/api/governanca", async (req) => {
+    exigirPermissao(req.usuario, "quartos.situacao");
+    return listaGovernanca(ctx);
+  });
+  app.post("/api/quartos/:id/limpo", async (req) => {
+    exigirPermissao(req.usuario, "quartos.situacao");
+    await marcarLimpo(ctx, idParam.parse(req.params).id, req.usuario);
+    return { ok: true };
+  });
+  const acoesQuarto = { manutencao: colocarEmManutencao, bloquear, liberar } as const;
+  for (const [caminho, acao] of Object.entries(acoesQuarto)) {
+    app.post(`/api/quartos/:id/${caminho}`, async (req) => {
+      exigirPermissao(req.usuario, "quartos.manutencao");
+      await acao(ctx, idParam.parse(req.params).id, corpoMotivo.parse(req.body).motivo, req.usuario);
+      return { ok: true };
+    });
+  }
 }
