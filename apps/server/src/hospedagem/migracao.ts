@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import type { Migracao } from "../shared/banco.js";
 
 export const migracaoHospedagem: Migracao = {
@@ -51,5 +52,45 @@ export const migracaoHospedagem: Migracao = {
       .addColumn("hospede_id", "text", (c) => c.notNull().references("hospedes.id"))
       .addPrimaryKeyConstraint("acompanhantes_pk", ["reserva_id", "hospede_id"])
       .execute();
+  },
+};
+
+export const migracaoHospedagemConta: Migracao = {
+  nome: "0420_hospedagem_conta",
+  async up(db) {
+    await db.schema
+      .createTable("lancamentos")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("conta_id", "text", (c) => c.notNull().references("contas.id"))
+      .addColumn("reserva_id", "text", (c) => c.references("reservas.id"))
+      .addColumn("tipo", "text", (c) => c.notNull()) // "diaria" | "extra" | "estorno"
+      .addColumn("origem", "text", (c) => c.notNull()) // "hospedagem"; futuramente "bar"
+      .addColumn("produto_id", "text", (c) => c.references("produtos.id"))
+      .addColumn("descricao", "text", (c) => c.notNull())
+      .addColumn("quantidade", "integer", (c) => c.notNull())
+      .addColumn("valor", "integer", (c) => c.notNull()) // total em centavos, + ou -
+      .addColumn("data_ref", "text") // noite, para diárias
+      .addColumn("estorna_id", "text", (c) => c.references("lancamentos.id"))
+      .addColumn("instante", "text", (c) => c.notNull())
+      .addColumn("usuario", "text", (c) => c.notNull())
+      .execute();
+    await sql`CREATE UNIQUE INDEX lancamentos_diaria_unica ON lancamentos (reserva_id, data_ref) WHERE tipo = 'diaria'`.execute(db);
+    await sql`CREATE UNIQUE INDEX lancamentos_estorno_unico ON lancamentos (estorna_id) WHERE estorna_id IS NOT NULL`.execute(db);
+    await db.schema.createIndex("lancamentos_conta").on("lancamentos").column("conta_id").execute();
+    await db.schema
+      .createTable("pagamentos")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("conta_id", "text", (c) => c.notNull().references("contas.id"))
+      .addColumn("reserva_id", "text", (c) => c.references("reservas.id"))
+      .addColumn("forma_codigo", "text", (c) => c.notNull())
+      .addColumn("valor", "integer", (c) => c.notNull()) // + ou -
+      .addColumn("estorna_id", "text", (c) => c.references("pagamentos.id"))
+      .addColumn("turno_id", "text", (c) => c.notNull().references("turnos_caixa.id"))
+      .addColumn("instante", "text", (c) => c.notNull())
+      .addColumn("usuario", "text", (c) => c.notNull())
+      .execute();
+    await sql`CREATE UNIQUE INDEX pagamentos_estorno_unico ON pagamentos (estorna_id) WHERE estorna_id IS NOT NULL`.execute(db);
+    await db.schema.createIndex("pagamentos_conta").on("pagamentos").column("conta_id").execute();
+    await db.schema.createIndex("pagamentos_reserva").on("pagamentos").column("reserva_id").execute();
   },
 };

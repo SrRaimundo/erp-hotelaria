@@ -13,6 +13,7 @@ import { listarCanais } from "../tarifas/regras.js";
 import { verificarRestricoes } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
 import { verificarDisponibilidade } from "./disponibilidade.js";
+import { pagoNaReserva } from "./conta.js";
 import type { EstadoReserva } from "./estados.js";
 
 export type NovaReserva = {
@@ -51,7 +52,7 @@ export type Reserva = {
   criadaEm: string;
 };
 
-export type ReservaDetalhe = Reserva & { noites: ValorNoite[]; total: Centavos };
+export type ReservaDetalhe = Reserva & { noites: ValorNoite[]; total: Centavos; pago: Centavos };
 
 export type Grupo = { id: string; titularId: string; cobranca: "unica" | "separada" };
 
@@ -209,5 +210,5 @@ export async function obterReserva(ctx: Contexto, id: string): Promise<ReservaDe
   if (!l) throw new ErroDominio("RESERVA_NAO_ENCONTRADA", "Reserva não encontrada. Confira o número informado.", { id });
   const ns = await ctx.db.selectFrom("reserva_noites").selectAll().where("reserva_id", "=", id).orderBy("data").execute();
   const noites: ValorNoite[] = ns.map((n) => ({ data: n.data, valor: n.valor, passos: JSON.parse(n.passos) }));
-  return { ...paraReserva(l), noites, total: noites.reduce((s, n) => s + n.valor, 0) };
+  return { ...paraReserva(l), noites, total: noites.reduce((s, n) => s + n.valor, 0), pago: await pagoNaReserva(ctx, id) };
 }

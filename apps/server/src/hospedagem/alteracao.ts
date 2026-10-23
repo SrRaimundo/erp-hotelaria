@@ -166,7 +166,7 @@ export async function alterarReserva(
       dados: { antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, valorSinal, ajusteManual: mudanca.precosManuais ?? [] },
     });
     await registrarEvento(tx, "hospedagem.ReservaAlterada", { reservaId: atual.id, antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo });
-    const { noites: _n, total: _t, ...reserva } = await obterReserva(tx, atual.id);
+    const { noites: _n, total: _t, pago: _p, ...reserva } = await obterReserva(tx, atual.id);
     return reserva;
   });
 }

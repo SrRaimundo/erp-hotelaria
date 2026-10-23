@@ -2,7 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
+import { ErroDominio } from "../shared/erros.js";
 import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrogarSinal, type Mudanca } from "./alteracao.js";
+import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagamento, saldo } from "./conta.js";
+import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -93,5 +96,55 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     const { novoPrazo, ...aut } = corpoProrrogacao.parse(req.body);
     await prorrogarSinal(ctx, id, novoPrazo, req.usuario, aut);
     return obterReserva(ctx, id);
+  });
+
+  const corpoLancamento = z.object({
+    tipo: z.literal("extra"),
+    produtoCodigo: texto.optional(),
+    descricao: texto.optional(),
+    valorUnitario: z.number().int().optional(),
+    quantidade: z.number().int().min(1),
+  });
+  const corpoPagamento = z.object({ reservaId: texto.optional(), formaCodigo: texto, valor: z.number().int().min(1) });
+  const idParam = z.object({ id: texto });
+
+  app.get("/api/contas/:id", async (req) => {
+    const id = idParam.parse(req.params).id;
+    return { saldo: await saldo(ctx, id), extrato: await extrato(ctx, id) };
+  });
+  app.post("/api/contas/:id/lancamentos", async (req) => {
+    exigirPermissao(req.usuario, "conta.lancar");
+    const contaId = idParam.parse(req.params).id;
+    const c = corpoLancamento.parse(req.body);
+    let descricao = c.descricao;
+    let valorUnitario = c.valorUnitario;
+    let produtoId: string | undefined;
+    if (c.produtoCodigo) {
+      const p = await obterProdutoPorCodigo(ctx, c.produtoCodigo);
+      produtoId = p.id;
+      descricao = p.nome;
+      valorUnitario = p.precoCentavos;
+    }
+    if (!descricao || valorUnitario === undefined) {
+      throw new ErroDominio("LANCAMENTO_INCOMPLETO", "Informe o código do produto ou, então, a descrição e o valor unitário.");
+    }
+    const id = await lancar(ctx, { contaId, tipo: "extra", origem: "hospedagem", produtoId, descricao, quantidade: c.quantidade, valorUnitario }, req.usuario.id);
+    return { id };
+  });
+  app.post("/api/contas/:id/pagamentos", async (req) => {
+    exigirPermissao(req.usuario, "caixa.operar");
+    const contaId = idParam.parse(req.params).id;
+    const id = await registrarPagamento(ctx, { contaId, ...corpoPagamento.parse(req.body) }, req.usuario);
+    return { id };
+  });
+  app.post("/api/lancamentos/:id/estornar", async (req) => {
+    exigirPermissao(req.usuario, "conta.lancar");
+    const id = await estornarLancamento(ctx, idParam.parse(req.params).id, req.usuario, corpoSensivel.parse(req.body));
+    return { id };
+  });
+  app.post("/api/pagamentos/:id/estornar", async (req) => {
+    exigirPermissao(req.usuario, "conta.lancar");
+    const id = await estornarPagamento(ctx, idParam.parse(req.params).id, req.usuario, corpoSensivel.parse(req.body));
+    return { id };
   });
 }
