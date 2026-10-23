@@ -12,6 +12,7 @@ import { diaHoteleiro, noites as datasDasNoites, type Data } from "../shared/tem
 import { cotar } from "../tarifas/cotacao.js";
 import { verificarRestricoes, type Violacao } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
+import { alertarSaldoOrfao } from "./conta.js";
 import { verificarDisponibilidade } from "./disponibilidade.js";
 import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 import { obterReserva, verificarCapacidade, type Reserva, type ReservaDetalhe } from "./reservas.js";
@@ -202,7 +203,7 @@ async function resolverAlertasDaReserva(tx: Contexto, reservaId: string, usuario
 }
 
 async function carregarEstado(tx: Contexto, id: string) {
-  const l = await tx.db.selectFrom("reservas").select(["estado", "chegada"]).where("id", "=", id).executeTakeFirst();
+  const l = await tx.db.selectFrom("reservas").select(["estado", "chegada", "conta_id"]).where("id", "=", id).executeTakeFirst();
   if (!l) throw new ErroDominio("RESERVA_NAO_ENCONTRADA", "Reserva não encontrada. Confira o número informado.", { id });
   return l;
 }
@@ -210,10 +211,11 @@ async function carregarEstado(tx: Contexto, id: string) {
 export async function cancelarReserva(ctx: Contexto, reservaId: string, usuario: UsuarioSessao, autorizacao: Autorizacao | undefined): Promise<void> {
   const aut = await autorizarSupervisor(ctx, autorizacao?.supervisor, autorizacao?.motivo);
   await emTransacao(ctx, async (tx) => {
-    const { estado } = await carregarEstado(tx, reservaId);
+    const { estado, conta_id } = await carregarEstado(tx, reservaId);
     transicionar(estado, "cancelada");
     await tx.db.updateTable("reservas").set({ estado: "cancelada" }).where("id", "=", reservaId).execute();
     await resolverAlertasDaReserva(tx, reservaId, usuario.id, false);
+    await alertarSaldoOrfao(tx, conta_id);
     await auditar(tx, {
       ator: usuario.id, acao: "reserva.cancelar", alvoTipo: "reserva", alvoId: reservaId,
       motivo: aut.motivo, supervisorId: aut.supervisorId, dados: { estadoAnterior: estado },
@@ -225,7 +227,7 @@ export async function cancelarReserva(ctx: Contexto, reservaId: string, usuario:
 export async function marcarNoShow(ctx: Contexto, reservaId: string, usuario: UsuarioSessao, autorizacao: Autorizacao | undefined): Promise<void> {
   const aut = await autorizarSupervisor(ctx, autorizacao?.supervisor, autorizacao?.motivo);
   await emTransacao(ctx, async (tx) => {
-    const { estado, chegada } = await carregarEstado(tx, reservaId);
+    const { estado, chegada, conta_id } = await carregarEstado(tx, reservaId);
     transicionar(estado, "no_show");
     const config = await obterConfig(tx);
     const hoje = diaHoteleiro(tx.relogio.agora(), config.fuso, config.viradaDia);
@@ -234,6 +236,7 @@ export async function marcarNoShow(ctx: Contexto, reservaId: string, usuario: Us
     }
     await tx.db.updateTable("reservas").set({ estado: "no_show" }).where("id", "=", reservaId).execute();
     await resolverAlertasDaReserva(tx, reservaId, usuario.id, false);
+    await alertarSaldoOrfao(tx, conta_id);
     await auditar(tx, {
       ator: usuario.id, acao: "reserva.no_show", alvoTipo: "reserva", alvoId: reservaId,
       motivo: aut.motivo, supervisorId: aut.supervisorId, dados: { chegada },

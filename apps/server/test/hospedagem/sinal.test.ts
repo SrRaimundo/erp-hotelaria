@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { registrarPagamento } from "../../src/hospedagem/conta.js";
+import { lancar, registrarPagamento } from "../../src/hospedagem/conta.js";
 import { criarReserva, obterReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { processarSinais } from "../../src/hospedagem/sinal.js";
 import { alertasAbertos } from "../../src/infra/alertas.js";
@@ -53,6 +53,18 @@ describe("prazo do sinal", () => {
     expect(await alertasAbertos(ctx)).toEqual([]);
     const al = await ctx.db.selectFrom("alertas").select("resolvido_por").executeTakeFirstOrThrow();
     expect(al.resolvido_por).toBe("Sistema");
+  });
+
+  test("I3: cancelamento automático com consumo na conta gera alerta de saldo", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await lancar(ctx, { contaId: r.contaId, tipo: "extra", origem: "hospedagem", descricao: "Transfer", quantidade: 1, valorUnitario: 8000 }, recepcao.id);
+    avancar(48);
+    await processarSinais(ctx);
+    avancar(12);
+    expect((await processarSinais(ctx)).canceladas).toEqual([r.id]);
+    const alertas = await alertasAbertos(ctx);
+    expect(alertas.map((a) => [a.tipo, a.alvoTipo, a.alvoId])).toEqual([["conta_com_saldo", "conta", r.contaId]]);
+    expect(alertas[0]!.mensagem).toContain("R$ 80,00");
   });
 
   test("pagamento parcial impede o cancelamento automático e gera alerta", async () => {

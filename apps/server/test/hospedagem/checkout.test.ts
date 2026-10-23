@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
-import { alterarReserva } from "../../src/hospedagem/alteracao.js";
+import { alterarReserva, marcarNoShow } from "../../src/hospedagem/alteracao.js";
 import { fazerCheckin } from "../../src/hospedagem/checkin.js";
 import { fazerCheckout, previaCheckout } from "../../src/hospedagem/checkout.js";
 import { extrato, lancar, saldo } from "../../src/hospedagem/conta.js";
+import { alertasAbertos } from "../../src/infra/alertas.js";
 import { criarGrupo, criarReserva, obterReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { processarVirada } from "../../src/hospedagem/virada.js";
 import { abrirCaixa, fecharCaixa } from "../../src/nucleo/caixa.js";
@@ -329,6 +330,23 @@ describe("mudanças durante a estadia", () => {
     const previa = await previaCheckout(ctx, r.id);
     expect(previa.lateCheckout).toBeUndefined();
     expect(previa.saldo).toBe(30000);
+  });
+});
+
+describe("saldo órfão na conta", () => {
+  test("I3: grupo único com dívida e a última reserva em no-show gera alerta de cobrança", async () => {
+    const g = await criarGrupo(ctx, { titularId: "h1", cobranca: "unica" }, recepcao);
+    const a = await hospedar({ ...dados, grupoId: g.id }, q101);
+    const b = await criarReserva(ctx, { ...dados, grupoId: g.id }, recepcao); // confirmada, não chegou
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    await fazerCheckout(ctx, { reservaId: a.id, pagamentos: [] }, recepcao); // deixa 900,00 em aberto
+    expect(await alertasAbertos(ctx)).toEqual([]);
+    await marcarNoShow(ctx, b.id, recepcao, { motivo: "Não veio", supervisor: { login: "admin", senha: "admin" } });
+    const alertas = (await alertasAbertos(ctx)).filter((x) => x.tipo === "conta_com_saldo");
+    expect(alertas).toHaveLength(1);
+    expect(alertas[0]).toMatchObject({ alvoTipo: "conta", alvoId: a.contaId });
+    expect(alertas[0]!.mensagem).toContain("R$ 900,00");
+    expect(alertas[0]!.mensagem).toMatch(/cobr/i);
   });
 });
 

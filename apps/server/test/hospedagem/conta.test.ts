@@ -184,6 +184,27 @@ describe("conta do hóspede", () => {
   });
 });
 
+describe("saldo órfão na conta", () => {
+  test("I3: pré-reserva com sinal parcial cancelada gera alerta de crédito a devolver", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await abrirCaixa(ctx, recepcao.id, 0);
+    await registrarPagamento(ctx, { contaId: r.contaId, reservaId: r.id, formaCodigo: "pix", valor: 10000 }, recepcao);
+    await cancelarReserva(ctx, r.id, recepcao, { motivo: "Desistiu", supervisor: admin });
+    const alertas = (await alertasAbertos(ctx)).filter((x) => x.tipo === "conta_com_saldo");
+    expect(alertas).toHaveLength(1);
+    expect(alertas[0]).toMatchObject({ alvoTipo: "conta", alvoId: r.contaId });
+    expect(alertas[0]!.mensagem).toContain("R$ 100,00");
+    expect(alertas[0]!.mensagem).toMatch(/crédito/);
+    expect(alertas[0]!.mensagem).toMatch(/devol/);
+  });
+
+  test("I3: cancelamento com conta zerada não gera alerta", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await cancelarReserva(ctx, r.id, recepcao, { motivo: "Desistiu", supervisor: admin });
+    expect((await alertasAbertos(ctx)).filter((x) => x.tipo === "conta_com_saldo")).toEqual([]);
+  });
+});
+
 describe("faturado e estorno de pagamento", () => {
   test("I2: faturado só entra pelo check-out", async () => {
     const app = criarApp(ctx);

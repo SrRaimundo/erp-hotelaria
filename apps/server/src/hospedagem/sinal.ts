@@ -3,7 +3,7 @@ import { ATOR_SISTEMA, auditar } from "../infra/auditoria.js";
 import { registrarEvento } from "../infra/outbox.js";
 import { obterConfig } from "../nucleo/pousada.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
-import { pagoNaReserva } from "./conta.js";
+import { alertarSaldoOrfao, pagoNaReserva } from "./conta.js";
 import { transicionar } from "./estados.js";
 
 const MOTIVO = "sinal não pago";
@@ -29,7 +29,7 @@ export async function processarSinais(ctx: Contexto): Promise<{ avisadas: string
   for (const { id } of candidatas) {
     try {
       await emTransacao(ctx, async (tx) => {
-        const r = await tx.db.selectFrom("reservas").select(["estado", "prazo_sinal", "aviso_sinal_em"]).where("id", "=", id).executeTakeFirst();
+        const r = await tx.db.selectFrom("reservas").select(["estado", "prazo_sinal", "aviso_sinal_em", "conta_id"]).where("id", "=", id).executeTakeFirst();
         if (!r || r.estado !== "pre_reserva" || !r.prazo_sinal) return;
         const agora = tx.relogio.agora().toISOString();
         let aviso = r.aviso_sinal_em;
@@ -57,6 +57,7 @@ export async function processarSinais(ctx: Contexto): Promise<{ avisadas: string
         const abertos = await tx.db.selectFrom("alertas").select("id")
           .where("alvo_tipo", "=", "reserva").where("alvo_id", "=", id).where("tipo", "=", "sinal_vencido").where("resolvido_em", "is", null).execute();
         for (const a of abertos) await resolverAlerta(tx, a.id, ATOR_SISTEMA);
+        await alertarSaldoOrfao(tx, r.conta_id);
         await auditar(tx, {
           ator: ATOR_SISTEMA, acao: "reserva.cancelar", motivo: MOTIVO, alvoTipo: "reserva", alvoId: id,
           dados: { estadoAnterior: r.estado, prazoSinal: r.prazo_sinal },

@@ -5,12 +5,12 @@ import { exigirCaixaAberto, registrarMovimento, turnoAberto } from "../nucleo/ca
 import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import { autorizarSupervisor } from "../nucleo/supervisor.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
-import type { Centavos } from "../shared/dinheiro.js";
+import { formatarBRL, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 import type { Data } from "../shared/tempo.js";
 import type { Autorizacao } from "./alteracao.js";
-import { transicionar } from "./estados.js";
+import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 
 export type NovoLancamento = {
   contaId: string;
@@ -222,6 +222,23 @@ export async function saldo(ctx: Contexto, contaId: string): Promise<{ debitos: 
   const debitos = Number(d?.t ?? 0);
   const creditos = Number(c?.t ?? 0);
   return { debitos, creditos, saldo: debitos - creditos };
+}
+
+/**
+ * Depois de cancelamento ou no-show: se a conta não tem mais reserva ativa e ficou com saldo,
+ * abre o alerta "conta_com_saldo" (dívida a cobrar ou crédito a devolver). Roda na transação do chamador.
+ */
+export async function alertarSaldoOrfao(tx: Contexto, contaId: string): Promise<void> {
+  const ativa = await tx.db.selectFrom("reservas").select("id").where("conta_id", "=", contaId).where("estado", "in", ESTADOS_ATIVOS).executeTakeFirst();
+  if (ativa) return;
+  const { saldo: valor } = await saldo(tx, contaId);
+  if (valor === 0) return;
+  await criarAlerta(tx, {
+    tipo: "conta_com_saldo", alvoTipo: "conta", alvoId: contaId,
+    mensagem: valor > 0
+      ? `A conta ficou sem reserva ativa com ${formatarBRL(valor)} a receber do hóspede. Cobre o valor devido.`
+      : `A conta ficou sem reserva ativa com ${formatarBRL(-valor)} de crédito do hóspede. Providencie a devolução.`,
+  });
 }
 
 export async function extrato(ctx: Contexto, contaId: string): Promise<LinhaExtrato[]> {
