@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "start": "tsx src/main.ts",
     "dev": "tsx watch src/main.ts",
     "typecheck": "tsc --noEmit"
   },

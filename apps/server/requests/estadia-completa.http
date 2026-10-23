@@ -1,0 +1,150 @@
+# Fluxo completo de uma estadia, passo a passo (extensão "REST Client" do VS Code).
+# Antes: suba o servidor com `npm start -w apps/server` e clique em "Send Request" em cada bloco, de cima para baixo.
+#
+# Observações importantes:
+#  - O check-in só funciona no DIA DA CHEGADA da reserva. Por isso as datas abaixo usam o dia de hoje
+#    ({{$localDatetime ...}}); a saída é amanhã.
+#  - A taxa de early check-in e o horário de check-in/check-out dependem do RELÓGIO REAL da máquina
+#    (padrão: check-in 14:00, check-out 12:00, virada do dia 04:00). Fazer check-in antes da hora de
+#    check-in gera a cobrança de early check-in, se ela estiver configurada.
+#  - Se o dia hoteleiro ainda não virou (antes das 04:00), "hoje" para o hotel é o dia anterior.
+#  - Os dados ficam no banco indicado em ERP_DB. Para repetir o roteiro, use um banco novo
+#    (o quarto 12 e o CPF abaixo só podem ser cadastrados uma vez).
+
+@base = http://localhost:8080
+@chegada = {{$localDatetime 'YYYY-MM-DD'}}
+@saida = {{$localDatetime 'YYYY-MM-DD' 1 d}}
+
+### 1. Login (usuário inicial: admin / admin). O token é guardado e usado nos passos seguintes.
+# @name login
+POST {{base}}/api/sessoes
+Content-Type: application/json
+
+{ "login": "admin", "senha": "admin" }
+
+###
+@token = {{login.response.body.token}}
+
+### 2. Ativar o sinal de 30% (o canal "Balcão" exige sinal; a reserva nasce como pré-reserva)
+PUT {{base}}/api/config
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "sinal": { "exigir": true, "tipo": "percentual", "percentual": 30, "prazoHoras": 48, "toleranciaHoras": 2 } }
+
+### 3. Criar a categoria de quarto
+# @name categoria
+POST {{base}}/api/categorias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nome": "Standard", "maxAdultos": 3, "maxCriancas": 1, "comodidades": ["ar-condicionado", "wi-fi"] }
+
+### 4. Criar o quarto 12 nessa categoria
+# @name quarto
+POST {{base}}/api/quartos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "numero": "12", "categoriaId": "{{categoria.response.body.id}}" }
+
+### 5. Tabela de preços base da categoria (valores em centavos: R$ 250,00 / 300,00 / 360,00; adulto extra R$ 80,00)
+PUT {{base}}/api/tarifas/tabelas-base
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "categoriaId": "{{categoria.response.body.id}}",
+  "porAdultos": { "1": 25000, "2": 30000, "3": 36000 },
+  "adultoExtra": 8000
+}
+
+### 6. Cadastrar o hóspede titular (ficha FNRH completa, senão o check-in é recusado)
+# @name hospede
+POST {{base}}/api/hospedes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nome": "Maria da Silva",
+  "documentoTipo": "cpf",
+  "documento": "529.982.247-25",
+  "nascimento": "1985-03-20",
+  "nacionalidade": "BR",
+  "telefone": "81999990000",
+  "email": "maria@exemplo.com",
+  "endereco": { "logradouro": "Rua das Flores, 10", "cidade": "Recife", "uf": "PE", "pais": "BR", "cep": "50000000" }
+}
+
+### 7. Criar a reserva (chega hoje, sai amanhã, 2 adultos) -> estado "pre_reserva" com o valor do sinal
+# @name reserva
+POST {{base}}/api/reservas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "titularId": "{{hospede.response.body.id}}",
+  "categoriaId": "{{categoria.response.body.id}}",
+  "chegada": "{{chegada}}",
+  "saida": "{{saida}}",
+  "adultos": 2,
+  "canal": "Balcão"
+}
+
+### 8. Abrir o caixa do turno (troco inicial zero) -- necessário para receber pagamentos
+POST {{base}}/api/caixa/abrir
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "valorInicial": 0 }
+
+### 9. Pagar o sinal em Pix -> a reserva passa para "confirmada"
+POST {{base}}/api/contas/{{reserva.response.body.contaId}}/pagamentos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "reservaId": "{{reserva.response.body.id}}", "formaCodigo": "pix", "valor": {{reserva.response.body.valorSinal}} }
+
+### 10. Check-in no quarto 12 (só no dia da chegada; antes da hora de check-in pode cobrar early check-in)
+POST {{base}}/api/reservas/{{reserva.response.body.id}}/checkin
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "quartoId": "{{quarto.response.body.id}}" }
+
+### 11. Consultar a conta (saldo e extrato).
+# ATENÇÃO: a diária só é lançada na virada do dia (04:00 do dia seguinte) pelo agendador do servidor, e o
+# check-out feito no mesmo dia do check-in é uma saída antecipada (sem diária a cobrar, e o sinal fica sobrando).
+# Por isso, rode os passos 11 a 14 no DIA DA SAÍDA (amanhã, depois das 04:00), com o servidor ligado.
+# Nesse dia, o saldo do passo 12 será a diária menos o sinal já pago (ex.: R$ 300,00 - R$ 90,00 = R$ 210,00).
+# Passar das 12:00 no check-out gera a taxa de late check-out, se configurada.
+GET {{base}}/api/contas/{{reserva.response.body.contaId}}
+Authorization: Bearer {{token}}
+
+### 12. Prévia do check-out (mostra o saldo a pagar; late check-out se passar do horário)
+# @name previa
+GET {{base}}/api/reservas/{{reserva.response.body.id}}/checkout
+Authorization: Bearer {{token}}
+
+### 13. Check-out pagando o saldo restante em Pix -> reserva "finalizada", quarto 12 "sujo"
+POST {{base}}/api/reservas/{{reserva.response.body.id}}/checkout
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "pagamentos": [ { "formaCodigo": "pix", "valor": {{previa.response.body.saldo}} } ] }
+
+### 14. Fechar o caixa informando o valor contado por forma de pagamento.
+# O total em Pix é o sinal + o saldo do check-out; ajuste "pix" para esse total (a resposta mostra a diferença).
+POST {{base}}/api/caixa/fechar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "contados": { "pix": 0 } }
+
+### 15. Painel do dia
+GET {{base}}/api/painel
+Authorization: Bearer {{token}}
+
+### 16. Mapa de ocupação (próximos dias)
+GET {{base}}/api/mapa?inicio={{chegada}}&fim={{saida}}
+Authorization: Bearer {{token}}
