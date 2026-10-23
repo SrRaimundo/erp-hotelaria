@@ -16,7 +16,7 @@ const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD")
 const centavos = z.number().int().min(0);
 const naoNegativo = z.number().min(0);
 const texto = z.string().trim().min(1, "Campo obrigatório");
-const regraTaxa = z.object({ tipo: z.enum(["fixo", "percentual_diaria"]), valor: naoNegativo }).partial();
+const regraTaxa = z.object({ tipo: z.enum(["fixo", "percentual_diaria"]), valor: centavos }).partial();
 
 const corpoConfig = z
   .object({

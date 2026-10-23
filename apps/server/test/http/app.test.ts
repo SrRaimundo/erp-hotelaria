@@ -59,6 +59,9 @@ describe("API HTTP base", () => {
     const put = (payload: object, headers = admin) => app.inject({ method: "PUT", url: "/api/config", headers, payload });
     expect((await put({ horaCheckin: "25:00" })).statusCode).toBe(400);
     expect((await put({ sinal: { percentual: -1 } })).statusCode).toBe(400);
+    const frac = await put({ earlyCheckin: { tipo: "fixo", valor: 10.5 } });
+    expect(frac.statusCode).toBe(400);
+    expect(frac.json().codigo).toBe("DADOS_INVALIDOS");
     const ok = await put({ horaCheckin: "15:00", sinal: { percentual: 50 } });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toMatchObject({ horaCheckin: "15:00", sinal: { percentual: 50, prazoHoras: 48 } });
