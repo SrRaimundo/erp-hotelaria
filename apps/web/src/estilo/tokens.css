@@ -1,0 +1,14 @@
+:root {
+  --fundo: #faf6ef;
+  --superficie: #fffdf8;
+  --borda: #eadfcd;
+  --texto: #3b2f25;
+  --texto-suave: #8a7663;
+  --verde: #2f6f5e;
+  --terracota: #c0613a;
+  --amarelo: #f2c879;
+  --alerta-fundo: #fbeee6;
+  --raio-cartao: 14px;
+  --raio-controle: 10px;
+  --fonte: system-ui, "Segoe UI", sans-serif;
+}
