@@ -94,3 +94,20 @@ export const migracaoHospedagemConta: Migracao = {
     await db.schema.createIndex("pagamentos_reserva").on("pagamentos").column("reserva_id").execute();
   },
 };
+
+export const migracaoHospedagemReceber: Migracao = {
+  nome: "0430_hospedagem_receber",
+  async up(db) {
+    await db.schema
+      .createTable("valores_a_receber")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("conta_id", "text", (c) => c.notNull().references("contas.id"))
+      .addColumn("reserva_id", "text", (c) => c.notNull().references("reservas.id"))
+      .addColumn("responsavel_nome", "text", (c) => c.notNull())
+      .addColumn("responsavel_documento", "text", (c) => c.notNull())
+      .addColumn("valor", "integer", (c) => c.notNull())
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .addColumn("situacao", "text", (c) => c.notNull()) // "aberto"
+      .execute();
+  },
+};

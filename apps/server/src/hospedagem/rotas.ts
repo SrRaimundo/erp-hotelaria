@@ -7,6 +7,7 @@ import { alterarReserva, cancelarReserva, marcarNoShow, previaAlteracao, prorrog
 import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagamento, saldo } from "./conta.js";
 import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
+import { fazerCheckout, previaCheckout } from "./checkout.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD");
@@ -52,6 +53,11 @@ const corpoCheckin = z.object({
   acompanhantes: z.array(texto).default([]),
   cobrarEarlyCheckin: z.boolean().optional(),
   recalcularPreco: z.boolean().optional(),
+});
+const corpoCheckout = z.object({
+  pagamentos: z.array(z.object({ formaCodigo: texto, valor: z.number().int().min(1) })).default([]),
+  faturado: z.object({ nome: texto, documento: texto, valor: z.number().int().min(1) }).optional(),
+  cobrarLateCheckout: z.boolean().optional(),
 });
 const corpoGrupo = z.object({ titularId: texto, cobranca: z.enum(["unica", "separada"]) });
 
@@ -113,6 +119,17 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     exigirPermissao(req.usuario, "hospedagem.checkin");
     const id = z.object({ id: texto }).parse(req.params).id;
     await fazerCheckin(ctx, { reservaId: id, ...corpoCheckin.parse(req.body) }, req.usuario);
+    return obterReserva(ctx, id);
+  });
+
+  app.get("/api/reservas/:id/checkout", async (req) => {
+    exigirPermissao(req.usuario, "hospedagem.checkout");
+    return previaCheckout(ctx, z.object({ id: texto }).parse(req.params).id);
+  });
+  app.post("/api/reservas/:id/checkout", async (req) => {
+    exigirPermissao(req.usuario, "hospedagem.checkout");
+    const id = z.object({ id: texto }).parse(req.params).id;
+    await fazerCheckout(ctx, { reservaId: id, ...corpoCheckout.parse(req.body) }, req.usuario);
     return obterReserva(ctx, id);
   });
 
