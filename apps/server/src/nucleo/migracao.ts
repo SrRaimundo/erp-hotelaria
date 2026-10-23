@@ -139,3 +139,31 @@ export const migracaoNucleoUsuarios: Migracao = {
       .execute();
   },
 };
+
+export const migracaoNucleoCaixa: Migracao = {
+  nome: "0230_nucleo_caixa",
+  async up(db) {
+    await db.schema
+      .createTable("turnos_caixa")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("usuario_id", "text", (c) => c.notNull().references("usuarios.id"))
+      .addColumn("aberto_em", "text", (c) => c.notNull())
+      .addColumn("valor_inicial", "integer", (c) => c.notNull())
+      .addColumn("fechado_em", "text")
+      .addColumn("contados", "text")
+      .execute();
+    // No máximo um turno aberto por usuário.
+    await sql`CREATE UNIQUE INDEX turnos_caixa_um_aberto ON turnos_caixa (usuario_id) WHERE fechado_em IS NULL`.execute(db);
+    await db.schema
+      .createTable("movimentos_caixa")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("turno_id", "text", (c) => c.notNull().references("turnos_caixa.id"))
+      .addColumn("forma_codigo", "text", (c) => c.notNull())
+      .addColumn("valor", "integer", (c) => c.notNull())
+      .addColumn("origem_tipo", "text", (c) => c.notNull())
+      .addColumn("origem_id", "text", (c) => c.notNull())
+      .addColumn("instante", "text", (c) => c.notNull())
+      .execute();
+    await db.schema.createIndex("movimentos_caixa_turno").on("movimentos_caixa").column("turno_id").execute();
+  },
+};

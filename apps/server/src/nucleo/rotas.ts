@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../shared/contexto.js";
+import { abrirCaixa, fecharCaixa, turnoAberto } from "./caixa.js";
 import { criarCategoria, listarCategorias } from "./categorias.js";
 import { listarFormas } from "./formas-pagamento.js";
 import { buscarHospedes, salvarHospede } from "./hospedes.js";
@@ -74,6 +75,8 @@ const corpoProduto = z.object({
   tipo: z.enum(["produto", "servico"]),
 });
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
+const corpoAbrirCaixa = z.object({ valorInicial: centavos });
+const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
 const corpoLogin = z.object({ login: z.string().min(1), senha: z.string().min(1) });
 
 export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
@@ -128,5 +131,20 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
   app.post("/api/usuarios", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
     return res.status(201).send(await criarUsuario(ctx, corpoUsuario.parse(req.body), req.usuario.id));
+  });
+
+  app.post("/api/caixa/abrir", async (req, res) => {
+    exigirPermissao(req.usuario, "caixa.operar");
+    const { valorInicial } = corpoAbrirCaixa.parse(req.body);
+    return res.status(201).send(await abrirCaixa(ctx, req.usuario.id, valorInicial));
+  });
+  app.post("/api/caixa/fechar", async (req) => {
+    exigirPermissao(req.usuario, "caixa.operar");
+    const { contados } = corpoFecharCaixa.parse(req.body);
+    return fecharCaixa(ctx, req.usuario.id, contados);
+  });
+  app.get("/api/caixa/atual", async (req) => {
+    exigirPermissao(req.usuario, "caixa.operar");
+    return turnoAberto(ctx, req.usuario.id);
   });
 }
