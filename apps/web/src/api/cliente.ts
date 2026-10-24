@@ -16,6 +16,25 @@ export class ErroApi extends Error {
   }
 }
 
+let online = true;
+const ouvintes = new Set<() => void>();
+
+function marcarConexao(valor: boolean): void {
+  if (online === valor) return;
+  online = valor;
+  ouvintes.forEach((o) => o());
+}
+
+export function estaOnline(): boolean {
+  return online;
+}
+
+/** Assina mudanças de conexão (para useSyncExternalStore); devolve a função que cancela. */
+export function aoMudarConexao(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => ouvintes.delete(ouvinte);
+}
+
 export function definirToken(token: string | null): void {
   if (token === null) localStorage.removeItem(CHAVE_TOKEN);
   else localStorage.setItem(CHAVE_TOKEN, token);
@@ -37,9 +56,11 @@ export async function chamarApi<T>(metodo: "GET" | "POST" | "PUT" | "PATCH" | "D
     resposta = await fetch(caminho, init);
     texto = await resposta.text();
   } catch {
+    marcarConexao(false);
     throw new ErroApi(0, "SEM_CONEXAO", "Sem conexão com o servidor da pousada.");
   }
 
+  marcarConexao(true); // qualquer resposta do servidor prova que a rede voltou
   let dados: unknown = undefined;
   let jsonValido = true;
   if (texto) {

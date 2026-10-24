@@ -1,5 +1,6 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
+import { useConexao } from "./useConexao";
 import type { ItemListaReserva, LinhaExtrato, Mapa, Painel, ReservaDetalhe, ResultadoBusca } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
@@ -29,7 +30,16 @@ export type ParamsMapa = { inicio: string; fim: string; categoriaId?: string };
 export type FiltrosReservas = { inicio?: string; fim?: string; estado?: string; canal?: string; q?: string; pagina?: number; porPagina?: number };
 export type ContaDetalhe = { saldo: { debitos: number; creditos: number; saldo: number }; extrato: LinhaExtrato[] };
 
-export const usePainel = () => useQuery({ queryKey: ["painel"], queryFn: () => chamarApi<Painel>("GET", "/api/painel") });
+/** Offline: tenta de 5 em 5 s para a faixa de conexão sumir logo que o servidor voltar. */
+export function usePainel(ativo = true) {
+  const { online } = useConexao();
+  return useQuery({
+    queryKey: ["painel"],
+    queryFn: () => chamarApi<Painel>("GET", "/api/painel"),
+    enabled: ativo,
+    refetchInterval: online ? 30_000 : 5_000,
+  });
+}
 
 export const useMapa = (p: ParamsMapa) =>
   useQuery({

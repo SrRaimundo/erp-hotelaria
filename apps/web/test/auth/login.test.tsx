@@ -19,6 +19,7 @@ const recepcao: UsuarioSessao = {
   limiteDesconto: 5,
 };
 const admin: UsuarioSessao = { ...recepcao, id: "u0", nome: "Admin", perfil: "admin", trocarSenha: true };
+const painelVazio = { "GET /api/painel": { dia: "2026-10-23", atencao: [] } };
 const governanca: UsuarioSessao = { ...recepcao, id: "u2", nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] };
 
 function Sonda() {
@@ -42,7 +43,7 @@ async function preencherLogin(u: ReturnType<typeof userEvent.setup>, login = "ma
 
 describe("login e sessão", () => {
   test("login com sucesso leva à tela Hoje", async () => {
-    instalarApiFalsa({ "POST /api/sessoes": { __status: 201, token: "tk1", usuario: recepcao } });
+    instalarApiFalsa({ ...painelVazio, "POST /api/sessoes": { __status: 201, token: "tk1", usuario: recepcao } });
     const u = userEvent.setup();
     telaCompleta("/login");
     await preencherLogin(u);
@@ -65,6 +66,7 @@ describe("login e sessão", () => {
 
   test("admin com trocarSenha é obrigado a trocar antes de entrar", async () => {
     instalarApiFalsa({
+      ...painelVazio,
       "POST /api/sessoes": { __status: 201, token: "tk0", usuario: admin },
       "PUT /api/usuarios/me/senha": { __status: 204 },
     });
@@ -91,7 +93,7 @@ describe("login e sessão", () => {
     await u.type(screen.getByLabelText("Confirmar nova senha"), "nova-senha");
     await u.click(screen.getByRole("button", { name: "Salvar nova senha" }));
     expect(await screen.findByRole("heading", { name: "Hoje" })).toBeInTheDocument();
-    expect(chamadas.at(-1)).toMatchObject({
+    expect(chamadas.find((c) => c.metodo === "PUT")).toMatchObject({
       metodo: "PUT",
       caminho: "/api/usuarios/me/senha",
       corpo: { senhaAtual: "admin123", novaSenha: "nova-senha" },
@@ -128,7 +130,7 @@ describe("login e sessão", () => {
   });
 
   test("sessão expirada volta ao login e retorna à rota anterior", async () => {
-    instalarApiFalsa({ "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
+    instalarApiFalsa({ ...painelVazio, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
     const u = userEvent.setup();
     telaCompleta("/mapa", false);
     expect(await screen.findByRole("heading", { name: "Mapa" })).toBeInTheDocument();

@@ -1,16 +1,9 @@
-import { Outlet, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import { Login } from "./auth/Login";
 import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
+import { Shell } from "./layout/Shell";
 
-// Provisório até o Shell (Task 6); as telas seguintes trocam apenas os elementos desta tabela.
-function Shell() {
-  return (
-    <main>
-      <Outlet />
-    </main>
-  );
-}
 const Provisoria = ({ titulo }: { titulo: string }) => <h1>{titulo}</h1>;
 
 export function AppRotas() {
