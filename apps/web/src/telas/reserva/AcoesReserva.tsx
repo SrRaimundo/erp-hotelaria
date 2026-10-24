@@ -5,13 +5,14 @@ import type { ReservaDetalhe } from "../../api/tipos";
 import { Botao } from "../../componentes/Botao";
 import { JanelaSupervisor, type Autorizacao } from "../../componentes/JanelaSupervisor";
 import { ProrrogarSinal } from "../../componentes/ProrrogarSinal";
+import { JanelaAlterarReserva } from "./JanelaAlterarReserva";
 
 type Props = {
   reserva: ReservaDetalhe;
   /** Muda parâmetros da URL (undefined remove) preservando os demais. */
   aoMudarUrl: (mudancas: Record<string, string | undefined>) => void;
 };
-type Pendente = "cancelar" | "no-show" | "prorrogar" | null;
+type Pendente = "cancelar" | "no-show" | "prorrogar" | "alterar" | null;
 
 export function AcoesReserva({ reserva, aoMudarUrl }: Props) {
   const [pendente, setPendente] = useState<Pendente>(null);
@@ -48,6 +49,8 @@ export function AcoesReserva({ reserva, aoMudarUrl }: Props) {
           <Botao onClick={() => aoMudarUrl({ fluxo: "checkout", receber: undefined })}>Fazer check-out</Botao>
         </>
       )}
+      <Botao variante="contorno" onClick={() => setPendente("alterar")}>Alterar</Botao>
+      {pendente === "alterar" && <JanelaAlterarReserva reserva={reserva} aoFechar={fechar} />}
       <JanelaSupervisor
         aberta={pendente === "cancelar"}
         titulo="Cancelar reserva"

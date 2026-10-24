@@ -4,12 +4,15 @@ import { somarDiasIso } from "../../lib/datas";
 
 export type Movimento = {
   reservaId: string;
-  tipo: "mover" | "esticar";
+  tipo: "mover" | "esticar" | "alterar";
   quartoId?: string;
   /** Só vai quando o quarto de destino é de outra categoria (o servidor exige quarto e categoria coerentes). */
   categoriaId?: string;
   chegada?: string;
   saida?: string;
+  /** Só no formulário Alterar da gaveta. */
+  adultos?: number;
+  criancasNascimento?: string[];
 };
 
 /** Linha da grade; `categoriaId` fica indefinido quando o nome da categoria não identifica um id com segurança. */
