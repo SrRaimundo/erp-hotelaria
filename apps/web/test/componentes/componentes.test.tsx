@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { chamarApi } from "../../src/api/cliente";
+import { Botao } from "../../src/componentes/Botao";
 import { CampoDinheiro } from "../../src/componentes/CampoDinheiro";
 import { ErroAcao } from "../../src/componentes/ErroAcao";
 import { Gaveta } from "../../src/componentes/Gaveta";
@@ -114,5 +116,65 @@ describe("componentes base", () => {
     await u.keyboard("{Escape}");
     expect(fecharJanela).toHaveBeenCalledTimes(1);
     expect(fecharGaveta).not.toHaveBeenCalled();
+  });
+
+  test("Gaveta e Janela montadas abertas no mesmo render: Esc fecha a Janela primeiro, depois a Gaveta", async () => {
+    const u = userEvent.setup();
+    function Caso() {
+      const [gaveta, setGaveta] = useState(true);
+      const [janela, setJanela] = useState(true);
+      return (
+        <Gaveta aberta={gaveta} aoFechar={() => setGaveta(false)} titulo="Reserva">
+          <Janela aberta={janela} aoFechar={() => setJanela(false)} titulo="Confirmar">
+            <input aria-label="Primeiro" />
+          </Janela>
+        </Gaveta>
+      );
+    }
+    render(<Caso />);
+    await u.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Confirmar" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Reserva" })).toBeInTheDocument();
+    await u.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("Esc não fecha a JanelaSupervisor enquanto o envio está em andamento", async () => {
+    const u = userEvent.setup();
+    const cancelar = vi.fn();
+    let liberar!: () => void;
+    const confirmar = vi.fn(() => new Promise<void>((r) => { liberar = r; }));
+    render(<JanelaSupervisor aberta titulo="Autorizar" aoCancelar={cancelar} aoConfirmar={confirmar} />);
+    await u.type(screen.getByLabelText("Motivo"), "Cortesia");
+    await u.click(screen.getByRole("button", { name: "Autorizar" }));
+    expect(confirmar).toHaveBeenCalledTimes(1);
+    await u.keyboard("{Escape}");
+    expect(cancelar).not.toHaveBeenCalled();
+    await act(async () => {
+      liberar();
+    });
+    await u.keyboard("{Escape}");
+    expect(cancelar).toHaveBeenCalledTimes(1);
+  });
+
+  describe("conexão", () => {
+    afterEach(() => vi.unstubAllGlobals());
+    test("Botao com ignorarConexao segue habilitado offline; os demais desabilitam", async () => {
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("rede")));
+      await expect(chamarApi("GET", "/api/x")).rejects.toMatchObject({ codigo: "SEM_CONEXAO" });
+      render(
+        <>
+          <Botao>Salvar</Botao>
+          <Botao ignorarConexao>Sair</Botao>
+        </>,
+      );
+      expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
+      vi.stubGlobal("fetch", async () => new Response("{}", { status: 200 }));
+      await act(async () => {
+        await chamarApi("GET", "/api/x");
+      });
+      expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
+    });
   });
 });

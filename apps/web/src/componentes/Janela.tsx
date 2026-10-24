@@ -8,7 +8,7 @@ const FOCAVEIS = 'input, select, textarea, button, a[href], [tabindex]:not([tabi
 /** Modal centralizado com fundo escurecido. O botão de fechar vem por último no DOM para o foco inicial cair no conteúdo. */
 export function Janela({ aberta, aoFechar, titulo, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  useEsc(aberta, aoFechar);
+  useEsc(aberta, aoFechar, 1); // modal: sempre acima da Gaveta
   useEffect(() => {
     if (!aberta) return;
     const anterior = document.activeElement as HTMLElement | null;

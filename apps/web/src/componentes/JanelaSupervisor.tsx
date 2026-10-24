@@ -11,7 +11,7 @@ type Props = {
   aoConfirmar: (a: Autorizacao) => Promise<void>;
 };
 
-function Formulario({ aoCancelar, aoConfirmar }: Pick<Props, "aoCancelar" | "aoConfirmar">) {
+function Formulario({ aoCancelar, aoConfirmar, aoEnviando }: Pick<Props, "aoCancelar" | "aoConfirmar"> & { aoEnviando: (v: boolean) => void }) {
   const id = useId();
   const [motivo, setMotivo] = useState("");
   const [login, setLogin] = useState("");
@@ -27,12 +27,14 @@ function Formulario({ aoCancelar, aoConfirmar }: Pick<Props, "aoCancelar" | "aoC
     }
     setErro(null);
     setEnviando(true);
+    aoEnviando(true);
     try {
       await aoConfirmar({ motivo: motivo.trim(), supervisor: { login, senha } });
     } catch (x) {
       setErro(x instanceof Error ? x : new Error("Não foi possível autorizar."));
     } finally {
       setEnviando(false);
+      aoEnviando(false);
     }
   }
 
@@ -58,9 +60,11 @@ function Formulario({ aoCancelar, aoConfirmar }: Pick<Props, "aoCancelar" | "aoC
 }
 
 export function JanelaSupervisor({ aberta, titulo, aoCancelar, aoConfirmar }: Props) {
+  const [enviando, setEnviando] = useState(false);
+  // Durante o envio, Esc e × não fecham a janela (evita perder o resultado da autorização).
   return (
-    <Janela aberta={aberta} aoFechar={aoCancelar} titulo={titulo}>
-      <Formulario aoCancelar={aoCancelar} aoConfirmar={aoConfirmar} />
+    <Janela aberta={aberta} aoFechar={() => !enviando && aoCancelar()} titulo={titulo}>
+      <Formulario aoCancelar={aoCancelar} aoConfirmar={aoConfirmar} aoEnviando={setEnviando} />
     </Janela>
   );
 }
