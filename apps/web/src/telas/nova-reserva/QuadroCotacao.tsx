@@ -62,7 +62,7 @@ export function QuadroCotacao({ pedido, canal, config, desconto, titulo = "Cota√
   const exigeSinal = !!canal?.exigeSinal && !!config?.sinal.exigir;
 
   return (
-    <section className="nova-cotacao" aria-label={titulo}>
+    <section className={`nova-cotacao${consulta.isPlaceholderData ? " nova-cotacao--atualizando" : ""}`} aria-label={titulo} aria-busy={consulta.isPlaceholderData}>
       <h3>{titulo}</h3>
       {!cot && !consulta.error && <p className="reserva-suave">Calculando‚Ä¶</p>}
       {consulta.error && (

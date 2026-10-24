@@ -208,4 +208,41 @@ describe("nova reserva", () => {
     expect(screen.getByRole("link", { name: "#201" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "#202" })).not.toBeInTheDocument();
   });
+
+  test("grupo: reenviar cria o grupo uma vez, não repete a linha criada e refaz a que falhou", async () => {
+    const usuario = userEvent.setup();
+    let tentativasLuxo = 0;
+    let n = 0;
+    montar("/reservas/nova?chegada=2026-12-30", {
+      "POST /api/grupos": { id: "g1", titularId: "h1", cobranca: "separada" },
+      "POST /api/reservas": (corpo: { categoriaId: string }) => {
+        if (corpo.categoriaId === "c2" && ++tentativasLuxo === 1) return { __status: 422, codigo: "CATEGORIA_LOTADA", mensagem: "Não há quartos Luxo livres." };
+        return reservaCriada(`r${++n}`, 300 + n);
+      },
+    });
+    await prepararGrupo(usuario);
+    await usuario.click(screen.getByRole("button", { name: "Reservar grupo" }));
+    expect(await screen.findByText("Não há quartos Luxo livres.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Categoria da linha 1")).toBeDisabled();
+    await usuario.click(screen.getByRole("button", { name: "Reservar grupo" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "#302" })).toBeInTheDocument());
+    expect(screen.queryByText("Não há quartos Luxo livres.")).not.toBeInTheDocument();
+    expect(chamadas.filter((c) => c.caminho === "/api/grupos")).toHaveLength(1);
+    const posts = chamadas.filter((c) => c.metodo === "POST" && c.caminho === "/api/reservas").map((c) => c.corpo as { categoriaId: string });
+    expect(posts.map((p) => p.categoriaId)).toEqual(["c1", "c2", "c2"]);
+  });
+
+  test("hóspede da URL inexistente mostra o erro", async () => {
+    montar("/reservas/nova?hospede=h9", {
+      "GET /api/hospedes/h9": { __status: 422, codigo: "HOSPEDE_NAO_ENCONTRADO", mensagem: "Hóspede não encontrado. Busque de novo pelo nome ou documento." },
+    });
+    expect(await screen.findByText("Não foi possível carregar o hóspede.")).toBeInTheDocument();
+    expect(screen.getByText("Hóspede não encontrado. Busque de novo pelo nome ou documento.")).toBeInTheDocument();
+  });
+
+  test("falha ao carregar o catálogo mostra o erro", async () => {
+    montar("/reservas/nova", { "GET /api/categorias": { __status: 500, codigo: "ERRO_INTERNO", mensagem: "Falha no servidor." } });
+    expect(await screen.findByText("Não foi possível carregar categorias, quartos ou canais.")).toBeInTheDocument();
+    expect(screen.getByText("Falha no servidor.")).toBeInTheDocument();
+  });
 });

@@ -44,6 +44,7 @@ export function TelaNovaReserva() {
     enabled: !!hospedeUrl,
     refetchInterval: false,
   });
+  const falhaCatalogo = categoriasQ.error ?? quartosQ.error ?? canaisQ.error ?? configQ.error;
   const [escolhido, setEscolhido] = useState<Hospede | null | undefined>(undefined);
   const titular = escolhido !== undefined ? escolhido : (hospedeQ.data ?? null);
 
@@ -239,6 +240,22 @@ export function TelaNovaReserva() {
             void (grupo ? reservarGrupo() : reservar());
           }}
         >
+          {hospedeQ.error && escolhido === undefined && (
+            <>
+              <p>
+                <strong>Não foi possível carregar o hóspede.</strong>
+              </p>
+              <ErroAcao erro={hospedeQ.error} />
+            </>
+          )}
+          {falhaCatalogo && (
+            <>
+              <p>
+                <strong>Não foi possível carregar categorias, quartos ou canais.</strong>
+              </p>
+              <ErroAcao erro={falhaCatalogo} />
+            </>
+          )}
           <SeletorHospede valor={titular} aoEscolher={setEscolhido} />
 
           <label className="checkin-opcao">
@@ -286,7 +303,7 @@ export function TelaNovaReserva() {
                 const { categoriaId, quartoId } = resolver(l.aco);
                 const sufixo = ` da linha ${i + 1}`;
                 return (
-                  <fieldset key={l.id} className="nova-linha">
+                  <fieldset key={l.id} className="nova-linha" disabled={!!r && "reserva" in r}>
                     <legend>Quarto {i + 1}</legend>
                     <CamposAcomodacao
                       sufixo={sufixo}
@@ -297,7 +314,7 @@ export function TelaNovaReserva() {
                       quartos={quartos}
                       aoMudar={(a) => setLinhas((ls) => ls.map((x) => (x.id === l.id ? { ...x, aco: a } : x)))}
                     />
-                    {r && "reserva" in r && <p className="nova-ok">✓ #{r.reserva.codigo}</p>}
+                    {r && "reserva" in r && <p className="nova-ok">✓ criada #{r.reserva.codigo}</p>}
                     {r && "erro" in r && <p className="erro-acao" role="alert">{r.erro}</p>}
                     {!(r && "reserva" in r) && linhas.length > 1 && (
                       <Botao variante="contorno" tamanho="pequeno" aria-label={`Remover linha ${i + 1}`} onClick={() => setLinhas((ls) => ls.filter((x) => x.id !== l.id))}>

@@ -27,3 +27,4 @@
 .nova-sinal { margin: 12px 0 0; font-weight: 600; color: var(--verde); }
 .nova-grupo-criado { border: 1px solid var(--verde); border-radius: var(--raio-cartao); background: var(--superficie); padding: 16px; }
 .nova-grupo-criado h3 { margin: 0 0 8px; color: var(--verde); }
+.nova-cotacao--atualizando { opacity: 0.5; }
