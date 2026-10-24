@@ -61,10 +61,11 @@ export const useReserva = (id: string) =>
 export const useConta = (id: string) =>
   useQuery({ queryKey: ["conta", id], queryFn: () => chamarApi<ContaDetalhe>("GET", `/api/contas/${encodeURIComponent(id)}`) });
 
-export const useReservas = (f: FiltrosReservas) =>
+export const useReservas = (f: FiltrosReservas, ativo = true) =>
   useQuery({
     queryKey: ["reservas", f],
     queryFn: () => chamarApi<{ itens: ItemListaReserva[]; total: number }>("GET", `/api/reservas${consulta({ ...f })}`),
+    enabled: ativo,
   });
 
 /** Turno aberto do usuário; `null` quando não há caixa aberto. */

@@ -21,6 +21,7 @@ const recepcao: UsuarioSessao = {
 };
 const admin: UsuarioSessao = { ...recepcao, id: "u0", nome: "Admin", perfil: "admin", trocarSenha: true };
 const painelVazio = { "GET /api/painel": criarPainel({ atencao: [] }), "GET /api/config": { horaCheckin: "14:00", horaCheckout: "12:00" } };
+const caixaFechado = { ...painelVazio, "GET /api/caixa/atual": null, "GET /api/formas-pagamento": [] };
 const governanca: UsuarioSessao = { ...recepcao, id: "u2", nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] };
 
 function Sonda() {
@@ -131,10 +132,10 @@ describe("login e sessão", () => {
   });
 
   test("sessão expirada volta ao login e retorna à rota anterior", async () => {
-    instalarApiFalsa({ ...painelVazio, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
+    instalarApiFalsa({ ...caixaFechado, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
     const u = userEvent.setup();
     telaCompleta("/caixa", false);
-    expect(await screen.findByRole("heading", { name: "Caixa" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Abrir caixa" })).toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new Event("erp:sessao-expirada"));
@@ -145,7 +146,7 @@ describe("login e sessão", () => {
     expect(localStorage.getItem("erp.usuario")).toBeNull();
 
     await preencherLogin(u);
-    expect(await screen.findByRole("heading", { name: "Caixa" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Abrir caixa" })).toBeInTheDocument();
     expect(screen.getByTestId("local")).toHaveTextContent(/^\/caixa$/);
   });
 
@@ -161,7 +162,7 @@ describe("login e sessão", () => {
   });
 
   test("sair chama DELETE /api/sessoes, ignora o erro, limpa o armazenamento e vai ao login", async () => {
-    instalarApiFalsa({ "DELETE /api/sessoes": { __status: 500, codigo: "X", mensagem: "falhou" } });
+    instalarApiFalsa({ ...caixaFechado, "DELETE /api/sessoes": { __status: 500, codigo: "X", mensagem: "falhou" } });
     function BotaoSair() {
       const { sair, pode } = useSessao();
       return <button onClick={() => void sair()}>Sair {pode("x") ? "com x" : "sem x"}</button>;
@@ -177,7 +178,7 @@ describe("login e sessão", () => {
     );
     await u.click(screen.getByRole("button", { name: "Sair sem x" }));
     await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/login"));
-    expect(chamadas[0]).toMatchObject({ metodo: "DELETE", caminho: "/api/sessoes" });
+    expect(chamadas.find((c) => c.metodo === "DELETE")).toMatchObject({ metodo: "DELETE", caminho: "/api/sessoes" });
     expect(localStorage.getItem("erp.token")).toBeNull();
     expect(localStorage.getItem("erp.usuario")).toBeNull();
   });

@@ -1,0 +1,11 @@
+.caixa { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.caixa h1 { font-size: 1.5rem; }
+.caixa-suave { color: var(--texto-suave); font-size: 0.875rem; }
+.caixa-bloco { display: flex; flex-direction: column; gap: 10px; }
+.caixa-bloco h2 { font-size: 1.0625rem; }
+.caixa-tabela { width: 100%; border-collapse: collapse; }
+.caixa-tabela th, .caixa-tabela td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); }
+.caixa-tabela th { color: var(--texto-suave); font-size: 0.8125rem; }
+.caixa-num { text-align: right !important; }
+.caixa-esperado { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.caixa-esperado li { display: flex; justify-content: space-between; gap: 12px; }

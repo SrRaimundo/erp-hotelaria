@@ -5,6 +5,7 @@ import { ErroAcao } from "../../componentes/ErroAcao";
 import { Etiqueta } from "../../componentes/Etiqueta";
 import { Gaveta } from "../../componentes/Gaveta";
 import { formatarData } from "../../lib/datas";
+import { ESTADOS_RESERVA } from "../../lib/estados";
 import { AbaConta } from "./AbaConta";
 import { AbaHospedes } from "./AbaHospedes";
 import { AbaResumo } from "./AbaResumo";
@@ -22,15 +23,6 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "conta", rotulo: "Conta" },
   { id: "hospedes", rotulo: "Hóspedes" },
 ];
-
-const ESTADOS: Record<ReservaDetalhe["estado"], { rotulo: string; tom: "neutro" | "verde" | "terracota" | "amarelo" }> = {
-  pre_reserva: { rotulo: "pré-reserva", tom: "amarelo" },
-  confirmada: { rotulo: "confirmada", tom: "verde" },
-  hospedada: { rotulo: "hospedada", tom: "verde" },
-  finalizada: { rotulo: "finalizada", tom: "neutro" },
-  cancelada: { rotulo: "cancelada", tom: "terracota" },
-  no_show: { rotulo: "no-show", tom: "terracota" },
-};
 
 const PARAMETROS = ["reserva", "aba", "fluxo", "receber"];
 
@@ -86,7 +78,7 @@ function PainelReserva({ id, aba, fluxo, receber, aoMudar, aoFechar }: PainelPro
       </Gaveta>
     );
   }
-  const estado = ESTADOS[r.estado];
+  const estado = ESTADOS_RESERVA[r.estado];
   return (
     <Gaveta aberta aoFechar={aoFechar} titulo={`#${r.codigo} · ${r.titular.nome} · ${r.quartoNumero ? `Qto ${r.quartoNumero}` : "sem quarto"}`}>
       <div className="reserva-cabecalho">
