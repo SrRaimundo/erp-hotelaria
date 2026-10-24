@@ -37,7 +37,7 @@ Itens podem ser desativados (não aparecem em novos checklists) mas nunca apagad
 **Modelo padrão — Diária:**
 - Limpeza: Banheiro limpo · Apartamento varrido · Toalhas e piso trocados · Amenidades repostas
 - Enxoval recolhido: Toalhas · Pisos · Lençóis de casal · Lençóis de solteiro
-- Equipamentos: TV · Rádio · Ar-condicionado · Água quente
+- (sem equipamentos no padrão; a pousada poderá incluí-los quando houver a tela de configuração)
 
 ### 2.2 Checklist (execução)
 
