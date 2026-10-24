@@ -110,6 +110,12 @@ export async function salvarHospede(ctx: Contexto, dados: DadosHospede, ator: st
   });
 }
 
+export async function obterHospede(ctx: Contexto, id: string): Promise<Hospede> {
+  const l = await ctx.db.selectFrom("hospedes").selectAll().where("id", "=", id).executeTakeFirst();
+  if (!l) throw new ErroDominio("HOSPEDE_NAO_ENCONTRADO", "Hóspede não encontrado. Busque de novo pelo nome ou documento.", { id });
+  return paraHospede(l);
+}
+
 export async function buscarHospedes(ctx: Contexto, termo: string): Promise<Hospede[]> {
   const t = normalizarBusca(termo);
   if (!t) return [];

@@ -1,0 +1,29 @@
+.nova-reserva h1 { margin: 0 0 16px; }
+.nova-colunas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 899px) { .nova-colunas { grid-template-columns: 1fr; } }
+.nova-form { gap: 14px; }
+.nova-form select, .nova-form input[type="number"], .nova-form input[type="date"], .nova-form textarea {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; font: inherit; color: var(--texto);
+}
+.nova-datas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nova-acomodacao { display: flex; flex-direction: column; gap: 10px; }
+.nova-criancas { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.nova-crianca { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.nova-titular { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; background: var(--superficie); }
+.nova-busca { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.nova-busca .campo { align-self: stretch; }
+.nova-resultados { list-style: none; margin: 0; padding: 0; align-self: stretch; border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); }
+.nova-resultado { width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 12px; color: var(--texto); font: inherit; }
+.nova-resultado:hover, .nova-resultado:focus-visible { background: var(--alerta-fundo); }
+.nova-resultado small { color: var(--texto-suave); }
+.nova-linhas { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.nova-linha { align-self: stretch; border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.nova-ok { color: var(--verde); font-weight: 700; margin: 0; }
+.nova-erros { margin: 0; padding: 8px 12px 8px 28px; background: var(--alerta-fundo); color: var(--terracota); border-radius: var(--raio-controle); }
+.nova-lateral { display: flex; flex-direction: column; gap: 16px; }
+.nova-cotacao { border: 1px solid var(--borda); border-radius: var(--raio-cartao); background: var(--superficie); padding: 16px; }
+.nova-cotacao h3 { margin: 0 0 8px; }
+.nova-passos { margin: 6px 0 0; padding-left: 18px; color: var(--texto-suave); }
+.nova-sinal { margin: 12px 0 0; font-weight: 600; color: var(--verde); }
+.nova-grupo-criado { border: 1px solid var(--verde); border-radius: var(--raio-cartao); background: var(--superficie); padding: 16px; }
+.nova-grupo-criado h3 { margin: 0 0 8px; color: var(--verde); }

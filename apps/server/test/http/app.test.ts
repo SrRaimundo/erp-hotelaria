@@ -87,6 +87,13 @@ describe("API HTTP base", () => {
     expect(h.statusCode).toBe(201);
     const busca = await app.inject({ method: "GET", url: "/api/hospedes?q=maria", headers: rec });
     expect(busca.json()).toHaveLength(1);
+    const porId = await app.inject({ method: "GET", url: `/api/hospedes/${h.json().id}`, headers: rec });
+    expect(porId.statusCode).toBe(200);
+    expect(porId.json()).toMatchObject({ id: h.json().id, nome: "Maria Souza" });
+    const semHospede = await app.inject({ method: "GET", url: "/api/hospedes/inexistente", headers: rec });
+    expect(semHospede.statusCode).toBe(422);
+    expect(semHospede.json().codigo).toBe("HOSPEDE_NAO_ENCONTRADO");
+    expect((await app.inject({ method: "GET", url: `/api/hospedes/${h.json().id}`, headers: await entrarComo(ctx, "governanca") })).statusCode).toBe(403);
 
     const formas = (await app.inject({ method: "GET", url: "/api/formas-pagamento", headers: rec })).json();
     expect(formas.map((f: any) => f.codigo)).toEqual(["dinheiro", "pix", "debito", "credito", "faturado"]);

@@ -5,7 +5,7 @@ import type { Contexto } from "../shared/contexto.js";
 import { abrirCaixa, fecharCaixa, resumoCaixa } from "./caixa.js";
 import { criarCategoria, listarCategorias } from "./categorias.js";
 import { listarFormas } from "./formas-pagamento.js";
-import { buscarHospedes, salvarHospede } from "./hospedes.js";
+import { buscarHospedes, obterHospede, salvarHospede } from "./hospedes.js";
 import { exigirPermissao } from "./permissoes.js";
 import { obterConfig, salvarConfig, type ConfigPousada } from "./pousada.js";
 import { criarProduto, listarProdutos } from "./produtos.js";
@@ -118,6 +118,10 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     exigirPermissao(req.usuario, "reservas.gerenciar");
     const { q } = z.object({ q: z.string().default("") }).parse(req.query);
     return buscarHospedes(ctx, q);
+  });
+  app.get("/api/hospedes/:id", async (req) => {
+    exigirPermissao(req.usuario, "reservas.gerenciar");
+    return obterHospede(ctx, z.object({ id: z.string().min(1) }).parse(req.params).id);
   });
   app.post("/api/hospedes", async (req, res) => {
     exigirPermissao(req.usuario, "reservas.gerenciar");
