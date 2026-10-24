@@ -23,12 +23,12 @@ export type PedidoCheckout = {
 export type PreviaCheckout = { extrato: LinhaExtrato[]; saldo: Centavos; lateCheckout?: Centavos; saidaAntecipada: boolean; exigeQuitacao: boolean };
 
 /** Em conta única de grupo, só a última reserva ativa do grupo precisa zerar o saldo (e fecha a conta). */
-async function ehUltimaDaConta(ctx: Contexto, r: { id: string; grupo_id: string | null }): Promise<boolean> {
-  if (!r.grupo_id) return true;
-  const grupo = await ctx.db.selectFrom("grupos").select("cobranca").where("id", "=", r.grupo_id).executeTakeFirst();
+async function ehUltimaDaConta(ctx: Contexto, reservaId: string, grupoId: string | null): Promise<boolean> {
+  if (!grupoId) return true;
+  const grupo = await ctx.db.selectFrom("grupos").select("cobranca").where("id", "=", grupoId).executeTakeFirst();
   if (grupo?.cobranca !== "unica") return true;
   const outra = await ctx.db.selectFrom("reservas").select("id")
-    .where("grupo_id", "=", r.grupo_id).where("id", "!=", r.id).where("estado", "in", ESTADOS_ATIVOS).executeTakeFirst();
+    .where("grupo_id", "=", grupoId).where("id", "!=", reservaId).where("estado", "in", ESTADOS_ATIVOS).executeTakeFirst();
   return !outra;
 }
 
@@ -85,7 +85,7 @@ export async function previaCheckout(ctx: Contexto, reservaId: string): Promise<
     saldo: atual.saldo + adicional,
     ...(p.taxa > 0 ? { lateCheckout: p.taxa } : {}),
     saidaAntecipada: p.saidaAntecipada,
-    exigeQuitacao: await ehUltimaDaConta(ctx, p.r),
+    exigeQuitacao: await ehUltimaDaConta(ctx, p.r.id, p.r.grupo_id),
   };
 }
 
@@ -130,7 +130,7 @@ export async function fazerCheckout(ctx: Contexto, pedido: PedidoCheckout, usuar
     }
 
     // Conta de grupo "unica": só a última reserva não finalizada do grupo precisa zerar o saldo e fecha a conta.
-    const ultima = await ehUltimaDaConta(tx, r);
+    const ultima = await ehUltimaDaConta(tx, r.id, r.grupo_id);
     if (ultima) {
       const { saldo: restante } = await saldo(tx, r.conta_id);
       if (restante !== 0) {
