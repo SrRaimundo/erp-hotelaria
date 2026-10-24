@@ -1,7 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
 import { useConexao } from "./useConexao";
-import type { Categoria, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa } from "./tipos";
+import type { Categoria, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa, ItemGovernanca } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
   return new QueryClient({
@@ -78,8 +78,7 @@ export const useProdutos = () =>
 export const useFormasPagamento = () =>
   useQuery({ queryKey: ["formas-pagamento"], queryFn: () => chamarApi<FormaPagamento[]>("GET", "/api/formas-pagamento"), staleTime: 300_000 });
 
-// Governança ganha tipo próprio quando sua tela chegar.
-export const useGovernanca = () => useQuery({ queryKey: ["governanca"], queryFn: () => chamarApi<unknown[]>("GET", "/api/governanca") });
+export const useGovernanca = () => useQuery({ queryKey: ["governanca"], queryFn: () => chamarApi<ItemGovernanca[]>("GET", "/api/governanca") });
 
 export const useBusca = (q: string) =>
   useQuery({

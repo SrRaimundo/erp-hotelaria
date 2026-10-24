@@ -25,7 +25,7 @@ const painel = (atencao: Painel["atencao"] = []) => ({
 
 describe("casca", () => {
   test("menu mostra só o que o perfil permite", async () => {
-    instalarApiFalsa({});
+    instalarApiFalsa({ "GET /api/governanca": [] });
     renderizar(<AppRotas />, { rota: "/governanca", usuario: { nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] } });
     const menu = screen.getByRole("navigation", { name: "Menu principal" });
     const links = Array.from(menu.querySelectorAll("a")).map((a) => a.textContent);
@@ -95,7 +95,7 @@ describe("casca", () => {
   });
 
   test("?reserva= abre o painel da reserva em qualquer rota", async () => {
-    instalarApiFalsa({ ...painel(), "GET /api/reservas/r1": criarReserva() });
+    instalarApiFalsa({ ...painel(), "GET /api/governanca": [], "GET /api/reservas/r1": criarReserva() });
     renderizar(<AppRotas />, { rota: "/governanca?reserva=r1", usuario: recepcao });
     expect(await screen.findByRole("dialog", { name: "#128 · Maria Silva · Qto 101" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Governança" })).toBeInTheDocument();

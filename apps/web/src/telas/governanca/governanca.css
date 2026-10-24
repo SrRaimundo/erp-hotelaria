@@ -1,0 +1,23 @@
+.governanca { display: flex; flex-direction: column; gap: 16px; }
+.governanca h1 { font-size: 1.5rem; }
+.governanca__grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.governanca__item { position: relative; }
+.governanca__cartao { width: 100%; min-height: 72px; height: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 12px 44px 12px 14px; border: 1px solid var(--borda); border-radius: var(--raio-cartao); color: var(--texto); font: inherit; text-align: left; }
+button.governanca__cartao { cursor: pointer; }
+.governanca__cartao--sujo { background: color-mix(in srgb, var(--terracota) 22%, var(--superficie)); border-color: var(--terracota); }
+.governanca__cartao--livre { background: color-mix(in srgb, var(--verde) 18%, var(--superficie)); }
+.governanca__cartao--ocupado { background: var(--superficie); }
+.governanca__cartao--inativo { background: var(--borda); color: var(--texto-suave); }
+.governanca__numero { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
+.governanca__situacao { font-weight: 600; }
+.governanca__ate { font-size: 0.875rem; color: var(--texto-suave); }
+.governanca__menu-botao { position: absolute; top: 6px; right: 6px; min-width: 40px; min-height: 40px; border: 0; border-radius: var(--raio-controle); background: transparent; color: var(--texto); font-size: 1.25rem; cursor: pointer; }
+.governanca__menu { position: absolute; top: 46px; right: 6px; z-index: 5; display: flex; flex-direction: column; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-controle); overflow: hidden; }
+.governanca__menu button { min-height: 44px; padding: 0 16px; border: 0; background: transparent; color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+.governanca__menu button:hover { background: var(--borda); }
+.governanca__botoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.governanca__form { display: flex; flex-direction: column; gap: 8px; }
+.governanca__form label { display: flex; flex-direction: column; gap: 4px; }
+@media (min-width: 600px) {
+  .governanca__grade { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}

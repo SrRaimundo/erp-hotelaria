@@ -123,7 +123,7 @@ describe("login e sessão", () => {
   });
 
   test("governança cai direto na tela Governança", async () => {
-    instalarApiFalsa({ "POST /api/sessoes": { __status: 201, token: "tk2", usuario: governanca } });
+    instalarApiFalsa({ "GET /api/governanca": [], "POST /api/sessoes": { __status: 201, token: "tk2", usuario: governanca } });
     const u = userEvent.setup();
     telaCompleta("/login");
     await preencherLogin(u, "gil");

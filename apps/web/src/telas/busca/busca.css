@@ -1,0 +1,8 @@
+.busca { display: flex; flex-direction: column; gap: 12px; }
+.busca__campo { width: 100%; }
+.busca__dica { color: var(--texto-suave); font-size: 0.875rem; }
+.busca__lista { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.busca__grupo h3 { font-size: 0.875rem; color: var(--texto-suave); margin: 4px 0; }
+.busca__linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--borda); border-radius: var(--raio-controle); margin-bottom: 6px; }
+.busca__linha--ativa { background: var(--alerta-fundo); border-color: var(--terracota); }
+.busca__acoes { display: flex; gap: 6px; flex-wrap: wrap; }

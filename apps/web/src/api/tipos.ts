@@ -4,6 +4,7 @@ export type { ItemListaReserva } from "@server/hospedagem/lista-reservas";
 export type { LinhaExtrato } from "@server/hospedagem/conta";
 export type { Cotacao } from "@server/tarifas/cotacao";
 export type { UsuarioSessao } from "@server/nucleo/permissoes";
+export type { ItemGovernanca } from "@server/hospedagem/governanca";
 export type { Quarto } from "@server/nucleo/quartos";
 export type { Categoria } from "@server/nucleo/categorias";
 export type { Hospede } from "@server/nucleo/hospedes";

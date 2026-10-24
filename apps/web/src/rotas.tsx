@@ -4,12 +4,11 @@ import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
+import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
 import { TelaMapa } from "./telas/mapa/TelaMapa";
 import { TelaNovaReserva } from "./telas/nova-reserva/TelaNovaReserva";
 import { TelaReservas } from "./telas/reservas/TelaReservas";
-
-const Provisoria = ({ titulo }: { titulo: string }) => <h1>{titulo}</h1>;
 
 export function AppRotas() {
   return (
@@ -23,7 +22,7 @@ export function AppRotas() {
           <Route path="/reservas" element={<TelaReservas />} />
           <Route path="/reservas/nova" element={<TelaNovaReserva />} />
           <Route path="/caixa" element={<TelaCaixa />} />
-          <Route path="/governanca" element={<Provisoria titulo="Governança" />} />
+          <Route path="/governanca" element={<TelaGovernanca />} />
         </Route>
       </Route>
     </Routes>
