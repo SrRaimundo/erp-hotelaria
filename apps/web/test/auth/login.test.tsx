@@ -7,6 +7,7 @@ import { useSessao } from "../../src/auth/SessaoProvider";
 import { AppRotas } from "../../src/rotas";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
+import { criarPainel } from "../fixtures/painel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,7 +20,7 @@ const recepcao: UsuarioSessao = {
   limiteDesconto: 5,
 };
 const admin: UsuarioSessao = { ...recepcao, id: "u0", nome: "Admin", perfil: "admin", trocarSenha: true };
-const painelVazio = { "GET /api/painel": { dia: "2026-10-23", atencao: [] } };
+const painelVazio = { "GET /api/painel": criarPainel({ atencao: [] }), "GET /api/config": { horaCheckin: "14:00", horaCheckout: "12:00" } };
 const governanca: UsuarioSessao = { ...recepcao, id: "u2", nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] };
 
 function Sonda() {
@@ -47,7 +48,7 @@ describe("login e sessão", () => {
     const u = userEvent.setup();
     telaCompleta("/login");
     await preencherLogin(u);
-    expect(await screen.findByRole("heading", { name: "Hoje" })).toBeInTheDocument();
+    expect(await screen.findByText(/ocupação hoje/)).toBeInTheDocument();
     expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/);
     expect(chamadas[0]).toMatchObject({ metodo: "POST", caminho: "/api/sessoes", corpo: { login: "maria", senha: "segredo1" } });
     expect(localStorage.getItem("erp.token")).toBe("tk1");
@@ -92,7 +93,7 @@ describe("login e sessão", () => {
     await u.clear(screen.getByLabelText("Confirmar nova senha"));
     await u.type(screen.getByLabelText("Confirmar nova senha"), "nova-senha");
     await u.click(screen.getByRole("button", { name: "Salvar nova senha" }));
-    expect(await screen.findByRole("heading", { name: "Hoje" })).toBeInTheDocument();
+    expect(await screen.findByText(/ocupação hoje/)).toBeInTheDocument();
     expect(chamadas.find((c) => c.metodo === "PUT")).toMatchObject({
       metodo: "PUT",
       caminho: "/api/usuarios/me/senha",

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocation } from "react-router";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -6,42 +6,7 @@ import type { Painel } from "../../src/api/tipos";
 import { TelaHoje } from "../../src/telas/hoje/TelaHoje";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
-
-const base = { codigo: 1, chegada: "2026-11-20", saida: "2026-11-22" };
-
-function criarPainel(): Painel {
-  return {
-    dia: "2026-11-20",
-    chegadas: [
-      { ...base, reservaId: "r1", titular: "Ana Souza", quartoNumero: "101", estado: "confirmada", noites: 2, adultos: 2, criancas: 1, canal: "Balcão", sinalPendente: 0, pendenciasFnrh: false },
-      { ...base, reservaId: "r2", titular: "Bruno Lima", quartoNumero: null, estado: "confirmada", noites: 3, adultos: 1, criancas: 0, canal: "Booking", sinalPendente: 0, pendenciasFnrh: false },
-      { ...base, reservaId: "r3", titular: "Carla Dias", quartoNumero: "102", estado: "confirmada", noites: 1, adultos: 2, criancas: 0, canal: "Site", sinalPendente: 5000, pendenciasFnrh: true },
-    ],
-    saidas: [
-      { ...base, reservaId: "r4", titular: "Davi Melo", quartoNumero: "201", contaId: "c4", saldo: 8600 },
-      { ...base, reservaId: "r5", titular: "Eva Nunes", quartoNumero: "202", contaId: "c5", saldo: 0 },
-    ],
-    hospedados: 5,
-    quartosSujos: [{ quartoId: "q103", numero: "103" }],
-    sinaisVencendo: [],
-    chegadasVencidas: [],
-    alertas: [],
-    ocupacao: { ocupados: 9, total: 12, percentual: 75 },
-    numeros: { chegadas: 3, chegadasJaHospedadas: 1, saidas: 2, hospedados: 5, pessoasHospedadas: 8, quartosSujos: 1, quartosManutencao: 1, livresHoje: 3 },
-    governanca: [
-      { quartoId: "q103", numero: "103", situacao: "sujo", motivo: null },
-      { quartoId: "q106", numero: "106", situacao: "em_manutencao", motivo: "chuveiro" },
-    ],
-    proximosDias: [
-      { dia: "2026-11-21", chegadas: 4, saidas: 2, ocupacaoPct: 83 },
-      { dia: "2026-11-22", chegadas: 1, saidas: 0, ocupacaoPct: 100 },
-    ],
-    atencao: [
-      { tipo: "sinal_vencendo", id: "a1", titulo: "Sinal vence às 18:00", detalhe: "Reserva #8 · Fábio Reis · faltam R$ 150,00", reservaId: "r8", contaId: null, telefone: "(11) 99999-0000", sinalPendente: 15000, acoes: ["registrar_sinal", "prorrogar_sinal"] },
-      { tipo: "chegada_atrasada", id: "a2", titulo: "Chegada atrasada", detalhe: "Reserva #9 · Gil Prado", reservaId: "r9", contaId: null, telefone: null, acoes: ["marcar_no_show", "abrir_reserva"] },
-    ],
-  };
-}
+import { criarPainel } from "../fixtures/painel";
 
 function Local() {
   const l = useLocation();
@@ -226,5 +191,47 @@ describe("tela Hoje", () => {
     await screen.findByText(/ocupação hoje/);
     await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/config")).toBe(true));
     expect(screen.queryByText(/a partir das/)).not.toBeInTheDocument();
+  });
+
+  test("enquanto carrega mostra Carregando…", async () => {
+    montar();
+    expect(screen.getByText("Carregando…")).toBeInTheDocument();
+    await screen.findByText(/ocupação hoje/);
+  });
+
+  test("sem dados e com erro mostra a mensagem do servidor no lugar da tela", async () => {
+    montar(criarPainel(), { "GET /api/painel": { __status: 500, codigo: "ERRO", mensagem: "Falha ao montar o painel." } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao montar o painel.");
+    expect(screen.queryByText(/ocupação hoje/)).not.toBeInTheDocument();
+  });
+
+  test("erro numa nova consulta mantém a tela com os dados em cache", async () => {
+    const { cliente } = montar();
+    await screen.findByText(/ocupação hoje/);
+    instalarApiFalsa({ "GET /api/painel": { __status: 500, codigo: "ERRO", mensagem: "Servidor caiu." } });
+    await act(async () => {
+      await cliente.invalidateQueries({ queryKey: ["painel"] });
+    });
+    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/painel")).toBe(true));
+    expect(screen.getByText(/ocupação hoje: 9 de 12/)).toBeInTheDocument();
+    expect(screen.queryByText("Servidor caiu.")).not.toBeInTheDocument();
+  });
+
+  test("Resolver alerta fica desabilitado enquanto a requisição está pendente", async () => {
+    const u = userEvent.setup();
+    let liberar!: () => void;
+    const p = criarPainel();
+    p.atencao = [{ tipo: "alerta", id: "al1", titulo: "Alerta X", detalhe: "", reservaId: null, contaId: "c1", telefone: null, acoes: ["resolver_alerta"] }];
+    montar(p, { "POST /api/alertas/al1/resolver": () => ({ ok: true }) });
+    const original = globalThis.fetch;
+    const espera = new Promise<void>((r) => (liberar = r));
+    vi.stubGlobal("fetch", async (...args: Parameters<typeof fetch>) => {
+      if (String(args[0]).includes("/resolver")) await espera;
+      return original(...args);
+    });
+    const botao = await screen.findByRole("button", { name: "Resolver alerta" });
+    await u.click(botao);
+    expect(screen.getByRole("button", { name: "Resolver alerta" })).toBeDisabled();
+    await act(async () => liberar());
   });
 });

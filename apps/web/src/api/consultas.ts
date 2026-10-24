@@ -41,7 +41,7 @@ export function usePainel(ativo = true) {
   });
 }
 
-/** Horários de check-in/check-out; quem não tem permissão de ler a configuração recebe erro e a tela omite os horários. */
+/** Horários de check-in/check-out para os subtítulos; se a consulta falhar, a tela simplesmente omite os horários. */
 export const useConfigHorarios = () =>
   useQuery({ queryKey: ["config"], queryFn: () => chamarApi<{ horaCheckin: string; horaCheckout: string }>("GET", "/api/config"), staleTime: 300_000 });
 

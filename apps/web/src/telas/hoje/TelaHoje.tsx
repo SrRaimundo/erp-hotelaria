@@ -40,8 +40,8 @@ export function TelaHoje() {
   const { usuario } = useSessao();
   const navegar = useNavigate();
 
-  if (painel.isPending) return <p>Carregando…</p>;
-  if (painel.isError) return <ErroAcao erro={painel.error} />;
+  // Com dados em cache a tela continua (o erro de uma nova consulta aparece na faixa de conexão do Shell).
+  if (!painel.data) return painel.isError ? <ErroAcao erro={painel.error} /> : <p>Carregando…</p>;
 
   const p = painel.data;
   const n = p.numeros;

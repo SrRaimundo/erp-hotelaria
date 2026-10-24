@@ -1,9 +1,11 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import type { Painel } from "../../src/api/tipos";
 import { AppRotas } from "../../src/rotas";
 import { instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
+import { criarPainel } from "../fixtures/painel";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -15,7 +17,10 @@ const recepcao = {
   perfil: "recepcao",
   permissoes: ["reservas.gerenciar", "caixa.operar", "quartos.situacao"],
 };
-const painel = (atencao: unknown[] = []) => ({ "GET /api/painel": { dia: "2026-10-23", atencao } });
+const painel = (atencao: Painel["atencao"] = []) => ({
+  "GET /api/painel": criarPainel({ atencao }),
+  "GET /api/config": { horaCheckin: "14:00", horaCheckout: "12:00" },
+});
 
 describe("casca", () => {
   test("menu mostra só o que o perfil permite", async () => {
@@ -40,7 +45,7 @@ describe("casca", () => {
   });
 
   test("Hoje mostra o contador de atenção só quando maior que zero", async () => {
-    instalarApiFalsa(painel([{ tipo: "a" }, { tipo: "b" }]));
+    instalarApiFalsa(painel(criarPainel().atencao));
     renderizar(<AppRotas />, { usuario: recepcao });
     expect(await screen.findByLabelText("2 itens de atenção")).toHaveTextContent("2");
   });
@@ -48,7 +53,7 @@ describe("casca", () => {
   test("sem itens de atenção não há contador", async () => {
     instalarApiFalsa(painel([]));
     renderizar(<AppRotas />, { usuario: recepcao });
-    await screen.findByRole("heading", { name: "Hoje" });
+    await screen.findByText(/ocupação hoje/);
     await waitFor(() => expect(screen.queryByLabelText(/itens de atenção/)).not.toBeInTheDocument());
   });
 
@@ -67,6 +72,13 @@ describe("casca", () => {
     await waitFor(() => expect(screen.queryByText(/Sem conexão com o servidor/)).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "+ Nova reserva" })).toBeEnabled();
     expect(screen.getByText("Online")).toBeInTheDocument();
+  });
+
+  test("a rota / mostra a tela Hoje", async () => {
+    instalarApiFalsa(painel());
+    renderizar(<AppRotas />, { usuario: recepcao });
+    expect(await screen.findByRole("heading", { level: 1, name: /, Maria$/ })).toBeInTheDocument();
+    expect(screen.getByText(/ocupação hoje: 9 de 12 quartos \(75%\)/)).toBeInTheDocument();
   });
 
   test("busca abre pelo gatilho e por Ctrl+K, e fecha com Esc", async () => {

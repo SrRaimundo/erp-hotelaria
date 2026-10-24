@@ -75,7 +75,13 @@ export function BlocoAtencao({ itens, aoAbrir }: Props) {
               {item.acoes
                 .filter((a) => disponivel(a, item))
                 .map((a, i) => (
-                  <Botao key={a} tamanho="pequeno" variante={i === 0 ? "principal" : "contorno"} onClick={() => executar(a, item)}>
+                  <Botao
+                    key={a}
+                    tamanho="pequeno"
+                    variante={i === 0 ? "principal" : "contorno"}
+                    disabled={a === "resolver_alerta" && resolver.isPending && resolver.variables === item.id}
+                    onClick={() => executar(a, item)}
+                  >
                     {ROTULOS[a]}
                   </Botao>
                 ))}
