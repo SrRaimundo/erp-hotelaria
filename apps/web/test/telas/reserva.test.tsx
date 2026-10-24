@@ -29,6 +29,9 @@ function montar(reserva: ReservaDetalhe, rota = "/mapa?reserva=r1", extras: Reco
     "GET /api/produtos": [],
     "GET /api/formas-pagamento": [],
     "GET /api/caixa/atual": null,
+    // O fluxo de check-in (checkin.test.tsx) consulta estas rotas quando a URL o abre.
+    "GET /api/reservas/r1/quartos-sugeridos": [],
+    "GET /api/categorias": [],
     ...extras,
   });
   return renderizar(

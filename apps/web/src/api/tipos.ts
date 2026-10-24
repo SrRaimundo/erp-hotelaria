@@ -11,4 +11,4 @@ export type { FormaPagamento } from "@server/nucleo/formas-pagamento";
 export type { Produto } from "@server/nucleo/produtos";
 export type { ResumoCaixa } from "@server/nucleo/caixa";
 
-export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknown };
+export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknown; campos?: { campo: string; mensagem: string }[] };

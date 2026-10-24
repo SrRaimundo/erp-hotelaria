@@ -78,7 +78,7 @@ export async function chamarApi<T>(metodo: "GET" | "POST" | "PUT" | "PATCH" | "D
       resposta.status,
       e.codigo ?? "ERRO_DESCONHECIDO",
       e.mensagem ?? "Algo deu errado. Tente de novo.",
-      e.detalhes,
+      e.detalhes ?? e.campos,
     );
   }
   if (!jsonValido) throw new ErroApi(resposta.status, "RESPOSTA_INVALIDA", "Resposta inesperada do servidor.");

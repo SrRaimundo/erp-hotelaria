@@ -9,6 +9,7 @@ import { AbaConta } from "./AbaConta";
 import { AbaHospedes } from "./AbaHospedes";
 import { AbaResumo } from "./AbaResumo";
 import { AcoesReserva } from "./AcoesReserva";
+import { FluxoCheckin } from "./FluxoCheckin";
 import "./reserva.css";
 
 type Aba = "resumo" | "conta" | "hospedes";
@@ -35,8 +36,8 @@ const PARAMETROS = ["reserva", "aba", "fluxo", "receber"];
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /** Ponto único de troca: as Tarefas 11, 12 e 13 substituem estes marcadores pelas telas reais. */
-function Conteudo({ reserva, aba, fluxo, receber, aoReceber }: { reserva: ReservaDetalhe; aba: Aba; fluxo: Fluxo | null; receber: number | null; aoReceber: () => void }) {
-  if (fluxo === "checkin") return <h3>Check-in</h3>;
+function Conteudo({ reserva, aba, fluxo, receber, aoReceber, aoMudar }: { reserva: ReservaDetalhe; aba: Aba; fluxo: Fluxo | null; receber: number | null; aoReceber: () => void; aoMudar: (m: Mudancas) => void }) {
+  if (fluxo === "checkin") return <FluxoCheckin reserva={reserva} aoMudarUrl={aoMudar} />;
   if (fluxo === "checkout") return <h3>Check-out</h3>;
   if (aba === "conta") return <AbaConta reserva={reserva} receberInicial={receber} aoReceber={aoReceber} />;
   if (aba === "hospedes") return <AbaHospedes reserva={reserva} />;
@@ -111,7 +112,7 @@ function PainelReserva({ id, aba, fluxo, receber, aoMudar, aoFechar }: PainelPro
         </div>
       )}
       <div id="reserva-painel" role={fluxo ? undefined : "tabpanel"} aria-labelledby={fluxo ? undefined : `aba-${aba}`}>
-        <Conteudo reserva={r} aba={aba} fluxo={fluxo} receber={receber} aoReceber={() => aoMudar({ receber: undefined })} />
+        <Conteudo reserva={r} aba={aba} fluxo={fluxo} receber={receber} aoReceber={() => aoMudar({ receber: undefined })} aoMudar={aoMudar} />
       </div>
     </Gaveta>
   );
