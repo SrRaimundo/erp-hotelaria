@@ -1,7 +1,7 @@
-import { screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocation } from "react-router";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { Mapa } from "../../src/api/tipos";
 import { TelaMapa } from "../../src/telas/mapa/TelaMapa";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
@@ -107,5 +107,49 @@ describe("tela Mapa", () => {
     expect(screen.queryByRole("button", { name: /Nova reserva no quarto Sem quarto/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Nova reserva no quarto 101 em 24/11" }));
     expect(screen.getByTestId("local")).toHaveTextContent("/reservas/nova?quarto=q101&chegada=2026-11-24");
+  });
+
+  test("células vazias ficam fora da ordem de tabulação; barras continuam tabuláveis", async () => {
+    montar();
+    const barraAna = await screen.findByRole("button", { name: /Ana Souza/ });
+    expect(barraAna).not.toHaveAttribute("tabindex");
+    expect(barraAna.tabIndex).toBe(0);
+    const celula = screen.getByRole("button", { name: "Nova reserva no quarto 101 em 24/11" });
+    expect(celula).toHaveAttribute("tabindex", "-1");
+    const tabulaveis = screen.getAllByRole("button").filter((b) => b.tabIndex >= 0 && /^Nova reserva no quarto/.test(b.getAttribute("aria-label") ?? ""));
+    expect(tabulaveis).toHaveLength(0);
+  });
+
+  test("não desenha a grade antes de carregar as categorias", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": criarPainel({ dia: "2026-11-20" }),
+      "GET /api/categorias": [{ id: "c1", nome: "Standard", maxAdultos: 2, maxCriancas: 1, comodidades: [] }],
+      "GET /api/mapa": { quartos: [], barras: [barra({ quartoId: null })] },
+    });
+    const real = globalThis.fetch;
+    let liberar!: () => void;
+    const portao = new Promise<void>((r) => (liberar = r));
+    vi.stubGlobal("fetch", async (entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada).includes("/api/categorias")) await portao;
+      return real(entrada, init);
+    });
+    renderizar(<TelaMapa />, { rota: "/mapa" });
+    await waitFor(() => expect(chamadas.some((c) => c.caminho.startsWith("/api/mapa"))).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); }); // dá tempo de a resposta do mapa chegar
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByText("c1")).not.toBeInTheDocument();
+    liberar();
+    expect(await screen.findByRole("heading", { name: "Standard" })).toBeInTheDocument();
+    expect(screen.queryByText("c1")).not.toBeInTheDocument();
+  });
+
+  test("erro ao carregar o mapa mostra aviso e a mensagem do servidor", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": criarPainel({ dia: "2026-11-20" }),
+      "GET /api/categorias": [],
+      "GET /api/mapa": { __status: 500, codigo: "ERRO", mensagem: "Banco indisponível." },
+    });
+    renderizar(<TelaMapa />, { rota: "/mapa" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível carregar o mapa. Banco indisponível.");
   });
 });

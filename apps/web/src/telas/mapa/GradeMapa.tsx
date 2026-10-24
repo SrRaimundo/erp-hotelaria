@@ -46,6 +46,7 @@ export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirRes
               <button
                 type="button"
                 className="mapa-celula"
+                tabIndex={-1}
                 aria-label={`Nova reserva no quarto ${quarto.numero} em ${formatarData(dia)}`}
                 onClick={() => aoCriarReserva(quarto.id, dia)}
               />

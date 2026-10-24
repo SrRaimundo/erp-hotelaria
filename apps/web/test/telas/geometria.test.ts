@@ -24,6 +24,10 @@ describe("geometria do mapa", () => {
     expect(posicaoBarra({ chegada: "2026-11-10", saida: "2026-11-19" }, "2026-11-19", 7)).toBeNull();
   });
 
+  test("barra de duração zero (chegada == saída) é null", () => {
+    expect(posicaoBarra({ chegada: "2026-11-20", saida: "2026-11-20" }, "2026-11-19", 14)).toBeNull();
+  });
+
   test("linha 'sem quarto' só quando há reserva sem quarto, uma por categoria", () => {
     const quartos = [quarto("q1", "101", "Standard"), quarto("q2", "201", "Luxo")];
     const nomes = { c1: "Standard", c2: "Luxo" };

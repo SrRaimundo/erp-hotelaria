@@ -19,7 +19,7 @@ export function colunasDoPeriodo(inicio: string, dias: number): string[] {
 export function posicaoBarra(b: { chegada: string; saida: string }, inicio: string, dias: number): PosicaoBarra | null {
   const de = diasEntre(inicio, b.chegada);
   const ate = diasEntre(inicio, b.saida);
-  if (ate <= 0 || de >= dias) return null;
+  if (ate <= de || ate <= 0 || de >= dias) return null;
   const coluna = Math.max(de, 0);
   return { coluna, largura: Math.min(ate, dias) - coluna, cortadaInicio: de < 0, cortadaFim: ate > dias };
 }

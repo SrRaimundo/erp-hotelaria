@@ -1,4 +1,4 @@
-.mapa { display: flex; flex-direction: column; gap: 12px; --mapa-finalizada: #d8ccba; }
+.mapa { display: flex; flex-direction: column; gap: 12px; }
 .mapa h1 { font-size: 1.5rem; }
 .mapa-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .mapa-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -26,6 +26,6 @@
 .mapa-barra[data-estado="hospedada"] { background: var(--terracota); }
 .mapa-barra[data-estado="confirmada"] { background: var(--verde); }
 .mapa-barra[data-estado="pre_reserva"] { background: var(--amarelo); color: var(--texto); }
-.mapa-barra[data-estado="finalizada"] { background: var(--mapa-finalizada); color: var(--texto); }
+.mapa-barra[data-estado="finalizada"] { background: var(--cinza-finalizada); color: var(--texto); }
 .mapa-barra--corta-inicio { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
 .mapa-barra--corta-fim { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }

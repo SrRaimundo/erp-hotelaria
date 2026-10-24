@@ -68,8 +68,8 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
           </label>
         </div>
       </header>
-      {mapa.isError && <ErroAcao erro={mapa.error} />}
-      {mapa.data ? (
+      {mapa.isError && <ErroAcao erro={new Error(`Não foi possível carregar o mapa. ${mapa.error.message}`)} />}
+      {mapa.data && !categorias.isPending ? (
         <GradeMapa
           mapa={mapa.data}
           inicio={inicio}
