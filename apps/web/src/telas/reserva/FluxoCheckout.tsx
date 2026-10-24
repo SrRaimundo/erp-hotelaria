@@ -33,6 +33,7 @@ export function FluxoCheckout({ reserva, aoMudarUrl }: Props) {
     staleTime: Infinity,
     gcTime: 0,
     refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
   const formas = useFormasPagamento();
   const caixa = useCaixa();
@@ -96,7 +97,9 @@ function Formulario({ reserva, aoMudarUrl, previa, formas, caixaAberto }: Props 
   const linhasValidas = linhas.every((l) => l.forma !== "" && l.valor !== null && l.valor >= 1);
   const faturadoValido = !faturar || (nome.trim() !== "" && documento.trim() !== "" && valorFaturado !== null && valorFaturado >= 1);
   const semCaixa = !caixaAberto && linhas.some((l) => (l.valor ?? 0) > 0);
-  const podeConcluir = restante === 0 && linhasValidas && faturadoValido && !semCaixa && !checkout.isPending;
+  // Em conta única de grupo com outros quartos ativos, o saldo restante fica na conta do grupo.
+  const quitado = previa.exigeQuitacao ? restante === 0 : restante >= 0;
+  const podeConcluir = quitado && linhasValidas && faturadoValido && !semCaixa && !checkout.isPending;
 
   const mudarLinha = (chave: number, mudanca: Partial<Linha>) =>
     setLinhas((atual) => atual.map((l) => (l.chave === chave ? { ...l, ...mudanca } : l)));
@@ -134,7 +137,9 @@ function Formulario({ reserva, aoMudarUrl, previa, formas, caixaAberto }: Props 
   }
 
   const situacao =
-    restante > 0
+    restante > 0 && !previa.exigeQuitacao
+      ? { texto: `Falta ${formatarReais(restante)}`, classe: "checkout-restante checkout-restante--ok" }
+      : restante > 0
       ? { texto: `Falta ${formatarReais(restante)}`, classe: "checkout-restante checkout-restante--pendente" }
       : restante < 0
         ? { texto: `Sobra ${formatarReais(-restante)}`, classe: "checkout-restante checkout-restante--pendente" }
@@ -167,6 +172,11 @@ function Formulario({ reserva, aoMudarUrl, previa, formas, caixaAberto }: Props 
             </label>
             <p className="reserva-suave">{`Late check-out: ${formatarReais(taxa)}`}</p>
           </>
+        )}
+        {devido < 0 && (
+          <p className="conta-aviso" role="status">
+            {`O hóspede tem crédito de ${formatarReais(-devido)}. Cancele e faça o estorno pela aba Conta.`}
+          </p>
         )}
         <p className="checkout-devido">
           <strong>Total a pagar</strong> <strong>{formatarReais(devido)}</strong>
@@ -226,6 +236,7 @@ function Formulario({ reserva, aoMudarUrl, previa, formas, caixaAberto }: Props 
       <section aria-labelledby="checkout-confirmar" className="checkin-secao">
         <h4 id="checkout-confirmar">Confirmar</h4>
         <p className={situacao.classe} role="status">{situacao.texto}</p>
+        {!previa.exigeQuitacao && <p className="reserva-suave">O saldo restante fica na conta do grupo.</p>}
         <ErroAcao erro={erro} />
         <div className="formulario__acoes">
           <Botao variante="contorno" ignorarConexao onClick={() => aoMudarUrl({ fluxo: undefined })}>Cancelar</Botao>

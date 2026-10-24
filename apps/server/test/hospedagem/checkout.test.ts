@@ -244,6 +244,24 @@ describe("check-out", () => {
     await fazerCheckout(ctx, { reservaId: b.id, pagamentos: [{ formaCodigo: "pix", valor: 180000 }] }, recepcao);
     expect(await situacaoConta(a.contaId)).toBe("fechada");
   });
+  test("I1: a prévia só exige quitação na última reserva ativa de um grupo de conta única", async () => {
+    const g = await criarGrupo(ctx, { titularId: "h1", cobranca: "unica" }, recepcao);
+    const a = await hospedar({ ...dados, grupoId: g.id }, q101);
+    const b = await hospedar({ ...dados, grupoId: g.id }, q102);
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    expect((await previaCheckout(ctx, a.id)).exigeQuitacao).toBe(false);
+    await fazerCheckout(ctx, { reservaId: a.id, pagamentos: [] }, recepcao);
+    expect((await previaCheckout(ctx, b.id)).exigeQuitacao).toBe(true);
+  });
+
+  test("I1: reserva avulsa ou de grupo com contas separadas exige quitação", async () => {
+    const avulsa = await hospedar(dados, q101);
+    const g = await criarGrupo(ctx, { titularId: "h1", cobranca: "separada" }, recepcao);
+    const c = await hospedar({ ...dados, grupoId: g.id }, q102);
+    ctx.relogio.definir(as("2026-11-13", "11:00"));
+    expect((await previaCheckout(ctx, avulsa.id)).exigeQuitacao).toBe(true);
+    expect((await previaCheckout(ctx, c.id)).exigeQuitacao).toBe(true);
+  });
 });
 
 describe("mudanças durante a estadia", () => {

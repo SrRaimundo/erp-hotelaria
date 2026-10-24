@@ -31,7 +31,7 @@ const formas = [
   { id: "f5", codigo: "faturado", nome: "Faturado", ativa: true },
 ];
 const caixa = { turno: { id: "t1", usuarioId: "u1", abertoEm: "2026-11-20T08:00:00.000Z", valorInicial: 10000, fechadoEm: null }, movimentos: [], esperadoPorForma: {} };
-const previa = (o: object = {}) => ({ extrato, saldo: 95000, saidaAntecipada: false, ...o });
+const previa = (o: object = {}) => ({ extrato, saldo: 95000, saidaAntecipada: false, exigeQuitacao: true, ...o });
 
 function montar(extras: Record<string, unknown> = {}) {
   instalarApiFalsa({
@@ -198,6 +198,54 @@ describe("fluxo de check-out", () => {
     await usuario.type(screen.getByLabelText("Documento do responsável"), "123");
     expect(screen.getByLabelText("Valor faturado")).toHaveValue("950,00");
     expect(botao()).toBeEnabled();
+  });
+
+  test("I1: conta única com outros quartos ativos permite concluir com saldo restante", async () => {
+    const usuario = userEvent.setup();
+    montar({ "GET /api/reservas/r1/checkout": previa({ exigeQuitacao: false }), "POST /api/reservas/r1/checkout": {} });
+    await digitar(usuario, "Valor da forma 1", "300,00");
+    expect(screen.getByText("Falta R$ 650,00")).toBeInTheDocument();
+    expect(screen.getByText("O saldo restante fica na conta do grupo.")).toBeInTheDocument();
+    expect(botao()).toBeEnabled();
+    await usuario.click(botao());
+    await waitFor(() => expect(postou()).toHaveLength(1));
+    expect(postou()[0]!.corpo).toMatchObject({ pagamentos: [{ formaCodigo: "dinheiro", valor: 30000 }] });
+  });
+
+  test("I1: sem exigir quitação aceita zero linhas de pagamento, mas linha inválida bloqueia", async () => {
+    const usuario = userEvent.setup();
+    montar({ "GET /api/reservas/r1/checkout": previa({ exigeQuitacao: false }) });
+    await screen.findByLabelText("Valor da forma 1");
+    await digitar(usuario, "Valor da forma 1", "0");
+    expect(botao()).toBeDisabled();
+    await usuario.click(screen.getByRole("button", { name: "Remover forma 1" }));
+    expect(botao()).toBeEnabled();
+  });
+
+  test("I1: sem exigir quitação, pagar além do devido continua bloqueado", async () => {
+    const usuario = userEvent.setup();
+    montar({ "GET /api/reservas/r1/checkout": previa({ exigeQuitacao: false }) });
+    await digitar(usuario, "Valor da forma 1", "1000,00");
+    expect(screen.getByText("Sobra R$ 50,00")).toBeInTheDocument();
+    expect(botao()).toBeDisabled();
+  });
+
+  test("exigindo quitação, o aviso do grupo não aparece", async () => {
+    montar();
+    await screen.findByText("Frigobar");
+    expect(screen.queryByText("O saldo restante fica na conta do grupo.")).not.toBeInTheDocument();
+  });
+
+  test("saldo negativo avisa do crédito do hóspede e orienta o estorno", async () => {
+    montar({ "GET /api/reservas/r1/checkout": previa({ saldo: -2500 }) });
+    expect(await screen.findByText("O hóspede tem crédito de R$ 25,00. Cancele e faça o estorno pela aba Conta.")).toBeInTheDocument();
+  });
+
+  test("a prévia não é recarregada por intervalo", async () => {
+    const { cliente } = montar();
+    await screen.findByText("Frigobar");
+    const q = cliente.getQueryCache().find({ queryKey: ["checkout-previa", "r1"] })!;
+    expect(q.observers[0]!.options.refetchInterval).toBe(false);
   });
 
   test("Cancelar volta ao resumo sem enviar nada", async () => {
