@@ -1,5 +1,13 @@
 {
   "name": "erp-hotelaria",
   "private": true,
-  "workspaces": ["apps/*"]
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/web",
+    "start": "npm start -w apps/server",
+    "demo": "npm run demo -w apps/server",
+    "e2e": "npm run e2e -w apps/web"
+  }
 }

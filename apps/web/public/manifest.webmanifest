@@ -1,0 +1,15 @@
+{
+  "name": "ERP Hotelaria",
+  "short_name": "ERP",
+  "description": "Gestão da pousada: reservas, hospedagem, caixa e governança.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "pt-BR",
+  "background_color": "#faf6ef",
+  "theme_color": "#2f6f5e",
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

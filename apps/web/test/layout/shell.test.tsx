@@ -33,6 +33,13 @@ describe("casca", () => {
     expect(screen.queryByRole("button", { name: "+ Nova reserva" })).not.toBeInTheDocument();
   });
 
+  test("sem permissão de reservas não há campo de busca vazio na barra do topo", async () => {
+    instalarApiFalsa({ "GET /api/governanca": [] });
+    const { container } = renderizar(<AppRotas />, { rota: "/governanca", usuario: { nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] } });
+    expect(container.querySelector(".topo__busca")).toBeNull();
+    expect(container.querySelector(".topo")).not.toBeNull();
+  });
+
   test("recepção vê todos os itens, o ativo é destacado e o rodapé mostra usuário e Sair", async () => {
     instalarApiFalsa(painel());
     renderizar(<AppRotas />, { rota: "/mapa", usuario: recepcao });

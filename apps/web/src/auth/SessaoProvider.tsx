@@ -97,7 +97,10 @@ export function rotaInicial(u: UsuarioSessao): string {
   return u.permissoes.length === 1 && u.permissoes[0] === "quartos.situacao" ? "/governanca" : "/";
 }
 
-/** Aceita só caminhos internos, para o parâmetro voltar não virar redirecionamento aberto. */
+/**
+ * Aceita só caminhos internos, para o parâmetro voltar não virar redirecionamento aberto.
+ * A raiz ("/") não é um destino escolhido: vale a tela inicial do perfil (governança não acessa Hoje).
+ */
 export function destinoSeguro(voltar: string | null, u: UsuarioSessao): string {
-  return voltar && voltar.startsWith("/") && !voltar.startsWith("//") && !voltar.startsWith("/login") ? voltar : rotaInicial(u);
+  return voltar && voltar !== "/" && voltar.startsWith("/") && !voltar.startsWith("//") && !voltar.startsWith("/login") ? voltar : rotaInicial(u);
 }

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ERP Hotelaria">
+  <rect width="512" height="512" fill="#2f6f5e"/>
+  <g stroke="#f2c879" stroke-width="22" stroke-linecap="round">
+    <line x1="256" y1="76" x2="256" y2="116"/>
+    <line x1="256" y1="396" x2="256" y2="436"/>
+    <line x1="76" y1="256" x2="116" y2="256"/>
+    <line x1="396" y1="256" x2="436" y2="256"/>
+    <line x1="128.7" y1="128.7" x2="157" y2="157"/>
+    <line x1="355" y1="355" x2="383.3" y2="383.3"/>
+    <line x1="383.3" y1="128.7" x2="355" y2="157"/>
+    <line x1="157" y1="355" x2="128.7" y2="383.3"/>
+  </g>
+  <circle cx="256" cy="256" r="84" fill="#f2c879"/>
+  <circle cx="256" cy="256" r="46" fill="#c0613a"/>
+</svg>

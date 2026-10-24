@@ -32,7 +32,7 @@ export function BarraTopo() {
           Buscar quarto, hóspede, CPF ou nº da reserva… (Ctrl+K)
         </button>
       ) : (
-        <span className="topo__busca" />
+        <span className="topo__espaco" />
       )}
       <span data-conexao className={`topo__conexao ${online ? "topo__conexao--on" : "topo__conexao--off"}`}>
         {online ? "Online" : "Sem conexão"}

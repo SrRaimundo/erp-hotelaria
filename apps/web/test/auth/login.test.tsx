@@ -131,6 +131,17 @@ describe("login e sessão", () => {
     expect(screen.getByTestId("local")).toHaveTextContent("/governanca");
   });
 
+  test("governança que abriu a raiz sem sessão (voltar=/) cai na tela Governança, não em Hoje", async () => {
+    instalarApiFalsa({ "GET /api/governanca": [], "POST /api/sessoes": { __status: 201, token: "tk2", usuario: governanca } });
+    const u = userEvent.setup();
+    telaCompleta("/", true);
+    expect(await screen.findByRole("button", { name: "Entrar" })).toBeInTheDocument();
+    expect(screen.getByTestId("local")).toHaveTextContent("/login?voltar=%2F");
+    await preencherLogin(u, "gil");
+    expect(await screen.findByRole("heading", { name: "Governança" })).toBeInTheDocument();
+    expect(screen.getByTestId("local")).toHaveTextContent(/^\/governanca$/);
+  });
+
   test("sessão expirada volta ao login e retorna à rota anterior", async () => {
     instalarApiFalsa({ ...caixaFechado, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
     const u = userEvent.setup();

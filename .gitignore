@@ -4,3 +4,5 @@ node_modules
 dist
 dados/
 .superpowers/
+apps/web/test-results
+apps/web/playwright-report
