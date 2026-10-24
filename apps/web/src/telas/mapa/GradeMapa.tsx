@@ -25,19 +25,25 @@ function classeDia(dia: string, hoje: string): string {
 export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirReserva, aoCriarReserva, aoSoltar }: Props) {
   const colunas = colunasDoPeriodo(inicio, dias);
   const grupos = linhaDeQuarto(mapa.quartos, mapa.barras, nomesCategoria);
-  const categoriaPorNome = Object.fromEntries(Object.entries(nomesCategoria).map(([id, nome]) => [nome, id]));
+  // O mapa só traz o nome da categoria dos quartos: o id só é usado quando o nome identifica uma única categoria.
+  const idsPorNome = new Map<string, string[]>();
+  for (const [id, nome] of Object.entries(nomesCategoria)) idsPorNome.set(nome, [...(idsPorNome.get(nome) ?? []), id]);
+  const categoriaIdDe = (nome: string): string | undefined => {
+    const ids = idsPorNome.get(nome);
+    return ids?.length === 1 ? ids[0] : undefined;
+  };
   const arrastar = usoArrastar({
     larguraColuna: LARGURA_COLUNA,
     alturaLinha: ALTURA_LINHA,
     linhas: grupos.flatMap((g) =>
-      g.linhas.map((l) => ({ quartoId: l.quarto?.id ?? null, categoriaId: categoriaPorNome[g.categoria] ?? g.categoria })),
+      g.linhas.map((l) => ({ quartoId: l.quarto?.id ?? null, categoriaId: categoriaIdDe(g.categoria) })),
     ),
     inicio,
     aoSoltar,
   });
   const modelo = `${LARGURA_ROTULO}px repeat(${dias}, ${LARGURA_COLUNA}px)`;
 
-  const renderLinha = (linha: LinhaMapa) => {
+  const renderLinha = (linha: LinhaMapa, categoria: string) => {
     const posicionadas = linha.barras.flatMap((b) => {
       const posicao = posicaoBarra(b, inicio, dias);
       return posicao ? [{ barra: b, posicao }] : [];
@@ -48,7 +54,14 @@ export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirRes
     const ocupadas = new Set(posicionadas.flatMap(({ posicao: p }) => Array.from({ length: p.largura }, (_, i) => p.coluna + i)));
     const situacao = quarto ? SITUACOES[quarto.situacao] : undefined;
     return (
-      <div className="mapa-linha" key={linha.chave} style={{ gridTemplateColumns: modelo, gridTemplateRows: `repeat(${nPistas}, ${ALTURA_LINHA}px)` }}>
+      <div
+        className="mapa-linha"
+        key={linha.chave}
+        data-linha=""
+        data-quarto-id={quarto?.id}
+        data-categoria-id={categoriaIdDe(categoria)}
+        data-sem-quarto={quarto ? undefined : ""}
+        style={{ gridTemplateColumns: modelo, gridTemplateRows: `repeat(${nPistas}, ${ALTURA_LINHA}px)` }}>
         <div className="mapa-rotulo" style={{ gridRow: `1 / span ${nPistas}` }}>
           <strong>{quarto ? quarto.numero : "Sem quarto"}</strong>
           {situacao && <span className={`mapa-situacao mapa-situacao--${quarto!.situacao}`}>{situacao}</span>}
@@ -87,7 +100,7 @@ export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirRes
         {grupos.map((g) => (
           <section key={g.categoria} className="mapa-grupo">
             <h2 className="mapa-grupo__titulo">{g.categoria}</h2>
-            {g.linhas.map(renderLinha)}
+            {g.linhas.map((l) => renderLinha(l, g.categoria))}
           </section>
         ))}
       </div>

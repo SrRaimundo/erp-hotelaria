@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocation } from "react-router";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Mapa } from "../../src/api/tipos";
 import { GradeMapa } from "../../src/telas/mapa/GradeMapa";
 import { TelaMapa } from "../../src/telas/mapa/TelaMapa";
@@ -114,6 +114,72 @@ describe("arrastar e esticar (grade)", () => {
   test("finalizada não é arrastável e não tem alça", () => {
     grade();
     expect(screen.getByRole("button", { name: "Davi Melo · 22/11–24/11 · finalizada" }).querySelector("[data-alca]")).toBeNull();
+  });
+});
+
+describe("alvo por hit-test, cancelamento e limpeza", () => {
+  afterEach(() => {
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+  });
+  const simularHitTest = (alvo: () => Element | null) => {
+    (document as { elementsFromPoint?: unknown }).elementsFromPoint = vi.fn(() => {
+      const el = alvo();
+      return el ? [el] : [];
+    });
+  };
+
+  test("a linha de destino vem do elemento sob o ponteiro, não de dy/altura (cabeçalhos e linhas altas)", () => {
+    const { aoSoltar } = grade();
+    simularHitTest(() => document.querySelector('[data-quarto-id="q201"]'));
+    arrastar(screen.getByRole("button", { name: ANA }), 0, 100); // por dy cairia em 'sem quarto'
+    expect(aoSoltar).toHaveBeenCalledWith({ reservaId: "r1", tipo: "mover", quartoId: "q201", categoriaId: "c2", chegada: "2026-11-20", saida: "2026-11-23" });
+  });
+
+  test("soltar sobre algo que não é linha (cabeçalho de categoria) ou sobre linha 'sem quarto' não faz nada", () => {
+    const { aoSoltar } = grade();
+    const ana = screen.getByRole("button", { name: ANA });
+    simularHitTest(() => screen.getByRole("heading", { name: "Luxo" }));
+    arrastar(ana, 0, -40);
+    simularHitTest(() => document.querySelector("[data-sem-quarto]"));
+    arrastar(ana, 0, 80);
+    simularHitTest(() => null);
+    arrastar(ana, 0, 40);
+    expect(aoSoltar).not.toHaveBeenCalled();
+  });
+
+  test("pointercancel limpa o estado e não chama aoSoltar", () => {
+    const { aoSoltar } = grade();
+    const ana = screen.getByRole("button", { name: ANA });
+    fireEvent.pointerDown(ana, { pointerId: 1, button: 0, clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(ana, { pointerId: 1, clientX: 296, clientY: 240 });
+    expect(ana).toHaveClass("mapa-barra--arrastando");
+    fireEvent.pointerCancel(ana, { pointerId: 1 });
+    expect(ana).not.toHaveClass("mapa-barra--arrastando");
+    fireEvent.pointerUp(ana, { pointerId: 1, clientX: 296, clientY: 240 });
+    expect(aoSoltar).not.toHaveBeenCalled();
+  });
+
+  test("Esc cancela o arrasto em andamento, sem chamar aoSoltar nem abrir a reserva", () => {
+    const { aoSoltar, aoAbrirReserva } = grade();
+    const ana = screen.getByRole("button", { name: ANA });
+    fireEvent.pointerDown(ana, { pointerId: 1, button: 0, clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(ana, { pointerId: 1, clientX: 296, clientY: 240 });
+    expect(ana).toHaveClass("mapa-barra--arrastando");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(ana).not.toHaveClass("mapa-barra--arrastando");
+    fireEvent.pointerUp(ana, { pointerId: 1, clientX: 296, clientY: 240 });
+    fireEvent.click(ana);
+    expect(aoSoltar).not.toHaveBeenCalled();
+    expect(aoAbrirReserva).not.toHaveBeenCalled();
+  });
+
+  test("pointercancel libera a captura do ponteiro", () => {
+    grade();
+    const ana = screen.getByRole("button", { name: ANA });
+    ana.releasePointerCapture = vi.fn();
+    fireEvent.pointerDown(ana, { pointerId: 7, button: 0, clientX: 1, clientY: 1 });
+    fireEvent.pointerCancel(ana, { pointerId: 7 });
+    expect(ana.releasePointerCapture).toHaveBeenCalledWith(7);
   });
 });
 
