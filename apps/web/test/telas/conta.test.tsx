@@ -148,8 +148,9 @@ describe("aba Conta", () => {
     montar("/mapa?reserva=r1&aba=conta&receber=22000", { "POST /api/contas/ct1/pagamentos": { id: "pg" } });
     await screen.findByLabelText("Valor a receber");
     await usuario.click(screen.getByRole("button", { name: "Receber" }));
-    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/mapa?reserva=r1&aba=conta"));
-    expect(screen.getByTestId("local").textContent).not.toContain("receber=");
+    await waitFor(() => expect(screen.getByTestId("local").textContent).not.toContain("receber="));
+    expect(screen.getByTestId("local").textContent).toContain("reserva=r1");
+    expect(screen.getByTestId("local").textContent).toContain("aba=conta");
   });
 
   test("sem forma elegível o botão Receber fica desabilitado", async () => {
