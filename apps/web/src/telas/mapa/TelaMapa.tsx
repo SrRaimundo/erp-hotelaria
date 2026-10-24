@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useCategorias, useMapa, usePainel } from "../../api/consultas";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { formatarData, somarDiasIso } from "../../lib/datas";
 import { GradeMapa } from "./GradeMapa";
+import { JanelaPreviaAlteracao } from "./JanelaPreviaAlteracao";
+import type { Movimento } from "./usoArrastar";
 import "./mapa.css";
 
 const PERIODOS = [7, 14, 30];
@@ -22,6 +24,7 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
   const categorias = useCategorias();
   const [params, setParams] = useSearchParams();
   const navegar = useNavigate();
+  const [movimento, setMovimento] = useState<Movimento | null>(null);
 
   const dias = PERIODOS.includes(Number(params.get("dias"))) ? Number(params.get("dias")) : PERIODO_PADRAO;
   const inicioParam = params.get("inicio");
@@ -77,11 +80,13 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
           hoje={hoje}
           nomesCategoria={nomesCategoria}
           aoAbrirReserva={(id) => alterar({ reserva: id })}
+          aoSoltar={setMovimento}
           aoCriarReserva={(quarto, data) => void navegar(`/reservas/nova?quarto=${encodeURIComponent(quarto)}&chegada=${data}`)}
         />
       ) : (
         !mapa.isError && <p>Carregando…</p>
       )}
+      {movimento && <JanelaPreviaAlteracao movimento={movimento} aoFechar={() => setMovimento(null)} />}
     </div>
   );
 }

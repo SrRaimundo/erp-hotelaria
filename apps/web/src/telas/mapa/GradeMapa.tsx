@@ -1,6 +1,7 @@
 import type { Mapa } from "../../api/tipos";
 import { ehFimDeSemana, formatarData, nomeDiaCurto } from "../../lib/datas";
 import { BarraReserva } from "./BarraReserva";
+import { usoArrastar, type Movimento } from "./usoArrastar";
 import { ALTURA_LINHA, LARGURA_COLUNA, LARGURA_ROTULO, colunasDoPeriodo, distribuirPistas, linhaDeQuarto, posicaoBarra, type LinhaMapa } from "./geometria";
 
 const SITUACOES: Record<string, string> = { sujo: "sujo", em_manutencao: "manutenção", bloqueado: "bloqueado" };
@@ -13,15 +14,27 @@ type Props = {
   nomesCategoria: Record<string, string>;
   aoAbrirReserva: (reservaId: string) => void;
   aoCriarReserva: (quartoId: string, data: string) => void;
+  /** Reserva arrastada ou esticada até uma nova posição (ainda sem gravar). */
+  aoSoltar: (movimento: Movimento) => void;
 };
 
 function classeDia(dia: string, hoje: string): string {
   return ["mapa-dia", dia === hoje && "mapa-dia--hoje", ehFimDeSemana(dia) && "mapa-dia--fds"].filter(Boolean).join(" ");
 }
 
-export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirReserva, aoCriarReserva }: Props) {
+export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirReserva, aoCriarReserva, aoSoltar }: Props) {
   const colunas = colunasDoPeriodo(inicio, dias);
   const grupos = linhaDeQuarto(mapa.quartos, mapa.barras, nomesCategoria);
+  const categoriaPorNome = Object.fromEntries(Object.entries(nomesCategoria).map(([id, nome]) => [nome, id]));
+  const arrastar = usoArrastar({
+    larguraColuna: LARGURA_COLUNA,
+    alturaLinha: ALTURA_LINHA,
+    linhas: grupos.flatMap((g) =>
+      g.linhas.map((l) => ({ quartoId: l.quarto?.id ?? null, categoriaId: categoriaPorNome[g.categoria] ?? g.categoria })),
+    ),
+    inicio,
+    aoSoltar,
+  });
   const modelo = `${LARGURA_ROTULO}px repeat(${dias}, ${LARGURA_COLUNA}px)`;
 
   const renderLinha = (linha: LinhaMapa) => {
@@ -54,7 +67,7 @@ export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirRes
           </div>
         ))}
         {posicionadas.map(({ barra, posicao }, i) => (
-          <BarraReserva key={barra.reservaId} barra={barra} posicao={posicao} pista={pistas[i]} aoAbrir={aoAbrirReserva} />
+          <BarraReserva key={barra.reservaId} barra={barra} posicao={posicao} pista={pistas[i]} aoAbrir={aoAbrirReserva} arrasto={arrastar.propsDaBarra(barra)} deslocamento={arrastar.deslocamento?.reservaId === barra.reservaId ? arrastar.deslocamento : null} />
         ))}
       </div>
     );

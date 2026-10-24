@@ -29,3 +29,7 @@
 .mapa-barra[data-estado="finalizada"] { background: var(--cinza-finalizada); color: var(--texto); }
 .mapa-barra--corta-inicio { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
 .mapa-barra--corta-fim { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+.mapa-barra { position: relative; touch-action: none; }
+.mapa-barra--arrastavel { cursor: grab; user-select: none; }
+.mapa-barra--arrastando { cursor: grabbing; z-index: 3; opacity: 0.85; outline: 2px dashed var(--texto); outline-offset: 1px; }
+.mapa-barra__alca { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: ew-resize; }
