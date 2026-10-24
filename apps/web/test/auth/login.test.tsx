@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useLocation } from "react-router";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { UsuarioSessao } from "../../src/api/tipos";
-import { useSessao } from "../../src/auth/SessaoProvider";
+import { destinoSeguro, useSessao } from "../../src/auth/SessaoProvider";
 import { AppRotas } from "../../src/rotas";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
@@ -192,5 +192,12 @@ describe("login e sessão", () => {
     expect(chamadas.find((c) => c.metodo === "DELETE")).toMatchObject({ metodo: "DELETE", caminho: "/api/sessoes" });
     expect(localStorage.getItem("erp.token")).toBeNull();
     expect(localStorage.getItem("erp.usuario")).toBeNull();
+  });
+
+  test("destinoSeguro rejeita barra invertida e endereços externos", () => {
+    expect(destinoSeguro("/\\evil.com", recepcao)).toBe("/");
+    expect(destinoSeguro("/a\\b", recepcao)).toBe("/");
+    expect(destinoSeguro("//evil.com", recepcao)).toBe("/");
+    expect(destinoSeguro("/caixa", recepcao)).toBe("/caixa");
   });
 });

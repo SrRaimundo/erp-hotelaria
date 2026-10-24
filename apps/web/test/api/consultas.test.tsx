@@ -98,4 +98,19 @@ describe("consultas", () => {
       ].sort(),
     );
   });
+
+  test("ação também invalida busca e hospedes", async () => {
+    instalarApiFalsa({ "POST /api/x": { ok: true } });
+    function Tela() {
+      const enviar = useAcao<{ a: number }, { ok: boolean }>((c) => chamarApi("POST", "/api/x", c));
+      return <button onClick={() => enviar.mutate({ a: 1 })}>enviar</button>;
+    }
+    const u = userEvent.setup();
+    const { cliente } = renderizar(<Tela />);
+    cliente.setQueryData(["busca", "ana"], []);
+    cliente.setQueryData(["hospedes", "ana"], []);
+    await u.click(screen.getByRole("button", { name: "enviar" }));
+    await waitFor(() => expect(cliente.getQueryState(["busca", "ana"])!.isInvalidated).toBe(true));
+    expect(cliente.getQueryState(["hospedes", "ana"])!.isInvalidated).toBe(true);
+  });
 });

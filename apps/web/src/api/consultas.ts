@@ -87,7 +87,7 @@ export const useBusca = (q: string) =>
     enabled: q.trim().length > 0,
   });
 
-const CHAVES_INVALIDADAS = ["painel", "mapa", "reserva", "conta", "reservas", "caixa", "governanca"] as const;
+const CHAVES_INVALIDADAS = ["painel", "mapa", "reserva", "conta", "reservas", "caixa", "governanca", "busca", "hospedes"] as const;
 
 /** Mutação que, ao dar certo, refaz as consultas que dependem do estado da pousada. */
 export function useAcao<TCorpo, TResp>(fn: (corpo: TCorpo) => Promise<TResp>) {

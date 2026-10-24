@@ -18,6 +18,9 @@ type Props = {
   aoReceber: () => void;
 };
 
+const ORIGENS: Record<string, string> = { hospedagem: "Hospedagem", caixa: "Caixa" };
+const rotuloOrigem = (o: string) => ORIGENS[o] ?? (o ? o.charAt(0).toUpperCase() + o.slice(1) : o);
+
 function situacao(saldo: number): { texto: string; classe: string } {
   if (saldo > 0) return { texto: "a receber", classe: "conta-saldo--receber" };
   if (saldo < 0) return { texto: "crédito do hóspede", classe: "conta-saldo--credito" };
@@ -77,7 +80,7 @@ export function AbaConta({ reserva, receberInicial, aoReceber }: Props) {
               <tr key={l.id} className={ehEstorno ? "conta-estorno" : undefined}>
                 <td>{formatarData(l.data)}</td>
                 <td>{texto}</td>
-                <td>{l.origem}</td>
+                <td>{rotuloOrigem(l.origem)}</td>
                 <td className={l.natureza === "credito" ? "conta-valor conta-valor--credito" : "conta-valor"}>
                   {formatarReais(l.valor)}
                   {l.natureza === "credito" && !ehEstorno && <small> crédito</small>}

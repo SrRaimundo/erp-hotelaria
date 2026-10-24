@@ -205,4 +205,12 @@ describe("aba Conta", () => {
     const nomes = screen.getAllByRole("button", { name: /^Estornar / }).map((b) => b.getAttribute("aria-label"));
     expect(nomes).toEqual(["Estornar Diária 20/11", "Estornar Frigobar", "Estornar Pagamento PIX"]);
   });
+
+  test("a coluna Origem mostra rótulos amigáveis", async () => {
+    montar("/mapa?reserva=r1&aba=conta");
+    const tabela = await screen.findByRole("table", { name: "Extrato da conta" });
+    expect(within(tabela).getAllByText("Hospedagem").length).toBeGreaterThan(0);
+    expect(within(tabela).getByText("Caixa")).toBeInTheDocument();
+    expect(within(tabela).queryByText("hospedagem")).not.toBeInTheDocument();
+  });
 });

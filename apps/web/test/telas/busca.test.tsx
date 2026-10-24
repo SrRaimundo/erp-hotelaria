@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { BarraTopo } from "../../src/layout/BarraTopo";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
+import { criarPainel } from "../fixtures/painel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,7 +25,7 @@ const resultados = [
   { tipo: "reserva", id: "r1", rotulo: "Reserva #7 — Maria Silva (20/11–22/11)", acoes: ["abrir", "checkin"] },
   { tipo: "hospede", id: "h1", rotulo: "Maria Silva — CPF ***.***.123-45", acoes: ["nova_reserva", "ver_historico"] },
 ];
-const api = () => instalarApiFalsa({ "GET /api/busca": resultados });
+const api = () => instalarApiFalsa({ "GET /api/busca": resultados, "GET /api/painel": criarPainel() });
 
 describe("busca universal", () => {
   test("Ctrl+K abre a busca com foco e Enter executa a primeira ação", async () => {
@@ -49,7 +50,7 @@ describe("busca universal", () => {
 
   test("Enter na reserva com check-in abre o fluxo só quando a primeira ação é checkin", async () => {
     const u = userEvent.setup();
-    instalarApiFalsa({ "GET /api/busca": [{ tipo: "reserva", id: "r9", rotulo: "Reserva #9 — Ana", acoes: ["checkin"] }] });
+    instalarApiFalsa({ "GET /api/busca": [{ tipo: "reserva", id: "r9", rotulo: "Reserva #9 — Ana", acoes: ["checkin"] }], "GET /api/painel": criarPainel() });
     renderizar(<App />, { ...recepcao, rota: "/mapa" });
     await u.keyboard("{Control>}k{/Control}");
     await u.type(await screen.findByRole("combobox"), "ana");
@@ -94,12 +95,12 @@ describe("busca universal", () => {
     expect(screen.getByTestId("local")).toHaveTextContent("/mapa?reserva=r1&fluxo=checkin");
     await abrirBusca();
     await u.click(await screen.findByRole("button", { name: "Histórico" }));
-    expect(screen.getByTestId("local")).toHaveTextContent("/reservas?q=Maria%20Silva");
+    expect(screen.getByTestId("local")).toHaveTextContent("/reservas?q=Maria%20Silva&inicio=2025-11-20&estado=finalizada");
   });
 
   test("sem resultados mostra aviso", async () => {
     const u = userEvent.setup();
-    instalarApiFalsa({ "GET /api/busca": [] });
+    instalarApiFalsa({ "GET /api/busca": [], "GET /api/painel": criarPainel() });
     renderizar(<App />, recepcao);
     await u.keyboard("{Control>}k{/Control}");
     await u.type(await screen.findByRole("combobox"), "zzz");

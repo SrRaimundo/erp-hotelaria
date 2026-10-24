@@ -102,5 +102,5 @@ export function rotaInicial(u: UsuarioSessao): string {
  * A raiz ("/") não é um destino escolhido: vale a tela inicial do perfil (governança não acessa Hoje).
  */
 export function destinoSeguro(voltar: string | null, u: UsuarioSessao): string {
-  return voltar && voltar !== "/" && voltar.startsWith("/") && !voltar.startsWith("//") && !voltar.startsWith("/login") ? voltar : rotaInicial(u);
+  return voltar && voltar !== "/" && voltar.startsWith("/") && !voltar.startsWith("//") && !voltar.includes("\\") && !voltar.startsWith("/login") ? voltar : rotaInicial(u);
 }

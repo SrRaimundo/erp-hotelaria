@@ -8,6 +8,7 @@ import { ErroAcao } from "../../componentes/ErroAcao";
 import { Etiqueta } from "../../componentes/Etiqueta";
 import { Janela } from "../../componentes/Janela";
 import { nomeCampoFnrh, pendenciasFnrh } from "../../lib/fnrh";
+import { useAtrasado } from "../../lib/useAtrasado";
 import { CadastroRapidoHospede } from "./CadastroRapidoHospede";
 
 type Props = {
@@ -21,15 +22,6 @@ type Corpo = { quartoId: string; acompanhantes: string[]; cobrarEarlyCheckin: bo
 
 const ATRASO_BUSCA_MS = 300;
 const ATRASO_VOLTA_MS = 1200;
-
-function useAtrasado(valor: string, ms: number): string {
-  const [atrasado, setAtrasado] = useState(valor);
-  useEffect(() => {
-    const t = setTimeout(() => setAtrasado(valor), ms);
-    return () => clearTimeout(t);
-  }, [valor, ms]);
-  return atrasado;
-}
 
 export function FluxoCheckin({ reserva, aoMudarUrl }: Props) {
   const categorias = useCategorias();

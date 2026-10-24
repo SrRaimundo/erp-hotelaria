@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useBusca } from "../../api/consultas";
+import { useBusca, usePainel } from "../../api/consultas";
 import type { ResultadoBusca } from "../../api/tipos";
+import { somarDiasIso } from "../../lib/datas";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import "./busca.css";
@@ -37,6 +38,7 @@ export function BuscaUniversal({ aoFechar }: { aoFechar: () => void }) {
   }, [texto]);
 
   const busca = useBusca(q);
+  const dia = usePainel().data?.dia;
   const grupos = useMemo(() => GRUPOS.map((g) => ({ ...g, itens: (busca.data ?? []).filter((r) => r.tipo === g.tipo) })).filter((g) => g.itens.length > 0), [busca.data]);
   const linhas = useMemo(() => grupos.flatMap((g) => g.itens), [grupos]);
   useEffect(() => setAtivo(0), [busca.data]);
@@ -52,7 +54,7 @@ export function BuscaUniversal({ aoFechar }: { aoFechar: () => void }) {
       registrar_pagamento: `${pathname}${reserva}&aba=conta`,
       lancar_extra: `${pathname}${reserva}&aba=conta`,
       nova_reserva: `/reservas/nova?hospede=${encodeURIComponent(r.id)}`,
-      ver_historico: `/reservas?q=${encodeURIComponent(r.rotulo.split(" — ")[0] ?? r.rotulo)}`,
+      ver_historico: `/reservas?q=${encodeURIComponent(r.rotulo.split(" — ")[0] ?? r.rotulo)}${dia ? `&inicio=${somarDiasIso(dia, -365)}` : ""}&estado=finalizada`,
     };
     const destino = destinos[acao];
     if (!destino) return;
