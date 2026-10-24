@@ -1,6 +1,7 @@
 import { auditar } from "../infra/auditoria.js";
 import { criarAlerta } from "../infra/alertas.js";
 import { registrarEvento } from "../infra/outbox.js";
+import { obterConfig } from "../nucleo/pousada.js";
 import { exigirCaixaAberto, registrarMovimento, turnoAberto } from "../nucleo/caixa.js";
 import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import { autorizarSupervisor } from "../nucleo/supervisor.js";
@@ -8,7 +9,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { formatarBRL, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
-import type { Data } from "../shared/tempo.js";
+import { dataLocal, type Data } from "../shared/tempo.js";
 import type { Autorizacao } from "./alteracao.js";
 import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 
@@ -32,6 +33,8 @@ export type LinhaExtrato = {
   descricao: string;
   valor: Centavos;
   instante: string;
+  /** Dia local da pousada (YYYY-MM-DD) do instante, no fuso configurado. */
+  data: Data;
   estornaId: string | null;
   reservaId: string | null;
 };
@@ -249,14 +252,16 @@ export async function alertarSaldoOrfao(tx: Contexto, contaId: string): Promise<
 export async function extrato(ctx: Contexto, contaId: string): Promise<LinhaExtrato[]> {
   const ls = await ctx.db.selectFrom("lancamentos").selectAll().where("conta_id", "=", contaId).execute();
   const ps = await ctx.db.selectFrom("pagamentos").selectAll().where("conta_id", "=", contaId).execute();
+  const { fuso } = await obterConfig(ctx);
+  const dia = (instante: string) => dataLocal(new Date(instante), fuso);
   const linhas: LinhaExtrato[] = [
     ...ls.map((l): LinhaExtrato => ({
       id: l.id, natureza: "debito", tipo: l.tipo, origem: l.origem, descricao: l.descricao, valor: l.valor,
-      instante: l.instante, estornaId: l.estorna_id, reservaId: l.reserva_id,
+      instante: l.instante, data: dia(l.instante), estornaId: l.estorna_id, reservaId: l.reserva_id,
     })),
     ...ps.map((p): LinhaExtrato => ({
       id: p.id, natureza: "credito", tipo: p.estorna_id ? "estorno" : "pagamento", origem: "caixa",
-      descricao: `Pagamento (${p.forma_codigo})`, valor: p.valor, instante: p.instante, estornaId: p.estorna_id, reservaId: p.reserva_id,
+      descricao: `Pagamento (${p.forma_codigo})`, valor: p.valor, instante: p.instante, data: dia(p.instante), estornaId: p.estorna_id, reservaId: p.reserva_id,
     })),
   ];
   return linhas.sort((a, b) => (a.instante === b.instante ? a.id.localeCompare(b.id) : a.instante.localeCompare(b.instante)));

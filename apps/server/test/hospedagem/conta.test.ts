@@ -93,6 +93,14 @@ describe("conta do hóspede", () => {
     expect(ev.map((e) => e.tipo).sort()).toEqual(["hospedagem.LancamentoCriado", "hospedagem.LancamentoEstornado"]);
   });
 
+  test("extrato traz a data local do instante (fuso da pousada)", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    const id = await extra(r.contaId);
+    await ctx.db.updateTable("lancamentos").set({ instante: "2026-11-21T01:30:00.000Z" }).where("id", "=", id).execute();
+    const linha = (await extrato(ctx, r.contaId)).find((l) => l.id === id)!;
+    expect(linha.data).toBe("2026-11-20");
+  });
+
   test("lançamento calcula quantidade × valor unitário e valida", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
     await extra(r.contaId, 1200, 3);

@@ -14,6 +14,8 @@ type Props = {
   reserva: ReservaDetalhe;
   /** Valor em centavos vindo de "Registrar sinal" (`&receber=`). */
   receberInicial: number | null;
+  /** Chamado depois de um pagamento: tira `receber` da URL. */
+  aoReceber: () => void;
 };
 
 function situacao(saldo: number): { texto: string; classe: string } {
@@ -22,7 +24,7 @@ function situacao(saldo: number): { texto: string; classe: string } {
   return { texto: "quitado", classe: "" };
 }
 
-export function AbaConta({ reserva, receberInicial }: Props) {
+export function AbaConta({ reserva, receberInicial, aoReceber }: Props) {
   const conta = useConta(reserva.contaId);
   const formas = useFormasPagamento();
   const [alvo, setAlvo] = useState<LinhaExtrato | null>(null);
@@ -73,7 +75,7 @@ export function AbaConta({ reserva, receberInicial }: Props) {
             const texto = descricao(l);
             return (
               <tr key={l.id} className={ehEstorno ? "conta-estorno" : undefined}>
-                <td>{formatarData(l.instante.slice(0, 10))}</td>
+                <td>{formatarData(l.data)}</td>
                 <td>{texto}</td>
                 <td>{l.origem}</td>
                 <td className={l.natureza === "credito" ? "conta-valor conta-valor--credito" : "conta-valor"}>
@@ -110,7 +112,7 @@ export function AbaConta({ reserva, receberInicial }: Props) {
         </tfoot>
       </table>
 
-      <FormReceber contaId={reserva.contaId} reservaId={reserva.id} receberInicial={receberInicial} />
+      <FormReceber key={receberInicial ?? "livre"} aoReceber={aoReceber} contaId={reserva.contaId} reservaId={reserva.id} receberInicial={receberInicial} />
       <FormLancarExtra contaId={reserva.contaId} />
 
       <JanelaSupervisor

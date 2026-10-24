@@ -16,12 +16,12 @@ function Local() {
 
 const linha = (o: Partial<LinhaExtrato>): LinhaExtrato => ({
   id: "l1", natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: "Diária 20/11", valor: 90000,
-  instante: "2026-11-20T14:00:00.000Z", estornaId: null, reservaId: "r1", ...o,
+  instante: "2026-11-20T14:00:00.000Z", data: "2026-11-20", estornaId: null, reservaId: "r1", ...o,
 });
 
 const extrato: LinhaExtrato[] = [
   linha({}),
-  linha({ id: "l2", tipo: "extra", descricao: "Frigobar", valor: 5000, instante: "2026-11-21T10:00:00.000Z" }),
+  linha({ id: "l2", tipo: "extra", descricao: "Frigobar", valor: 5000, instante: "2026-11-21T01:30:00.000Z", data: "2026-11-20" }),
   linha({ id: "l3", tipo: "extra", descricao: "Lavanderia", valor: 3000, instante: "2026-11-21T11:00:00.000Z" }),
   linha({ id: "l4", tipo: "estorno", descricao: "Estorno: Lavanderia", valor: -3000, estornaId: "l3", instante: "2026-11-21T12:00:00.000Z" }),
   linha({ id: "p1", natureza: "credito", tipo: "pagamento", origem: "caixa", descricao: "Pagamento (pix)", valor: 50000, instante: "2026-11-22T09:00:00.000Z" }),
@@ -62,6 +62,8 @@ describe("aba Conta", () => {
     expect(screen.getByText("Débitos")).toBeInTheDocument();
     expect(screen.getByText("R$ 950,00")).toBeInTheDocument();
     expect(screen.getByText("Pagamento PIX")).toBeInTheDocument();
+    // a data exibida é a local do servidor (01:30Z do dia 21 é dia 20 em São Paulo)
+    expect(within(screen.getByText("Frigobar").closest("tr")!).getByText("20/11")).toBeInTheDocument();
     // estorno em itálico com sinal negativo
     const estorno = screen.getByText("Estorno: Lavanderia").closest("tr")!;
     expect(estorno).toHaveClass("conta-estorno");
@@ -129,6 +131,31 @@ describe("aba Conta", () => {
     await waitFor(() => expect(postou("/api/contas/ct1/pagamentos")).toHaveLength(1));
     expect(postou("/api/contas/ct1/pagamentos")[0]!.corpo).toEqual({ reservaId: "r1", formaCodigo: "dinheiro", valor: 22000 });
     await waitFor(() => expect(screen.getByLabelText("Valor a receber")).toHaveValue(""));
+  });
+
+  test("Registrar sinal com a aba Conta já aberta pré-preenche e foca o valor", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/reservas/r1": criarReserva({ estado: "pre_reserva", pago: 5000 }) });
+    const valor = await screen.findByLabelText("Valor a receber");
+    expect(valor).toHaveValue("");
+    await usuario.click(screen.getByRole("button", { name: "Registrar sinal" }));
+    await waitFor(() => expect(screen.getByLabelText("Valor a receber")).toHaveValue("220,00"));
+    expect(screen.getByLabelText("Valor a receber")).toHaveFocus();
+  });
+
+  test("após receber, o parâmetro receber sai da URL", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta&receber=22000", { "POST /api/contas/ct1/pagamentos": { id: "pg" } });
+    await screen.findByLabelText("Valor a receber");
+    await usuario.click(screen.getByRole("button", { name: "Receber" }));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/mapa?reserva=r1&aba=conta"));
+    expect(screen.getByTestId("local").textContent).not.toContain("receber=");
+  });
+
+  test("sem forma elegível o botão Receber fica desabilitado", async () => {
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/formas-pagamento": [formas[2]] });
+    await screen.findByLabelText("Valor a receber");
+    expect(screen.getByRole("button", { name: "Receber" })).toBeDisabled();
   });
 
   test("formas não incluem faturado", async () => {

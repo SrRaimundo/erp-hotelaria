@@ -64,10 +64,10 @@ export async function previaCheckout(ctx: Contexto, reservaId: string): Promise<
   const previstas: LinhaExtrato[] = p.pendentes.map((n) => {
     const [, mes, dia] = n.data.split("-");
     const rotulo = (JSON.parse(n.passos) as { rotulo: string }[]).at(-1)?.rotulo ?? "Diária";
-    return { id: `previa-${n.data}`, natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: `Diária ${dia}/${mes} — ${rotulo}`, valor: n.valor, instante, estornaId: null, reservaId };
+    return { id: `previa-${n.data}`, natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: `Diária ${dia}/${mes} — ${rotulo}`, valor: n.valor, instante, data: p.hoje, estornaId: null, reservaId };
   });
   if (p.taxa > 0) {
-    previstas.push({ id: "previa-late-checkout", natureza: "debito", tipo: "extra", origem: "hospedagem", descricao: "Late check-out", valor: p.taxa, instante, estornaId: null, reservaId });
+    previstas.push({ id: "previa-late-checkout", natureza: "debito", tipo: "extra", origem: "hospedagem", descricao: "Late check-out", valor: p.taxa, instante, data: p.hoje, estornaId: null, reservaId });
   }
   const adicional = previstas.reduce((s, l) => s + l.valor, 0);
   return {

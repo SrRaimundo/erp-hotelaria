@@ -7,7 +7,7 @@ import { Botao } from "../../componentes/Botao";
 import { CampoDinheiro } from "../../componentes/CampoDinheiro";
 import { ErroAcao } from "../../componentes/ErroAcao";
 
-type Props = { contaId: string; reservaId: string; receberInicial: number | null };
+type Props = { contaId: string; reservaId: string; receberInicial: number | null; aoReceber: () => void };
 
 /** Carrega caixa e formas; só monta o formulário (e foca o valor) quando tudo está pronto. */
 export function FormReceber(props: Props) {
@@ -26,7 +26,7 @@ export function FormReceber(props: Props) {
   return <Formulario {...props} formas={formas.data.filter((f) => f.ativa && f.codigo !== "faturado")} />;
 }
 
-function Formulario({ contaId, reservaId, receberInicial, formas }: Props & { formas: FormaPagamento[] }) {
+function Formulario({ contaId, reservaId, receberInicial, aoReceber, formas }: Props & { formas: FormaPagamento[] }) {
   const receber = useAcao((c: { reservaId: string; formaCodigo: string; valor: number }) =>
     chamarApi("POST", `/api/contas/${encodeURIComponent(contaId)}/pagamentos`, c),
   );
@@ -49,6 +49,7 @@ function Formulario({ contaId, reservaId, receberInicial, formas }: Props & { fo
     try {
       await receber.mutateAsync({ reservaId, formaCodigo: forma, valor });
       setValor(null);
+      aoReceber();
     } catch (x) {
       setErro(x instanceof Error ? x : new Error("Não foi possível registrar o pagamento."));
     }
@@ -68,7 +69,7 @@ function Formulario({ contaId, reservaId, receberInicial, formas }: Props & { fo
       </div>
       <ErroAcao erro={erro} />
       <div className="formulario__acoes">
-        <Botao type="submit" disabled={receber.isPending}>Receber</Botao>
+        <Botao type="submit" disabled={receber.isPending || formas.length === 0}>Receber</Botao>
       </div>
     </form>
   );
