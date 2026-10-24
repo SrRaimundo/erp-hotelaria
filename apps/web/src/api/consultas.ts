@@ -1,7 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
 import { useConexao } from "./useConexao";
-import type { Categoria, ItemListaReserva, LinhaExtrato, Mapa, Painel, ReservaDetalhe, ResultadoBusca } from "./tipos";
+import type { Categoria, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
   return new QueryClient({
@@ -67,9 +67,17 @@ export const useReservas = (f: FiltrosReservas) =>
     queryFn: () => chamarApi<{ itens: ItemListaReserva[]; total: number }>("GET", `/api/reservas${consulta({ ...f })}`),
   });
 
-// Caixa e governança ganham tipo próprio quando suas telas chegarem.
-export const useCaixa = () => useQuery({ queryKey: ["caixa"], queryFn: () => chamarApi<unknown>("GET", "/api/caixa/atual") });
+/** Turno aberto do usuário; `null` quando não há caixa aberto. */
+export const useCaixa = () => useQuery({ queryKey: ["caixa"], queryFn: () => chamarApi<ResumoCaixa | null>("GET", "/api/caixa/atual") });
 
+export const useProdutos = () =>
+  useQuery({ queryKey: ["produtos"], queryFn: () => chamarApi<Produto[]>("GET", "/api/produtos"), staleTime: 300_000 });
+
+/** Formas de pagamento ativas, na ordem fixa do servidor. */
+export const useFormasPagamento = () =>
+  useQuery({ queryKey: ["formas-pagamento"], queryFn: () => chamarApi<FormaPagamento[]>("GET", "/api/formas-pagamento"), staleTime: 300_000 });
+
+// Governança ganha tipo próprio quando sua tela chegar.
 export const useGovernanca = () => useQuery({ queryKey: ["governanca"], queryFn: () => chamarApi<unknown[]>("GET", "/api/governanca") });
 
 export const useBusca = (q: string) =>

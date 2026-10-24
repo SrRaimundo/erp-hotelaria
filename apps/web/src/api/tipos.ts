@@ -9,5 +9,6 @@ export type { Categoria } from "@server/nucleo/categorias";
 export type { Hospede } from "@server/nucleo/hospedes";
 export type { FormaPagamento } from "@server/nucleo/formas-pagamento";
 export type { Produto } from "@server/nucleo/produtos";
+export type { ResumoCaixa } from "@server/nucleo/caixa";
 
 export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknown };

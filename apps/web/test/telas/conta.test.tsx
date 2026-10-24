@@ -1,0 +1,181 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useLocation } from "react-router";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import type { LinhaExtrato } from "../../src/api/tipos";
+import { GavetaReserva } from "../../src/telas/reserva/GavetaReserva";
+import { chamadas, instalarApiFalsa } from "../api-falsa";
+import { renderizar } from "../ajuda";
+import { criarPainel } from "../fixtures/painel";
+import { criarReserva } from "../fixtures/reserva";
+
+function Local() {
+  const l = useLocation();
+  return <output data-testid="local">{l.pathname + l.search}</output>;
+}
+
+const linha = (o: Partial<LinhaExtrato>): LinhaExtrato => ({
+  id: "l1", natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: "Diária 20/11", valor: 90000,
+  instante: "2026-11-20T14:00:00.000Z", estornaId: null, reservaId: "r1", ...o,
+});
+
+const extrato: LinhaExtrato[] = [
+  linha({}),
+  linha({ id: "l2", tipo: "extra", descricao: "Frigobar", valor: 5000, instante: "2026-11-21T10:00:00.000Z" }),
+  linha({ id: "l3", tipo: "extra", descricao: "Lavanderia", valor: 3000, instante: "2026-11-21T11:00:00.000Z" }),
+  linha({ id: "l4", tipo: "estorno", descricao: "Estorno: Lavanderia", valor: -3000, estornaId: "l3", instante: "2026-11-21T12:00:00.000Z" }),
+  linha({ id: "p1", natureza: "credito", tipo: "pagamento", origem: "caixa", descricao: "Pagamento (pix)", valor: 50000, instante: "2026-11-22T09:00:00.000Z" }),
+];
+
+const formas = [
+  { id: "f1", codigo: "dinheiro", nome: "Dinheiro", ativa: true },
+  { id: "f2", codigo: "pix", nome: "PIX", ativa: true },
+  { id: "f3", codigo: "faturado", nome: "Faturado", ativa: true },
+];
+const produtos = [{ id: "pr1", codigo: "AGUA", nome: "Água mineral", precoCentavos: 600, unidade: "un", grupo: "bebidas", tipo: "produto" }];
+const caixa = { turno: { id: "t1", usuarioId: "u1", abertoEm: "2026-11-20T08:00:00.000Z", valorInicial: 10000, fechadoEm: null }, movimentos: [], esperadoPorForma: {} };
+
+function montar(rota = "/mapa?reserva=r1&aba=conta", extras: Record<string, unknown> = {}) {
+  instalarApiFalsa({
+    "GET /api/painel": criarPainel(),
+    "GET /api/reservas/r1": criarReserva(),
+    "GET /api/contas/ct1": { saldo: { debitos: 95000, creditos: 50000, saldo: 45000 }, extrato },
+    "GET /api/produtos": produtos,
+    "GET /api/formas-pagamento": formas,
+    "GET /api/caixa/atual": caixa,
+    ...extras,
+  });
+  return renderizar(<><GavetaReserva /><Local /></>, { rota });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+const postou = (caminho: string) => chamadas.filter((c) => c.metodo === "POST" && c.caminho === caminho);
+
+describe("aba Conta", () => {
+  test("extrato com saldo", async () => {
+    montar();
+    expect(await screen.findByText("Frigobar")).toBeInTheDocument();
+    expect(screen.getByText("Saldo")).toBeInTheDocument();
+    expect(screen.getByText("R$ 450,00")).toBeInTheDocument();
+    expect(screen.getByText("a receber")).toBeInTheDocument();
+    expect(screen.getByText("Débitos")).toBeInTheDocument();
+    expect(screen.getByText("R$ 950,00")).toBeInTheDocument();
+    expect(screen.getByText("Pagamento PIX")).toBeInTheDocument();
+    // estorno em itálico com sinal negativo
+    const estorno = screen.getByText("Estorno: Lavanderia").closest("tr")!;
+    expect(estorno).toHaveClass("conta-estorno");
+    expect(within(estorno).getByText("−R$ 30,00")).toBeInTheDocument();
+  });
+
+  test("saldo negativo é crédito do hóspede", async () => {
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/contas/ct1": { saldo: { debitos: 0, creditos: 2000, saldo: -2000 }, extrato: [] } });
+    expect(await screen.findByText("crédito do hóspede")).toBeInTheDocument();
+  });
+
+  test("saldo zero é quitado", async () => {
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/contas/ct1": { saldo: { debitos: 0, creditos: 0, saldo: 0 }, extrato: [] } });
+    expect(await screen.findByText("quitado")).toBeInTheDocument();
+  });
+
+  test("lançar extra livre envia centavos inteiros", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "POST /api/contas/ct1/lancamentos": { id: "novo" } });
+    await screen.findByText("Frigobar");
+    await screen.findByRole("option", { name: /Água mineral/ });
+    await usuario.selectOptions(screen.getByLabelText("Produto"), "Outro (descrição livre)");
+    await usuario.type(screen.getByLabelText("Descrição"), "Lavagem");
+    await usuario.type(screen.getByLabelText("Valor unitário"), "12,50");
+    await usuario.clear(screen.getByLabelText("Quantidade"));
+    await usuario.type(screen.getByLabelText("Quantidade"), "2");
+    await usuario.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(1));
+    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", descricao: "Lavagem", valorUnitario: 1250, quantidade: 2 });
+    await waitFor(() => expect(screen.getByLabelText("Produto")).toHaveValue(""));
+  });
+
+  test("lançar extra de produto envia o código", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "POST /api/contas/ct1/lancamentos": { id: "novo" } });
+    await screen.findByRole("option", { name: /Água mineral/ });
+    expect(screen.queryByLabelText("Descrição")).not.toBeInTheDocument();
+    await usuario.selectOptions(screen.getByLabelText("Produto"), "AGUA");
+    await usuario.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(1));
+    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", produtoCodigo: "AGUA", quantidade: 1 });
+  });
+
+  test("lançar extra sem produto ou com quantidade inválida mostra erro e não envia", async () => {
+    const usuario = userEvent.setup();
+    montar();
+    await screen.findByRole("option", { name: /Água mineral/ });
+    await usuario.click(screen.getByRole("button", { name: "Lançar" }));
+    expect(await screen.findByText("Escolha um produto ou informe a descrição e o valor.")).toBeInTheDocument();
+    await usuario.selectOptions(screen.getByLabelText("Produto"), "AGUA");
+    await usuario.clear(screen.getByLabelText("Quantidade"));
+    await usuario.type(screen.getByLabelText("Quantidade"), "0");
+    await usuario.click(screen.getByRole("button", { name: "Lançar" }));
+    expect(await screen.findByText("Informe a quantidade: um número inteiro de 1 em diante.")).toBeInTheDocument();
+    expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(0);
+  });
+
+  test("registrar sinal pré-preenche o valor pendente e foca o campo", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta&receber=22000", { "POST /api/contas/ct1/pagamentos": { id: "pg" } });
+    const valor = await screen.findByLabelText("Valor a receber");
+    expect(valor).toHaveValue("220,00");
+    await waitFor(() => expect(valor).toHaveFocus());
+    await usuario.click(screen.getByRole("button", { name: "Receber" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/pagamentos")).toHaveLength(1));
+    expect(postou("/api/contas/ct1/pagamentos")[0]!.corpo).toEqual({ reservaId: "r1", formaCodigo: "dinheiro", valor: 22000 });
+    await waitFor(() => expect(screen.getByLabelText("Valor a receber")).toHaveValue(""));
+  });
+
+  test("formas não incluem faturado", async () => {
+    montar();
+    const forma = await screen.findByLabelText("Forma de pagamento");
+    const nomes = within(forma).getAllByRole("option").map((o) => o.textContent);
+    expect(nomes).toEqual(["Dinheiro", "PIX"]);
+  });
+
+  test("sem caixa aberto mostra aviso com link", async () => {
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/caixa/atual": null });
+    expect(await screen.findByText("Abra o caixa para receber pagamentos")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ir para o caixa" })).toHaveAttribute("href", "/caixa");
+    expect(screen.queryByLabelText("Valor a receber")).not.toBeInTheDocument();
+  });
+
+  test("estornar pede supervisor e envia motivo e credenciais", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "POST /api/lancamentos/l2/estornar": { id: "e" } });
+    await usuario.click(await screen.findByRole("button", { name: "Estornar Frigobar" }));
+    const janela = await screen.findByRole("dialog", { name: "Estornar lançamento" });
+    await usuario.type(within(janela).getByLabelText("Motivo"), "lançado por engano");
+    await usuario.type(within(janela).getByLabelText("Login do supervisor"), "admin");
+    await usuario.type(within(janela).getByLabelText("Senha do supervisor"), "segredo");
+    await usuario.click(within(janela).getByRole("button", { name: "Autorizar" }));
+    await waitFor(() => expect(postou("/api/lancamentos/l2/estornar")).toHaveLength(1));
+    expect(postou("/api/lancamentos/l2/estornar")[0]!.corpo).toEqual({ motivo: "lançado por engano", supervisor: { login: "admin", senha: "segredo" } });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Estornar lançamento" })).not.toBeInTheDocument());
+  });
+
+  test("estornar pagamento usa a rota de pagamentos", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "POST /api/pagamentos/p1/estornar": { id: "e" } });
+    await usuario.click(await screen.findByRole("button", { name: "Estornar Pagamento PIX" }));
+    const janela = await screen.findByRole("dialog", { name: "Estornar pagamento" });
+    await usuario.type(within(janela).getByLabelText("Motivo"), "erro de valor");
+    await usuario.type(within(janela).getByLabelText("Login do supervisor"), "admin");
+    await usuario.type(within(janela).getByLabelText("Senha do supervisor"), "segredo");
+    await usuario.click(within(janela).getByRole("button", { name: "Autorizar" }));
+    await waitFor(() => expect(postou("/api/pagamentos/p1/estornar")).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Estornar pagamento" })).not.toBeInTheDocument());
+  });
+
+  test("estornos e lançamentos já estornados não têm botão Estornar", async () => {
+    montar();
+    await screen.findByText("Frigobar");
+    const nomes = screen.getAllByRole("button", { name: /^Estornar / }).map((b) => b.getAttribute("aria-label"));
+    expect(nomes).toEqual(["Estornar Diária 20/11", "Estornar Frigobar", "Estornar Pagamento PIX"]);
+  });
+});

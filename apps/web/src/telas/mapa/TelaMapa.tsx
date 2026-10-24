@@ -79,7 +79,7 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
           dias={dias}
           hoje={hoje}
           nomesCategoria={nomesCategoria}
-          aoAbrirReserva={(id) => alterar({ reserva: id })}
+          aoAbrirReserva={(id) => alterar({ reserva: id, aba: null, fluxo: null, receber: null })}
           aoSoltar={setMovimento}
           aoCriarReserva={(quarto, data) => void navegar(`/reservas/nova?quarto=${encodeURIComponent(quarto)}&chegada=${data}`)}
         />

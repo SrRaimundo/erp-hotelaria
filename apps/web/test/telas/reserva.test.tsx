@@ -24,6 +24,11 @@ function montar(reserva: ReservaDetalhe, rota = "/mapa?reserva=r1", extras: Reco
   instalarApiFalsa({
     "GET /api/painel": criarPainel(),
     "GET /api/reservas/r1": reserva,
+    // A aba Conta (testada em conta.test.tsx) consulta estas rotas quando a URL a abre.
+    "GET /api/contas/ct1": { saldo: { debitos: 0, creditos: 0, saldo: 0 }, extrato: [] },
+    "GET /api/produtos": [],
+    "GET /api/formas-pagamento": [],
+    "GET /api/caixa/atual": null,
     ...extras,
   });
   return renderizar(
@@ -120,11 +125,6 @@ describe("painel da reserva", () => {
     expect(screen.getByText("Pedro Silva")).toBeInTheDocument();
     expect(screen.getByText("FNRH incompleta: documento, cidade")).toBeInTheDocument();
     expect(screen.getByText("FNRH completa")).toBeInTheDocument();
-  });
-
-  test("aba Conta mostra o marcador da próxima tarefa", async () => {
-    montar(criarReserva(), "/mapa?reserva=r1&aba=conta");
-    expect(await screen.findByRole("heading", { name: "Conta" })).toBeInTheDocument();
   });
 
   test("fluxo=checkin mostra o marcador no lugar das abas", async () => {

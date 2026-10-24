@@ -5,6 +5,7 @@ import { ErroAcao } from "../../componentes/ErroAcao";
 import { Etiqueta } from "../../componentes/Etiqueta";
 import { Gaveta } from "../../componentes/Gaveta";
 import { formatarData } from "../../lib/datas";
+import { AbaConta } from "./AbaConta";
 import { AbaHospedes } from "./AbaHospedes";
 import { AbaResumo } from "./AbaResumo";
 import { AcoesReserva } from "./AcoesReserva";
@@ -34,10 +35,10 @@ const PARAMETROS = ["reserva", "aba", "fluxo", "receber"];
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /** Ponto único de troca: as Tarefas 11, 12 e 13 substituem estes marcadores pelas telas reais. */
-function Conteudo({ reserva, aba, fluxo }: { reserva: ReservaDetalhe; aba: Aba; fluxo: Fluxo | null }) {
+function Conteudo({ reserva, aba, fluxo, receber }: { reserva: ReservaDetalhe; aba: Aba; fluxo: Fluxo | null; receber: number | null }) {
   if (fluxo === "checkin") return <h3>Check-in</h3>;
   if (fluxo === "checkout") return <h3>Check-out</h3>;
-  if (aba === "conta") return <h3>Conta</h3>;
+  if (aba === "conta") return <AbaConta reserva={reserva} receberInicial={receber} />;
   if (aba === "hospedes") return <AbaHospedes reserva={reserva} />;
   return <AbaResumo reserva={reserva} />;
 }
@@ -65,12 +66,15 @@ export function GavetaReserva() {
   const fluxoParam = params.get("fluxo");
   const fluxo: Fluxo | null = fluxoParam === "checkin" || fluxoParam === "checkout" ? fluxoParam : null;
 
-  return <PainelReserva key={id} id={id} aba={aba} fluxo={fluxo} aoMudar={mudar} aoFechar={fechar} />;
+  const receberParam = params.get("receber");
+  const receber = receberParam && /^\d+$/.test(receberParam) && Number(receberParam) > 0 ? Number(receberParam) : null;
+
+  return <PainelReserva key={id} id={id} aba={aba} fluxo={fluxo} receber={receber} aoMudar={mudar} aoFechar={fechar} />;
 }
 
-type PainelProps = { id: string; aba: Aba; fluxo: Fluxo | null; aoMudar: (m: Mudancas) => void; aoFechar: () => void };
+type PainelProps = { id: string; aba: Aba; fluxo: Fluxo | null; receber: number | null; aoMudar: (m: Mudancas) => void; aoFechar: () => void };
 
-function PainelReserva({ id, aba, fluxo, aoMudar, aoFechar }: PainelProps) {
+function PainelReserva({ id, aba, fluxo, receber, aoMudar, aoFechar }: PainelProps) {
   const consulta = useReserva(id);
   const r = consulta.data;
   if (!r) {
@@ -107,7 +111,7 @@ function PainelReserva({ id, aba, fluxo, aoMudar, aoFechar }: PainelProps) {
         </div>
       )}
       <div id="reserva-painel" role={fluxo ? undefined : "tabpanel"} aria-labelledby={fluxo ? undefined : `aba-${aba}`}>
-        <Conteudo reserva={r} aba={aba} fluxo={fluxo} />
+        <Conteudo reserva={r} aba={aba} fluxo={fluxo} receber={receber} />
       </div>
     </Gaveta>
   );

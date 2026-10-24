@@ -15,3 +15,15 @@
 .reserva-pessoa { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; }
 .reserva-pessoa__texto { display: flex; flex-direction: column; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.conta { display: flex; flex-direction: column; gap: 18px; }
+.conta-valor { text-align: right; white-space: nowrap; }
+.conta-valor--credito { color: var(--verde); }
+.conta-valor small { color: var(--texto-suave); }
+.conta-estorno td { font-style: italic; color: var(--texto-suave); }
+.conta-saldo--receber { color: var(--terracota); font-weight: 700; }
+.conta-saldo--credito { color: var(--verde); font-weight: 700; }
+.conta-form { border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 12px; background: var(--superficie); }
+.conta-form h4 { margin: 0 0 4px; }
+.conta-aviso { background: var(--alerta-fundo); border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; }
+.conta-aviso p { margin: 0 0 6px; }
+.conta-aviso a { color: var(--terracota); font-weight: 600; }

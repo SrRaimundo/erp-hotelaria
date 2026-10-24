@@ -109,6 +109,15 @@ describe("tela Mapa", () => {
     expect(screen.getByTestId("local")).toHaveTextContent("/reservas/nova?quarto=q101&chegada=2026-11-24");
   });
 
+  test("abrir outra barra limpa aba, fluxo e receber da reserva anterior", async () => {
+    montar("/mapa?inicio=2026-11-19&reserva=r2&aba=conta&fluxo=checkin&receber=5000");
+    await userEvent.click(await screen.findByRole("button", { name: "Ana Souza · 20/11–23/11 · confirmada" }));
+    const local = screen.getByTestId("local").textContent!;
+    expect(local).toContain("reserva=r1");
+    expect(local).toContain("inicio=2026-11-19");
+    expect(local).not.toMatch(/aba=|fluxo=|receber=/);
+  });
+
   test("células vazias ficam fora da ordem de tabulação; barras continuam tabuláveis", async () => {
     montar();
     const barraAna = await screen.findByRole("button", { name: /Ana Souza/ });
