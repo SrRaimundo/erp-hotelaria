@@ -7,6 +7,7 @@
 .hoje-atencao { background: var(--alerta-fundo); border: 1px solid var(--terracota); border-radius: var(--raio-cartao); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .hoje-atencao h2 { font-size: 1.0625rem; color: var(--terracota); }
 .hoje-atencao__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; }
+.hoje-atencao__item--saida_vencida, .hoje-atencao__item--chegada_atrasada { border-left: 4px solid var(--terracota); }
 .hoje-atencao__acoes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .hoje-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .hoje-secao { display: flex; flex-direction: column; gap: 10px; }

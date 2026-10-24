@@ -194,6 +194,21 @@ describe("painel do dia ampliado", () => {
     expect(p.atencao[3]).toMatchObject({ id: "al2", contaId: atrasada.contaId, reservaId: atrasada.id, acoes: ["abrir_conta", "resolver_alerta"] });
   });
 
+  test("I4: hóspede que passou da data de saída vira item saida_vencida, entre chegada atrasada e alerta", async () => {
+    await salvarHospede(ctx, { id: "h1", nome: "Maria Silva", documentoTipo: "cpf", documento: "529.982.247-25", nascimento: "1990-01-01", nacionalidade: "BR", telefone: "(48) 99812-3344" }, "u1");
+    const atrasada = await reserva({ chegada: "2026-11-09", saida: "2026-11-11" }, "confirmada");
+    const excedida = await reserva({ chegada: "2026-11-05", saida: "2026-11-09", quartoId: q12 }, "hospedada");
+    const hoje = await reserva({ chegada: "2026-11-08", saida: "2026-11-10", categoriaId: lux, quartoId: q13 }, "hospedada"); // sai hoje: não é vencida
+    await ctx.db.insertInto("alertas").values({ id: "al1", tipo: "x", alvo_tipo: "reserva", alvo_id: atrasada.id, mensagem: "Algo errado", criado_em: "2026-11-10T10:00:00Z", resolvido_em: null, resolvido_por: null }).execute();
+    const p = await painelDoDia(ctx);
+    expect(p.atencao.map((a) => a.tipo)).toEqual(["chegada_atrasada", "saida_vencida", "alerta"]);
+    expect(p.atencao[1]).toMatchObject({
+      id: `saida-vencida:${excedida.id}`, titulo: "Saída vencida", reservaId: excedida.id, contaId: null, telefone: "(48) 99812-3344", acoes: ["abrir_reserva"],
+      detalhe: `Reserva #${excedida.codigo} · Maria Silva · saída prevista 09/11, qto 12`,
+    });
+    expect(p.atencao.some((a) => a.reservaId === hoje.id)).toBe(false);
+  });
+
   test("sinal que vence hoje diz só a hora", async () => {
     const pre = await reserva({ chegada: "2026-11-12", saida: "2026-11-14" }, "pre_reserva");
     await ctx.db.updateTable("reservas").set({ valor_sinal: 1000, prazo_sinal: "2026-11-10T20:00:00.000Z" }).where("id", "=", pre.id).execute();

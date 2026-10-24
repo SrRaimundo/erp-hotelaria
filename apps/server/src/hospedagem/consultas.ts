@@ -46,7 +46,7 @@ export type ItemChegada = ItemReserva & {
 export type ItemSaida = ItemReserva & { contaId: string; saldo: Centavos };
 
 export type ItemAtencao = {
-  tipo: "sinal_vencendo" | "chegada_atrasada" | "alerta";
+  tipo: "sinal_vencendo" | "chegada_atrasada" | "saida_vencida" | "alerta";
   id: string;
   titulo: string;
   detalhe: string;
@@ -194,6 +194,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     .orderBy("r.codigo")
     .execute();
   const vencidas = await reservasComTitular(ctx).select([...campos, "h.telefone"]).where("r.estado", "=", "confirmada").where("r.chegada", "<", dia).execute();
+  const excedidas = await reservasComTitular(ctx).select([...campos, "h.telefone"]).where("r.estado", "=", "hospedada").where("r.saida", "<", dia).execute();
   const alertas = await alertasAbertos(ctx);
 
   const situacoes = await ctx.db.selectFrom("quartos").select("situacao").execute();
@@ -259,6 +260,18 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
       contaId: null,
       telefone: v.telefone ?? null,
       acoes: ["marcar_no_show", "abrir_reserva"],
+    });
+  }
+  for (const x of excedidas) {
+    atencao.push({
+      tipo: "saida_vencida",
+      id: `saida-vencida:${x.reservaId}`,
+      titulo: "Saída vencida",
+      detalhe: `Reserva #${x.codigo} · ${x.titular} · saída prevista ${diaMes(x.saida)}, qto ${x.quartoNumero ?? "sem quarto"}`,
+      reservaId: x.reservaId,
+      contaId: null,
+      telefone: x.telefone ?? null,
+      acoes: ["abrir_reserva"],
     });
   }
   for (const a of alertas) {

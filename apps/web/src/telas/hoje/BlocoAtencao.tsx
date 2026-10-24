@@ -65,7 +65,7 @@ export function BlocoAtencao({ itens, aoAbrir }: Props) {
       <ErroAcao erro={resolver.error} />
       <ul className="hoje-lista">
         {itens.map((item) => (
-          <li key={item.id} className="hoje-atencao__item">
+          <li key={item.id} className={`hoje-atencao__item hoje-atencao__item--${item.tipo}`}>
             <div className="hoje-linha__texto">
               <strong>{item.titulo}</strong>
               {item.detalhe && <span className="hoje-suave">{item.detalhe}</span>}

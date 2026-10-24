@@ -123,7 +123,7 @@ describe("tela Hoje", () => {
     expect(screen.getByTestId("local")).toHaveTextContent("/?reserva=r7");
   });
 
-  test("chegada sem quarto oferece Escolher quarto; FNRH pendente tem prioridade na etiqueta", async () => {
+  test("chegada sem quarto oferece Escolher quarto; FNRH pendente aparece com o sinal pendente", async () => {
     const u = userEvent.setup();
     montar();
     const lista = (await screen.findByRole("heading", { name: "Chegadas de hoje" })).closest("section")!;
@@ -131,7 +131,8 @@ describe("tela Hoje", () => {
     expect(within(lista).getByText("sinal pago")).toBeInTheDocument();
     expect(within(lista).getByText("sem quarto")).toBeInTheDocument();
     expect(within(lista).getByText("FNRH pendente")).toBeInTheDocument();
-    expect(within(lista).queryByText("aguardando sinal")).not.toBeInTheDocument();
+    // r3 tem FNRH pendente e sinal pendente: as duas etiquetas aparecem
+    expect(within(lista).getByText("aguardando sinal")).toBeInTheDocument();
     const botoes = within(lista).getAllByRole("button");
     expect(botoes.map((b) => b.textContent)).toEqual(["Check-in", "Escolher quarto", "Check-in"]);
     await u.click(botoes[1]!);
@@ -233,5 +234,37 @@ describe("tela Hoje", () => {
     await u.click(botao);
     expect(screen.getByRole("button", { name: "Resolver alerta" })).toBeDisabled();
     await act(async () => liberar());
+  });
+
+  test("I5: chegada em pré-reserva oferece Registrar sinal (não Check-in) e abre a conta com o valor", async () => {
+    const u = userEvent.setup();
+    const p = criarPainel();
+    p.chegadas = [{ ...p.chegadas[0]!, estado: "pre_reserva", reservaId: "r11", titular: "Ivo", sinalPendente: 27000, pendenciasFnrh: false }];
+    montar(p);
+    const lista = (await screen.findByRole("heading", { name: "Chegadas de hoje" })).closest("section")!;
+    expect(within(lista).queryByRole("button", { name: "Check-in" })).not.toBeInTheDocument();
+    await u.click(within(lista).getByRole("button", { name: "Registrar sinal" }));
+    expect(screen.getByTestId("local")).toHaveTextContent("/?reserva=r11&aba=conta&receber=27000");
+  });
+
+  test("I5: FNRH pendente e sinal pendente mostram as duas etiquetas", async () => {
+    const p = criarPainel();
+    p.chegadas = [{ ...p.chegadas[0]!, estado: "pre_reserva", sinalPendente: 5000, pendenciasFnrh: true }];
+    montar(p);
+    const lista = (await screen.findByRole("heading", { name: "Chegadas de hoje" })).closest("section")!;
+    expect(within(lista).getByText("FNRH pendente")).toBeInTheDocument();
+    expect(within(lista).getByText("aguardando sinal")).toBeInTheDocument();
+  });
+
+  test("I4: saída vencida aparece na atenção com o detalhe e abre a reserva", async () => {
+    const u = userEvent.setup();
+    const p = criarPainel();
+    p.atencao = [{ tipo: "saida_vencida", id: "saida-vencida:r12", titulo: "Saída vencida", detalhe: "Reserva #12 · Jão · saída prevista 18/11, qto 204", reservaId: "r12", contaId: null, telefone: null, acoes: ["abrir_reserva"] }];
+    const { container } = montar(p);
+    expect(await screen.findByText("Saída vencida")).toBeInTheDocument();
+    expect(screen.getByText("Reserva #12 · Jão · saída prevista 18/11, qto 204")).toBeInTheDocument();
+    expect(container.querySelector(".hoje-atencao__item--saida_vencida")).not.toBeNull();
+    await u.click(screen.getByRole("button", { name: "Abrir reserva" }));
+    expect(screen.getByTestId("local")).toHaveTextContent("/?reserva=r12");
   });
 });

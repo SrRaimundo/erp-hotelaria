@@ -5,14 +5,23 @@ import { LinhaReserva } from "./LinhaReserva";
 import { SecaoHoje } from "./SecaoHoje";
 
 type Chegada = Painel["chegadas"][number];
-type Props = { chegadas: Chegada[]; horaCheckin?: string; aoAbrir: (reservaId: string) => void };
+type Props = {
+  chegadas: Chegada[];
+  horaCheckin?: string;
+  /** Recebe a consulta da URL (ex.: `reserva=r1&fluxo=checkin`). */
+  aoAbrir: (consulta: string) => void;
+};
 
-function etiquetaDe(c: Chegada): { texto: string; tom: "verde" | "terracota" | "amarelo" } {
-  if (c.estado === "hospedada") return { texto: "hospedada", tom: "verde" };
-  if (c.pendenciasFnrh) return { texto: "FNRH pendente", tom: "amarelo" };
-  if (c.quartoNumero === null) return { texto: "sem quarto", tom: "amarelo" };
-  if (c.sinalPendente > 0) return { texto: "aguardando sinal", tom: "terracota" };
-  return { texto: "sinal pago", tom: "verde" };
+type Marca = { texto: string; tom: "verde" | "terracota" | "amarelo" };
+
+function etiquetasDe(c: Chegada): Marca[] {
+  if (c.estado === "hospedada") return [{ texto: "hospedada", tom: "verde" }];
+  const sinal: Marca = { texto: "aguardando sinal", tom: "terracota" };
+  // FNRH e sinal são pendências independentes: quando as duas existem, mostra as duas.
+  if (c.pendenciasFnrh) return [{ texto: "FNRH pendente", tom: "amarelo" }, ...(c.sinalPendente > 0 ? [sinal] : [])];
+  if (c.quartoNumero === null) return [{ texto: "sem quarto", tom: "amarelo" }];
+  if (c.sinalPendente > 0) return [sinal];
+  return [{ texto: "sinal pago", tom: "verde" }];
 }
 
 function plural(n: number, singular: string, pluralTxt: string): string {
@@ -32,17 +41,28 @@ export function ListaChegadas({ chegadas, horaCheckin, aoAbrir }: Props) {
       ) : (
         <ul className="hoje-lista">
           {chegadas.map((c) => {
-            const e = etiquetaDe(c);
+            const reserva = encodeURIComponent(c.reservaId);
             return (
               <LinhaReserva
                 key={c.reservaId}
                 quarto={c.quartoNumero}
                 titulo={c.titular}
                 detalhe={detalheDe(c)}
-                etiqueta={<Etiqueta tom={e.tom}>{e.texto}</Etiqueta>}
+                etiqueta={
+                  <>
+                    {etiquetasDe(c).map((e) => (
+                      <Etiqueta key={e.texto} tom={e.tom}>{e.texto}</Etiqueta>
+                    ))}
+                  </>
+                }
                 acao={
-                  c.estado === "hospedada" ? undefined : (
-                    <Botao tamanho="pequeno" onClick={() => aoAbrir(c.reservaId)}>
+                  c.estado === "hospedada" ? undefined : c.estado === "pre_reserva" ? (
+                    // Pré-reserva ainda não pode fazer check-in: o próximo passo é receber o sinal.
+                    <Botao tamanho="pequeno" onClick={() => aoAbrir(`reserva=${reserva}&aba=conta&receber=${c.sinalPendente}`)}>
+                      Registrar sinal
+                    </Botao>
+                  ) : (
+                    <Botao tamanho="pequeno" onClick={() => aoAbrir(`reserva=${reserva}&fluxo=checkin`)}>
                       {c.quartoNumero === null ? "Escolher quarto" : "Check-in"}
                     </Botao>
                   )

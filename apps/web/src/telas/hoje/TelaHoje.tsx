@@ -67,7 +67,7 @@ export function TelaHoje() {
       </div>
       <BlocoAtencao itens={p.atencao} aoAbrir={abrir} />
       <div className="hoje-grade">
-        <ListaChegadas chegadas={p.chegadas} horaCheckin={config.data?.horaCheckin} aoAbrir={(id) => abrir(reserva(id, "&fluxo=checkin"))} />
+        <ListaChegadas chegadas={p.chegadas} horaCheckin={config.data?.horaCheckin} aoAbrir={abrir} />
         <ListaSaidas saidas={p.saidas} horaCheckout={config.data?.horaCheckout} aoAbrir={(id) => abrir(reserva(id, "&fluxo=checkout"))} />
         <BlocoGovernanca governanca={p.governanca} />
         <ProximosDias dias={p.proximosDias} />
