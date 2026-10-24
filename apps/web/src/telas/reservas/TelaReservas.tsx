@@ -61,7 +61,7 @@ export function TelaReservas() {
     const novos = estados.includes(e) ? estados.filter((x) => x !== e) : ORDEM_ESTADOS.filter((x) => estados.includes(x) || x === e);
     mudar({ estado: novos.join(",") });
   };
-  const abrir = (id: string) => mudar({ reserva: id }, true);
+  const abrir = (id: string) => mudar({ reserva: id, aba: undefined, fluxo: undefined, receber: undefined }, true);
 
   const total = lista.data?.total ?? 0;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
@@ -103,7 +103,8 @@ export function TelaReservas() {
       </div>
 
       {lista.isError && <ErroAcao erro={lista.error} />}
-      {!pronto || (lista.isPending && !lista.isError) ? (
+      {painel.isError && !dia && <ErroAcao erro={painel.error} />}
+      {painel.isError && !dia ? null : !pronto || (lista.isPending && !lista.isError) ? (
         <p>Carregando…</p>
       ) : lista.data && lista.data.itens.length === 0 ? (
         <p className="reservas-suave">Nenhuma reserva encontrada.</p>

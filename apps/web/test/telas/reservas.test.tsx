@@ -149,6 +149,28 @@ describe("tela Reservas", () => {
     expect(screen.getByTestId("local")).toHaveTextContent(/reserva=r2/);
   });
 
+  test("abrir outra reserva descarta aba, fluxo e receber e mantém os filtros", async () => {
+    const u = userEvent.setup();
+    montar({ itens: [item(1), item(2)], total: 2 }, "/reservas?reserva=r1&aba=conta&fluxo=checkout&receber=5000&canal=Booking");
+    await u.click(await screen.findByText("Hóspede 2"));
+    const url = new URL(screen.getByTestId("local").textContent!, "http://localhost");
+    expect(url.searchParams.get("reserva")).toBe("r2");
+    expect(url.searchParams.has("aba")).toBe(false);
+    expect(url.searchParams.has("fluxo")).toBe(false);
+    expect(url.searchParams.has("receber")).toBe(false);
+    expect(url.searchParams.get("canal")).toBe("Booking");
+  });
+
+  test("falha ao carregar o painel mostra o erro em vez de carregar para sempre", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": { __status: 500, codigo: "X", mensagem: "Painel indisponível." },
+      "GET /api/tarifas/canais": [],
+    });
+    renderizar(<TelaReservas />, { rota: "/reservas" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Painel indisponível.");
+    expect(screen.queryByText("Carregando…")).not.toBeInTheDocument();
+  });
+
   test("sem resultados mostra a mensagem vazia", async () => {
     montar({ itens: [], total: 0 });
     expect(await screen.findByText("Nenhuma reserva encontrada.")).toBeInTheDocument();

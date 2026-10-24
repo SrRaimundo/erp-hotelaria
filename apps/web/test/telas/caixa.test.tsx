@@ -22,8 +22,8 @@ const resumo: ResumoCaixa = {
   turno: { id: "t1", usuarioId: "u1", abertoEm: ABERTO_EM, valorInicial: 10000, fechadoEm: null },
   movimentos: [
     { forma: "dinheiro", valor: 5000, origemTipo: "pagamento", instante: "2026-11-20T13:00:00.000Z" },
-    { forma: "pix", valor: -2000, origemTipo: "estorno", instante: "2026-11-20T14:15:00.000Z" },
-    { forma: "pix", valor: 7000, origemTipo: "ajuste", instante: "2026-11-20T15:00:00.000Z" },
+    { forma: "pix", valor: -2000, origemTipo: "pagamento", instante: "2026-11-20T14:15:00.000Z" },
+    { forma: "pix", valor: 7000, origemTipo: "pagamento", instante: "2026-11-20T15:00:00.000Z" },
   ],
   esperadoPorForma: { dinheiro: 15000, pix: 5000 },
 };
@@ -86,7 +86,7 @@ describe("tela Caixa", () => {
     expect(l1.getByText("R$ 50,00")).toBeInTheDocument();
     expect(within(linhas[2]!).getByText("Estorno")).toBeInTheDocument();
     expect(within(linhas[2]!).getByText("−R$ 20,00")).toBeInTheDocument();
-    expect(within(linhas[3]!).getByText("ajuste")).toBeInTheDocument();
+    expect(within(linhas[3]!).getByText("Pagamento")).toBeInTheDocument();
     const esperado = within(screen.getByRole("list", { name: "Esperado por forma" }));
     expect(esperado.getByText("Dinheiro")).toBeInTheDocument();
     expect(esperado.getByText("R$ 150,00")).toBeInTheDocument();

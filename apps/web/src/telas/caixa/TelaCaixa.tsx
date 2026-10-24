@@ -11,8 +11,9 @@ import "./caixa.css";
 
 type Relatorio = { porForma: { forma: string; esperado: number; contado: number; diferenca: number }[] };
 
-const ORIGENS: Record<string, string> = { pagamento: "Pagamento", estorno: "Estorno" };
-const origemAmigavel = (o: string) => ORIGENS[o] ?? o;
+const ORIGENS: Record<string, string> = { pagamento: "Pagamento" };
+/** O servidor emite `pagamento`; estorno é um pagamento com valor negativo. */
+const origemAmigavel = (o: string, valor: number) => (o === "pagamento" && valor < 0 ? "Estorno" : (ORIGENS[o] ?? o));
 
 /** Hora local do navegador (HH:MM) de um instante ISO. */
 function horaLocal(iso: string): string {
@@ -45,10 +46,11 @@ function AbrirCaixa() {
   );
 }
 
-function FormularioFechamento({ resumo, nome, aoFechar, aoCancelar }: { resumo: ResumoCaixa; nome: (c: string) => string; aoFechar: (r: Relatorio) => void; aoCancelar: () => void }) {
+type Fechamento = { mutateAsync: (c: Record<string, number>) => Promise<Relatorio>; isPending: boolean; error: Error | null };
+
+function FormularioFechamento({ resumo, nome, fechar, aoCancelar }: { resumo: ResumoCaixa; nome: (c: string) => string; fechar: Fechamento; aoCancelar: () => void }) {
   const formas = Object.keys(resumo.esperadoPorForma);
   const [contados, setContados] = useState<Record<string, number | null>>({});
-  const fechar = useAcao((c: Record<string, number>) => chamarApi<Relatorio>("POST", "/api/caixa/fechar", { contados: c }));
   const completo = formas.every((f) => contados[f] !== undefined && contados[f] !== null);
   return (
     <Cartao className="caixa-bloco">
@@ -59,7 +61,7 @@ function FormularioFechamento({ resumo, nome, aoFechar, aoCancelar }: { resumo: 
           e.preventDefault();
           if (!completo) return;
           const enviar = Object.fromEntries(formas.map((f) => [f, contados[f] as number]));
-          fechar.mutate(enviar, { onSuccess: aoFechar });
+          fechar.mutateAsync(enviar).catch(() => {}); // o erro aparece pelo estado da mutação
         }}
       >
         {formas.map((f) => (
@@ -120,12 +122,18 @@ export function TelaCaixa() {
   const [fechando, setFechando] = useState(false);
   // O relatório fica aqui porque, ao fechar, a consulta do caixa passa a vir vazia.
   const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
+  // A mutação vive aqui: o refetch pós-fechamento desmonta o formulário, e o relatório não pode depender dele.
+  const fechar = useAcao(async (c: Record<string, number>) => {
+    const rel = await chamarApi<Relatorio>("POST", "/api/caixa/fechar", { contados: c });
+    setRelatorio(rel);
+    return rel;
+  });
 
   const nome = (codigo: string) => formas.data?.find((f) => f.codigo === codigo)?.nome ?? codigo;
 
   let corpo;
   if (relatorio) {
-    corpo = <RelatorioFechamento relatorio={relatorio} nome={nome} aoConcluir={() => setRelatorio(null)} />;
+    corpo = <RelatorioFechamento relatorio={relatorio} nome={nome} aoConcluir={() => { setRelatorio(null); setFechando(false); }} />;
   } else if (caixa.data === undefined) {
     corpo = caixa.isError ? <ErroAcao erro={caixa.error} /> : <p>Carregando…</p>;
   } else if (caixa.data === null) {
@@ -153,7 +161,7 @@ export function TelaCaixa() {
                 {r.movimentos.map((m, i) => (
                   <tr key={i}>
                     <td>{horaLocal(m.instante)}</td>
-                    <td>{origemAmigavel(m.origemTipo)}</td>
+                    <td>{origemAmigavel(m.origemTipo, m.valor)}</td>
                     <td>{nome(m.forma)}</td>
                     <td className="caixa-num">{formatarReais(m.valor)}</td>
                   </tr>
@@ -178,10 +186,7 @@ export function TelaCaixa() {
             resumo={r}
             nome={nome}
             aoCancelar={() => setFechando(false)}
-            aoFechar={(rel) => {
-              setFechando(false);
-              setRelatorio(rel);
-            }}
+            fechar={fechar}
           />
         ) : (
           <div>
