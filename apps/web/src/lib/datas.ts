@@ -23,3 +23,15 @@ export function diasEntre(a: string, b: string): number {
 export function nomeDiaSemana(d: string): string {
   return DIAS[new Date(emUtc(d)).getUTCDay()]!;
 }
+
+const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** "2026-11-20" -> "Sex". */
+export function nomeDiaCurto(d: string): string {
+  return DIAS_CURTOS[new Date(emUtc(d)).getUTCDay()]!;
+}
+
+export function ehFimDeSemana(d: string): boolean {
+  const s = new Date(emUtc(d)).getUTCDay();
+  return s === 0 || s === 6;
+}

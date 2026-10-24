@@ -133,20 +133,20 @@ describe("login e sessão", () => {
   test("sessão expirada volta ao login e retorna à rota anterior", async () => {
     instalarApiFalsa({ ...painelVazio, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
     const u = userEvent.setup();
-    telaCompleta("/mapa", false);
-    expect(await screen.findByRole("heading", { name: "Mapa" })).toBeInTheDocument();
+    telaCompleta("/caixa", false);
+    expect(await screen.findByRole("heading", { name: "Caixa" })).toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new Event("erp:sessao-expirada"));
     });
     expect(await screen.findByRole("button", { name: "Entrar" })).toBeInTheDocument();
-    expect(screen.getByTestId("local")).toHaveTextContent("/login?voltar=%2Fmapa");
+    expect(screen.getByTestId("local")).toHaveTextContent("/login?voltar=%2Fcaixa");
     expect(localStorage.getItem("erp.token")).toBeNull();
     expect(localStorage.getItem("erp.usuario")).toBeNull();
 
     await preencherLogin(u);
-    expect(await screen.findByRole("heading", { name: "Mapa" })).toBeInTheDocument();
-    expect(screen.getByTestId("local")).toHaveTextContent(/^\/mapa$/);
+    expect(await screen.findByRole("heading", { name: "Caixa" })).toBeInTheDocument();
+    expect(screen.getByTestId("local")).toHaveTextContent(/^\/caixa$/);
   });
 
   test("sem sessão, rota protegida redireciona para o login com voltar", async () => {
@@ -173,7 +173,7 @@ describe("login e sessão", () => {
         <BotaoSair />
         <Sonda />
       </>,
-      { rota: "/mapa" },
+      { rota: "/caixa" },
     );
     await u.click(screen.getByRole("button", { name: "Sair sem x" }));
     await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/login"));

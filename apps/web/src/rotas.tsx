@@ -4,6 +4,7 @@ import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
+import { TelaMapa } from "./telas/mapa/TelaMapa";
 
 const Provisoria = ({ titulo }: { titulo: string }) => <h1>{titulo}</h1>;
 
@@ -15,7 +16,7 @@ export function AppRotas() {
       <Route element={<RotaProtegida />}>
         <Route element={<Shell />}>
           <Route index element={<TelaHoje />} />
-          <Route path="/mapa" element={<Provisoria titulo="Mapa" />} />
+          <Route path="/mapa" element={<TelaMapa />} />
           <Route path="/reservas" element={<Provisoria titulo="Reservas" />} />
           <Route path="/reservas/nova" element={<Provisoria titulo="Nova reserva" />} />
           <Route path="/caixa" element={<Provisoria titulo="Caixa" />} />

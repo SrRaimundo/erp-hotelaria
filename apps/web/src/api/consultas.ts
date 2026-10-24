@@ -1,7 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
 import { useConexao } from "./useConexao";
-import type { ItemListaReserva, LinhaExtrato, Mapa, Painel, ReservaDetalhe, ResultadoBusca } from "./tipos";
+import type { Categoria, ItemListaReserva, LinhaExtrato, Mapa, Painel, ReservaDetalhe, ResultadoBusca } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
   return new QueryClient({
@@ -50,6 +50,10 @@ export const useMapa = (p: ParamsMapa) =>
     queryKey: ["mapa", p.inicio, p.fim, p.categoriaId],
     queryFn: () => chamarApi<Mapa>("GET", `/api/mapa${consulta({ inicio: p.inicio, fim: p.fim, categoriaId: p.categoriaId })}`),
   });
+
+/** Categorias (id -> nome) para cruzar com o mapa, cujos quartos trazem só o nome. */
+export const useCategorias = () =>
+  useQuery({ queryKey: ["categorias"], queryFn: () => chamarApi<Categoria[]>("GET", "/api/categorias"), staleTime: 300_000 });
 
 export const useReserva = (id: string) =>
   useQuery({ queryKey: ["reserva", id], queryFn: () => chamarApi<ReservaDetalhe>("GET", `/api/reservas/${encodeURIComponent(id)}`) });
