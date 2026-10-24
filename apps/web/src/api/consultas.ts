@@ -41,6 +41,10 @@ export function usePainel(ativo = true) {
   });
 }
 
+/** Horários de check-in/check-out; quem não tem permissão de ler a configuração recebe erro e a tela omite os horários. */
+export const useConfigHorarios = () =>
+  useQuery({ queryKey: ["config"], queryFn: () => chamarApi<{ horaCheckin: string; horaCheckout: string }>("GET", "/api/config"), staleTime: 300_000 });
+
 export const useMapa = (p: ParamsMapa) =>
   useQuery({
     queryKey: ["mapa", p.inicio, p.fim, p.categoriaId],

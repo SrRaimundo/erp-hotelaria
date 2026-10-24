@@ -53,6 +53,8 @@ export type ItemAtencao = {
   reservaId: string | null;
   contaId: string | null;
   telefone: string | null;
+  /** Quanto falta do sinal (só em sinal_vencendo). */
+  sinalPendente?: Centavos;
   acoes: ("registrar_sinal" | "prorrogar_sinal" | "marcar_no_show" | "abrir_reserva" | "abrir_conta" | "resolver_alerta")[];
 };
 
@@ -243,6 +245,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
       reservaId: s.reservaId,
       contaId: null,
       telefone: s.telefone ?? null,
+      sinalPendente: faltam,
       acoes: ["registrar_sinal", "prorrogar_sinal"],
     });
   }

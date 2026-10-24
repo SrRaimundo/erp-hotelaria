@@ -1,0 +1,27 @@
+.hoje { display: flex; flex-direction: column; gap: 16px; }
+.hoje h1 { font-size: 1.5rem; }
+.hoje-suave { color: var(--texto-suave); font-size: 0.875rem; }
+.hoje-numeros { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.hoje-numero { display: flex; flex-direction: column; gap: 2px; }
+.hoje-numero__valor { font-size: 2rem; line-height: 1.1; }
+.hoje-atencao { background: var(--alerta-fundo); border: 1px solid var(--terracota); border-radius: var(--raio-cartao); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.hoje-atencao h2 { font-size: 1.0625rem; color: var(--terracota); }
+.hoje-atencao__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; }
+.hoje-atencao__acoes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.hoje-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.hoje-secao { display: flex; flex-direction: column; gap: 10px; }
+.hoje-secao__cabecalho { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hoje-secao__cabecalho h2 { font-size: 1.0625rem; }
+.hoje-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hoje-linha { display: flex; align-items: center; gap: 10px; }
+.hoje-linha__texto { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.hoje-linha__quarto { min-width: 40px; text-align: center; background: var(--borda); border-radius: var(--raio-controle); padding: 4px 8px; font-weight: 700; }
+.hoje-pilulas { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hoje-pilula { border-radius: 999px; padding: 4px 12px; font-size: 0.875rem; font-weight: 600; }
+.hoje-pilula--sujo { background: color-mix(in srgb, var(--terracota) 22%, var(--superficie)); color: var(--texto); }
+.hoje-pilula--neutro { background: var(--borda); color: var(--texto); }
+@media (max-width: 899px) {
+  .hoje-numeros { grid-template-columns: repeat(2, 1fr); }
+  .hoje-grade { grid-template-columns: 1fr; }
+  .hoje-atencao__item { flex-direction: column; align-items: flex-start; }
+}

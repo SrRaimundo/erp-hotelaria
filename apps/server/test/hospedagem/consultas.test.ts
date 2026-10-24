@@ -183,7 +183,7 @@ describe("painel do dia ampliado", () => {
     const p = await painelDoDia(ctx);
     expect(p.atencao.map((a) => a.tipo)).toEqual(["sinal_vencendo", "chegada_atrasada", "alerta", "alerta"]);
     expect(p.atencao[0]).toMatchObject({
-      id: `sinal:${pre.id}`, titulo: "Sinal vence amanhã às 07:00", reservaId: pre.id, acoes: ["registrar_sinal", "prorrogar_sinal"],
+      id: `sinal:${pre.id}`, titulo: "Sinal vence amanhã às 07:00", reservaId: pre.id, sinalPendente: 27000, acoes: ["registrar_sinal", "prorrogar_sinal"],
       detalhe: `Reserva #${pre.codigo} · Maria Silva · 12/11–14/11 · faltam R$ 270,00`,
     });
     expect(p.atencao[1]).toMatchObject({
