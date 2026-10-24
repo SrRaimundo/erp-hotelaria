@@ -37,3 +37,9 @@
 .checkin-achados { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .checkin-ok { background: var(--alerta-fundo); border: 1px solid var(--verde); color: var(--verde); font-weight: 700; border-radius: var(--raio-controle); padding: 12px; }
 .campo__erro { color: var(--terracota); font-size: 0.9375rem; }
+.checkout-extrato { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.checkout-extrato li, .checkout-devido { display: flex; justify-content: space-between; gap: 12px; margin: 0; }
+.checkout-linha { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.checkout-restante { margin: 0; font-weight: 700; font-size: 1.0625rem; }
+.checkout-restante--pendente { color: var(--terracota); }
+.checkout-restante--ok { color: var(--verde); }

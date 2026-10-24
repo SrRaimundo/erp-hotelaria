@@ -12,3 +12,4 @@ export type { Produto } from "@server/nucleo/produtos";
 export type { ResumoCaixa } from "@server/nucleo/caixa";
 
 export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknown; campos?: { campo: string; mensagem: string }[] };
+export type { PreviaCheckout } from "@server/hospedagem/checkout";

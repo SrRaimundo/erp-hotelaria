@@ -32,6 +32,8 @@ function montar(reserva: ReservaDetalhe, rota = "/mapa?reserva=r1", extras: Reco
     // O fluxo de check-in (checkin.test.tsx) consulta estas rotas quando a URL o abre.
     "GET /api/reservas/r1/quartos-sugeridos": [],
     "GET /api/categorias": [],
+    // O fluxo de check-out (checkout.test.tsx) consulta a prévia quando a URL o abre.
+    "GET /api/reservas/r1/checkout": { extrato: [], saldo: 0, saidaAntecipada: false },
     ...extras,
   });
   return renderizar(
@@ -136,7 +138,7 @@ describe("painel da reserva", () => {
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 
-  test("fluxo=checkout mostra o marcador no lugar das abas", async () => {
+  test("fluxo=checkout mostra o fluxo no lugar das abas", async () => {
     montar(criarReserva(), "/mapa?reserva=r1&fluxo=checkout");
     expect(await screen.findByRole("heading", { name: "Check-out" })).toBeInTheDocument();
   });

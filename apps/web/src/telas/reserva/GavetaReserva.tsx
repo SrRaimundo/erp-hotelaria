@@ -10,6 +10,7 @@ import { AbaHospedes } from "./AbaHospedes";
 import { AbaResumo } from "./AbaResumo";
 import { AcoesReserva } from "./AcoesReserva";
 import { FluxoCheckin } from "./FluxoCheckin";
+import { FluxoCheckout } from "./FluxoCheckout";
 import "./reserva.css";
 
 type Aba = "resumo" | "conta" | "hospedes";
@@ -38,7 +39,7 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 /** Ponto único de troca: as Tarefas 11, 12 e 13 substituem estes marcadores pelas telas reais. */
 function Conteudo({ reserva, aba, fluxo, receber, aoReceber, aoMudar }: { reserva: ReservaDetalhe; aba: Aba; fluxo: Fluxo | null; receber: number | null; aoReceber: () => void; aoMudar: (m: Mudancas) => void }) {
   if (fluxo === "checkin") return <FluxoCheckin reserva={reserva} aoMudarUrl={aoMudar} />;
-  if (fluxo === "checkout") return <h3>Check-out</h3>;
+  if (fluxo === "checkout") return <FluxoCheckout reserva={reserva} aoMudarUrl={aoMudar} />;
   if (aba === "conta") return <AbaConta reserva={reserva} receberInicial={receber} aoReceber={aoReceber} />;
   if (aba === "hospedes") return <AbaHospedes reserva={reserva} />;
   return <AbaResumo reserva={reserva} />;
