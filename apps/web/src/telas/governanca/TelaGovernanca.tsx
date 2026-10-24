@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useGovernanca, useAcao } from "../../api/consultas";
 import { chamarApi } from "../../api/cliente";
 import type { ItemGovernanca } from "../../api/tipos";
@@ -6,6 +6,7 @@ import { useSessao } from "../../auth/SessaoProvider";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { Janela } from "../../componentes/Janela";
+import { useEsc } from "../../componentes/useEsc";
 import { formatarData } from "../../lib/datas";
 import "./governanca.css";
 
@@ -38,6 +39,18 @@ export function TelaGovernanca() {
   const [motivo, setMotivo] = useState<{ quarto: ItemGovernanca; acao: AcaoMotivo } | null>(null);
   const podeManutencao = pode("quartos.manutencao");
 
+  useEsc(menu !== null, () => setMenu(null));
+  useEffect(() => {
+    if (menu === null) return;
+    // Clique fora do menu e do seu botão ⋯ fecha; o botão cuida do próprio abre/fecha.
+    const fora = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest(".governanca__menu, .governanca__menu-botao")) return;
+      setMenu(null);
+    };
+    document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, [menu]);
+
   return (
     <div className="governanca">
       <h1>Governança</h1>
@@ -45,6 +58,7 @@ export function TelaGovernanca() {
       <ul className="governanca__grade">
         {(governanca.data ?? []).map((q) => {
           const opcoes = podeManutencao ? transicoes(q.situacao) : [];
+          const comMenu = opcoes.length > 0 ? " governanca__cartao--com-menu" : "";
           const conteudo = (
             <>
               <span className="governanca__numero">{q.numero}</span>
@@ -55,11 +69,11 @@ export function TelaGovernanca() {
           return (
             <li key={q.quartoId} className="governanca__item">
               {q.situacao === "sujo" ? (
-                <button type="button" className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}`} onClick={() => setLimpando(q)}>
+                <button type="button" className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}${comMenu}`} onClick={() => setLimpando(q)}>
                   {conteudo}
                 </button>
               ) : (
-                <div className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}`}>{conteudo}</div>
+                <div className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}${comMenu}`}>{conteudo}</div>
               )}
               {opcoes.length > 0 && (
                 <>

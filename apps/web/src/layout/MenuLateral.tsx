@@ -12,11 +12,15 @@ const ITENS = [
 
 export function MenuLateral({ atencao }: { atencao: number }) {
   const { usuario, pode, sair } = useSessao();
+  const visiveis = ITENS.filter((i) => pode(i.permissao));
+  // Com um único destino (ex.: governança) o menu não tem o que oferecer: ficam só o nome e o Sair.
+  const simples = visiveis.length <= 1;
   return (
-    <aside className="menu">
+    <aside className={simples ? "menu menu--simples" : "menu"}>
       <div className="menu__marca">Pousada</div>
+      {!simples && (
       <nav aria-label="Menu principal" className="menu__itens">
-        {ITENS.filter((i) => pode(i.permissao)).map((i) => (
+        {visiveis.map((i) => (
           <NavLink key={i.para} to={i.para} end={i.para === "/"} className="menu__item">
             {i.rotulo}
             {i.para === "/" && atencao > 0 && (
@@ -27,6 +31,7 @@ export function MenuLateral({ atencao }: { atencao: number }) {
           </NavLink>
         ))}
       </nav>
+      )}
       <div className="menu__rodape">
         <strong>{usuario?.nome}</strong>
         <span>{usuario?.perfil}</span>

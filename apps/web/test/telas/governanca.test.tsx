@@ -77,4 +77,39 @@ describe("governança", () => {
     await waitFor(() => expect(chamadas.find((c) => c.metodo === "POST")?.corpo).toEqual({ motivo: "Ar-condicionado" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  test("I3: o menu das ações fecha com Esc", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/governanca": lista });
+    renderizar(<TelaGovernanca />, gerente);
+    await screen.findByText("103");
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 101" }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await u.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  test("I3: o menu das ações fecha ao clicar fora, mas não ao clicar no próprio menu", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/governanca": lista });
+    renderizar(<TelaGovernanca />, gerente);
+    await screen.findByText("103");
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 101" }));
+    await u.click(screen.getByRole("heading", { name: "Governança" }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 101" }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 101" }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  test("I3: só os cartões com botão ⋯ reservam espaço à direita", async () => {
+    instalarApiFalsa({ "GET /api/governanca": lista });
+    const { container } = renderizar(<TelaGovernanca />, gerente);
+    await screen.findByText("103");
+    // 101 (livre), 103 (sujo) e 104 (bloqueado) têm menu; 102 (ocupado) não.
+    const comMenu = Array.from(container.querySelectorAll(".governanca__cartao--com-menu")).map((e) => e.textContent);
+    expect(comMenu.some((t) => t?.includes("102"))).toBe(false);
+    expect(comMenu).toHaveLength(3);
+  });
 });

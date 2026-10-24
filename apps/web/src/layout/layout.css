@@ -21,3 +21,20 @@
 .topo__conexao::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-right: 6px; }
 
 .faixa-conexao { background: var(--alerta-fundo); color: var(--terracota); border-bottom: 1px solid var(--terracota); padding: 8px 20px; font-weight: 600; }
+
+/* Celular: o menu lateral vira uma barra no topo e o conteúdo usa a largura toda. */
+@media (max-width: 599px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell__conteudo { padding: 12px; }
+  .menu { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; }
+  .menu__marca { padding: 0; }
+  .menu__itens { order: 3; flex: 1 0 100%; flex-direction: row; gap: 4px; overflow-x: auto; }
+  .menu__item { flex: none; gap: 6px; padding: 8px 12px; white-space: nowrap; }
+  .menu__rodape { margin-left: auto; flex-direction: row; align-items: center; gap: 8px; padding: 0; }
+  .menu__rodape span { display: none; }
+  .menu__rodape .botao--contorno { margin-top: 0; }
+  .menu--simples .menu__rodape { flex: 1; }
+  .topo { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .topo__busca { min-width: 0; }
+  .faixa-conexao { padding: 8px 12px; }
+}

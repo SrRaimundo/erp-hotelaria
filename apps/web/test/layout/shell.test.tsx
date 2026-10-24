@@ -27,9 +27,10 @@ describe("casca", () => {
   test("menu mostra só o que o perfil permite", async () => {
     instalarApiFalsa({ "GET /api/governanca": [] });
     renderizar(<AppRotas />, { rota: "/governanca", usuario: { nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] } });
-    const menu = screen.getByRole("navigation", { name: "Menu principal" });
-    const links = Array.from(menu.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Governança"]);
+    // Com um único item visível o menu some: ficam só o nome e o Sair.
+    expect(screen.queryByRole("navigation", { name: "Menu principal" })).not.toBeInTheDocument();
+    expect(screen.getByText("Gil")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+ Nova reserva" })).not.toBeInTheDocument();
   });
 

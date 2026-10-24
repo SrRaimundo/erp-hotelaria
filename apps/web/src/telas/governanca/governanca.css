@@ -1,8 +1,10 @@
 .governanca { display: flex; flex-direction: column; gap: 16px; }
 .governanca h1 { font-size: 1.5rem; }
-.governanca__grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.governanca__grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .governanca__item { position: relative; }
-.governanca__cartao { width: 100%; min-height: 72px; height: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 12px 44px 12px 14px; border: 1px solid var(--borda); border-radius: var(--raio-cartao); color: var(--texto); font: inherit; text-align: left; }
+.governanca__cartao { width: 100%; min-height: 72px; height: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 12px 14px; border: 1px solid var(--borda); border-radius: var(--raio-cartao); color: var(--texto); font: inherit; text-align: left; }
+/* Só reserva espaço à direita quando o botão ⋯ existe. */
+.governanca__cartao--com-menu { padding-right: 52px; }
 button.governanca__cartao { cursor: pointer; }
 .governanca__cartao--sujo { background: color-mix(in srgb, var(--terracota) 22%, var(--superficie)); border-color: var(--terracota); }
 .governanca__cartao--livre { background: color-mix(in srgb, var(--verde) 18%, var(--superficie)); }
@@ -18,6 +20,9 @@ button.governanca__cartao { cursor: pointer; }
 .governanca__botoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .governanca__form { display: flex; flex-direction: column; gap: 8px; }
 .governanca__form label { display: flex; flex-direction: column; gap: 4px; }
+@media (min-width: 400px) {
+  .governanca__grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (min-width: 600px) {
   .governanca__grade { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
