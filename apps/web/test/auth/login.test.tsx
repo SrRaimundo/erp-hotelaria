@@ -145,7 +145,7 @@ describe("login e sessão", () => {
   test("sessão expirada volta ao login e retorna à rota anterior", async () => {
     instalarApiFalsa({ ...caixaFechado, "POST /api/sessoes": { __status: 201, token: "tk3", usuario: recepcao } });
     const u = userEvent.setup();
-    telaCompleta("/caixa", false);
+    telaCompleta("/caixa", false, recepcao);
     expect(await screen.findByRole("button", { name: "Abrir caixa" })).toBeInTheDocument();
 
     act(() => {

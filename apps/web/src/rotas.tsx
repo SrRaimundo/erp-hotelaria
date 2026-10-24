@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import { Login } from "./auth/Login";
+import { ExigePermissao } from "./auth/ExigePermissao";
 import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
@@ -17,12 +18,12 @@ export function AppRotas() {
       <Route path="/trocar-senha" element={<TrocarSenha />} />
       <Route element={<RotaProtegida />}>
         <Route element={<Shell />}>
-          <Route index element={<TelaHoje />} />
-          <Route path="/mapa" element={<TelaMapa />} />
-          <Route path="/reservas" element={<TelaReservas />} />
-          <Route path="/reservas/nova" element={<TelaNovaReserva />} />
-          <Route path="/caixa" element={<TelaCaixa />} />
-          <Route path="/governanca" element={<TelaGovernanca />} />
+          <Route index element={<ExigePermissao permissao="reservas.gerenciar"><TelaHoje /></ExigePermissao>} />
+          <Route path="/mapa" element={<ExigePermissao permissao="reservas.gerenciar"><TelaMapa /></ExigePermissao>} />
+          <Route path="/reservas" element={<ExigePermissao permissao="reservas.gerenciar"><TelaReservas /></ExigePermissao>} />
+          <Route path="/reservas/nova" element={<ExigePermissao permissao="reservas.gerenciar"><TelaNovaReserva /></ExigePermissao>} />
+          <Route path="/caixa" element={<ExigePermissao permissao="caixa.operar"><TelaCaixa /></ExigePermissao>} />
+          <Route path="/governanca" element={<ExigePermissao permissao="quartos.situacao"><TelaGovernanca /></ExigePermissao>} />
         </Route>
       </Route>
     </Routes>

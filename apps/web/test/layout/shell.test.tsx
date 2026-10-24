@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Painel } from "../../src/api/tipos";
 import { AppRotas } from "../../src/rotas";
-import { instalarApiFalsa } from "../api-falsa";
+import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
 import { criarPainel } from "../fixtures/painel";
 import { criarReserva } from "../fixtures/reserva";
@@ -106,5 +106,32 @@ describe("casca", () => {
     renderizar(<AppRotas />, { rota: "/governanca?reserva=r1", usuario: recepcao });
     expect(await screen.findByRole("dialog", { name: "#128 · Maria Silva · Qto 101" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Governança" })).toBeInTheDocument();
+  });
+
+  test("I2: governança abrindo / cai em /governanca sem consultar o painel", async () => {
+    instalarApiFalsa({ "GET /api/governanca": [] });
+    renderizar(<AppRotas />, { rota: "/", usuario: { nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] } });
+    expect(await screen.findByRole("heading", { name: "Governança" })).toBeInTheDocument();
+    expect(chamadas.some((c) => c.caminho === "/api/painel")).toBe(false);
+    expect(screen.queryByText(/ocupação hoje/)).not.toBeInTheDocument();
+  });
+
+  test("I2: governança não abre Caixa nem Mapa digitando a URL", async () => {
+    instalarApiFalsa({ "GET /api/governanca": [] });
+    renderizar(<AppRotas />, { rota: "/caixa", usuario: { nome: "Gil", perfil: "governanca", permissoes: ["quartos.situacao"] } });
+    expect(await screen.findByRole("heading", { name: "Governança" })).toBeInTheDocument();
+    expect(chamadas.map((c) => c.caminho)).toEqual(["/api/governanca"]);
+  });
+
+  test("I2: recepção continua abrindo /governanca", async () => {
+    instalarApiFalsa({ ...painel(), "GET /api/governanca": [] });
+    renderizar(<AppRotas />, { rota: "/governanca", usuario: recepcao });
+    expect(await screen.findByRole("heading", { name: "Governança" })).toBeInTheDocument();
+  });
+
+  test("I2: sem nenhuma permissão da rota inicial mostra aviso em vez de redirecionar sem fim", async () => {
+    instalarApiFalsa({});
+    renderizar(<AppRotas />, { rota: "/", usuario: { nome: "Zé", perfil: "x", permissoes: ["caixa.operar"] } });
+    expect(await screen.findByText("Você não tem permissão para abrir esta tela.")).toBeInTheDocument();
   });
 });
