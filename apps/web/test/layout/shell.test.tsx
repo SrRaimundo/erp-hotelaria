@@ -6,6 +6,7 @@ import { AppRotas } from "../../src/rotas";
 import { instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
 import { criarPainel } from "../fixtures/painel";
+import { criarReserva } from "../fixtures/reserva";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -91,5 +92,12 @@ describe("casca", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await u.keyboard("{Control>}k{/Control}");
     expect(screen.getByRole("dialog", { name: "Buscar" })).toBeInTheDocument();
+  });
+
+  test("?reserva= abre o painel da reserva em qualquer rota", async () => {
+    instalarApiFalsa({ ...painel(), "GET /api/reservas/r1": criarReserva() });
+    renderizar(<AppRotas />, { rota: "/governanca?reserva=r1", usuario: recepcao });
+    expect(await screen.findByRole("dialog", { name: "#128 · Maria Silva · Qto 101" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Governança" })).toBeInTheDocument();
   });
 });

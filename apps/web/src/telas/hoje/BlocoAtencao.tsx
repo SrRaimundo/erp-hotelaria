@@ -5,7 +5,7 @@ import type { ItemAtencao } from "../../api/tipos";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { JanelaSupervisor, type Autorizacao } from "../../componentes/JanelaSupervisor";
-import { ProrrogarSinal } from "./ProrrogarSinal";
+import { ProrrogarSinal } from "../../componentes/ProrrogarSinal";
 
 type Props = { itens: ItemAtencao[]; aoAbrir: (consulta: string) => void };
 type Acao = ItemAtencao["acoes"][number];

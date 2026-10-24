@@ -7,6 +7,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
+import { paraHospede, pendenciasFnrh, type Hospede } from "../nucleo/hospedes.js";
 import { idadeEm, type Data } from "../shared/tempo.js";
 import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
 import { listarCanais } from "../tarifas/regras.js";
@@ -52,7 +53,21 @@ export type Reserva = {
   criadaEm: string;
 };
 
-export type ReservaDetalhe = Reserva & { noites: ValorNoite[]; total: Centavos; pago: Centavos };
+export type HospedeDaReserva = Hospede & { pendenciasFnrh: string[] };
+export type ReservaDetalhe = Reserva & {
+  noites: ValorNoite[];
+  total: Centavos;
+  pago: Centavos;
+  quartoNumero: string | null;
+  titular: HospedeDaReserva;
+  acompanhantes: HospedeDaReserva[];
+};
+
+function comPendencias(l: any, chegada: Data): HospedeDaReserva {
+  const h = paraHospede(l);
+  const adulto = h.nascimento ? idadeEm(h.nascimento, chegada) >= 18 : true;
+  return { ...h, pendenciasFnrh: pendenciasFnrh(h, adulto) };
+}
 
 export type Grupo = { id: string; titularId: string; cobranca: "unica" | "separada" };
 
@@ -213,5 +228,23 @@ export async function obterReserva(ctx: Contexto, id: string): Promise<ReservaDe
   if (!l) throw new ErroDominio("RESERVA_NAO_ENCONTRADA", "Reserva não encontrada. Confira o número informado.", { id });
   const ns = await ctx.db.selectFrom("reserva_noites").selectAll().where("reserva_id", "=", id).orderBy("data").execute();
   const noites: ValorNoite[] = ns.map((n) => ({ data: n.data, valor: n.valor, passos: JSON.parse(n.passos) }));
-  return { ...paraReserva(l), noites, total: noites.reduce((s, n) => s + n.valor, 0), pago: await pagoNaReserva(ctx, id) };
+  const quarto = l.quarto_id ? await ctx.db.selectFrom("quartos").select("numero").where("id", "=", l.quarto_id).executeTakeFirst() : undefined;
+  const titular = await ctx.db.selectFrom("hospedes").selectAll().where("id", "=", l.titular_id).executeTakeFirstOrThrow();
+  const acomp = await ctx.db
+    .selectFrom("acompanhantes")
+    .innerJoin("hospedes", "hospedes.id", "acompanhantes.hospede_id")
+    .selectAll("hospedes")
+    .where("acompanhantes.reserva_id", "=", id)
+    .orderBy("hospedes.nome_busca")
+    .orderBy("hospedes.id")
+    .execute();
+  return {
+    ...paraReserva(l),
+    noites,
+    total: noites.reduce((s, n) => s + n.valor, 0),
+    pago: await pagoNaReserva(ctx, id),
+    quartoNumero: quarto?.numero ?? null,
+    titular: comPendencias(titular, l.chegada),
+    acompanhantes: acomp.map((a) => comPendencias(a, l.chegada)),
+  };
 }

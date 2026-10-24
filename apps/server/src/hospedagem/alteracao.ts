@@ -194,7 +194,7 @@ export async function alterarReserva(
     await registrarEvento(tx, "hospedagem.ReservaAlterada", { reservaId: atual.id, antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo });
     // Sinal recalculado pode já estar coberto pelo que foi pago.
     if (atual.estado === "pre_reserva") await confirmarSeSinalPago(tx, atual.id, usuario.id, { alteracao: true });
-    const { noites: _n, total: _t, pago: _p, ...reserva } = await obterReserva(tx, atual.id);
+    const { noites: _n, total: _t, pago: _p, quartoNumero: _q, titular: _ti, acompanhantes: _a, ...reserva } = await obterReserva(tx, atual.id);
     return reserva;
   });
 }

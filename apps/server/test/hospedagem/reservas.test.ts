@@ -275,3 +275,22 @@ describe("datas impossíveis e estadia longa", () => {
     expect(max.saida).toBe(somarDias(dados.chegada, 365));
   });
 });
+
+describe("detalhe com hóspedes", () => {
+  test("traz titular, acompanhantes, número do quarto e pendências de FNRH", async () => {
+    const r = await criarReserva(ctx, { ...dados, quartoId: q12 }, recepcao);
+    await ctx.db.insertInto("hospedes").values({
+      id: "h2", nome: "Acompanhante", nome_busca: "acompanhante", documento_tipo: "cpf", documento: null, nascimento: "2020-01-01", nacionalidade: "BR",
+    }).execute();
+    await ctx.db.insertInto("acompanhantes").values({ reserva_id: r.id, hospede_id: "h2" }).execute();
+    const d = await obterReserva(ctx, r.id);
+    expect(d.quartoNumero).toBe("12");
+    expect(d.titular).toMatchObject({ id: "h1", nome: "Titular", pendenciasFnrh: ["nascimento", "endereco.cidade", "contato"] });
+    expect(d.acompanhantes).toHaveLength(1);
+    expect(d.acompanhantes[0]).toMatchObject({ id: "h2", nome: "Acompanhante", pendenciasFnrh: [] }); // criança: só nome e nascimento
+    expect(d.noites).toHaveLength(3);
+    const semQuarto = await obterReserva(ctx, (await criarReserva(ctx, { ...dados, chegada: "2026-12-01", saida: "2026-12-02" }, recepcao)).id);
+    expect(semQuarto.quartoNumero).toBeNull();
+    expect(semQuarto.acompanhantes).toEqual([]);
+  });
+});

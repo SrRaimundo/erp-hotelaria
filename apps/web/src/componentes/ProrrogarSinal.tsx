@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
-import { Botao } from "../../componentes/Botao";
-import { Janela } from "../../componentes/Janela";
-import { JanelaSupervisor, type Autorizacao } from "../../componentes/JanelaSupervisor";
+import { Botao } from "./Botao";
+import { Janela } from "./Janela";
+import { JanelaSupervisor, type Autorizacao } from "./JanelaSupervisor";
 
 type Props = { aberta: boolean; aoCancelar: () => void; aoConfirmar: (novoPrazo: string, a: Autorizacao) => Promise<void> };
 

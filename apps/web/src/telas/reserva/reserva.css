@@ -1,0 +1,17 @@
+.reserva-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--texto-suave); }
+.reserva-suave { color: var(--texto-suave); font-size: 0.9375rem; }
+.reserva-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.reserva-abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); margin: 14px 0; }
+.reserva-aba { border: 0; background: transparent; color: var(--texto-suave); padding: 8px 14px; border-bottom: 3px solid transparent; }
+.reserva-aba--ativa { color: var(--texto); font-weight: 600; border-bottom-color: var(--verde); }
+.reserva-dados { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 16px; }
+.reserva-dados dt { color: var(--texto-suave); }
+.reserva-dados dd { margin: 0; }
+.reserva-diarias { width: 100%; border-collapse: collapse; }
+.reserva-diarias th, .reserva-diarias td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borda); }
+.reserva-diarias__passos td { color: var(--texto-suave); background: var(--fundo); font-size: 0.9375rem; }
+.reserva-diarias tfoot th, .reserva-diarias tfoot td { font-weight: 700; border-bottom: 0; }
+.reserva-pessoas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.reserva-pessoa { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; }
+.reserva-pessoa__texto { display: flex; flex-direction: column; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

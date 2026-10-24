@@ -4,6 +4,7 @@ import { useSessao } from "../auth/SessaoProvider";
 import { BarraTopo } from "./BarraTopo";
 import { FaixaConexao } from "./FaixaConexao";
 import { MenuLateral } from "./MenuLateral";
+import { GavetaReserva } from "../telas/reserva/GavetaReserva";
 
 export function Shell() {
   const { pode } = useSessao();
@@ -17,6 +18,7 @@ export function Shell() {
         <main className="shell__conteudo">
           <Outlet />
         </main>
+        <GavetaReserva />
       </div>
     </div>
   );
