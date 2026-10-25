@@ -50,7 +50,6 @@ export function FormFrigobar({ contaId, reservaId, aoFechar }: Props) {
                 {RAPIDAS.map((n) => (
                   <Botao
                     key={n}
-                   
                     tamanho="pequeno"
                     variante={q === n && !mostrarCampo ? "principal" : "contorno"}
                     aria-pressed={q === n && !mostrarCampo}
@@ -64,7 +63,6 @@ export function FormFrigobar({ contaId, reservaId, aoFechar }: Props) {
                   </Botao>
                 ))}
                 <Botao
-                 
                   tamanho="pequeno"
                   variante={mostrarCampo ? "principal" : "contorno"}
                   aria-pressed={mostrarCampo}
@@ -99,7 +97,7 @@ export function FormFrigobar({ contaId, reservaId, aoFechar }: Props) {
       </p>
       <ErroAcao erro={erro} />
       <div className="formulario__acoes">
-        <Botao type="button" variante="contorno" onClick={aoFechar}>Cancelar</Botao>
+        <Botao variante="contorno" ignorarConexao onClick={aoFechar}>Cancelar</Botao>
         <Botao type="button" disabled={total === 0 || lancar.isPending} onClick={() => void enviar()}>Lançar</Botao>
       </div>
     </Janela>

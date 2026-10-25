@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSessao } from "../../auth/SessaoProvider";
 import { chamarApi } from "../../api/cliente";
 import { useAcao, useConta, useFormasPagamento } from "../../api/consultas";
 import type { LinhaExtrato, ReservaDetalhe } from "../../api/tipos";
@@ -30,6 +31,7 @@ function situacao(saldo: number): { texto: string; classe: string } {
 }
 
 export function AbaConta({ reserva, receberInicial, aoReceber }: Props) {
+  const { pode } = useSessao();
   const conta = useConta(reserva.contaId);
   const formas = useFormasPagamento();
   const [alvo, setAlvo] = useState<LinhaExtrato | null>(null);
@@ -121,7 +123,7 @@ export function AbaConta({ reserva, receberInicial, aoReceber }: Props) {
       </table>
 
       <FormReceber key={receberInicial ?? "livre"} aoReceber={aoReceber} contaId={reserva.contaId} reservaId={reserva.id} receberInicial={receberInicial} />
-      {reserva.estado === "hospedada" && (
+      {reserva.estado === "hospedada" && pode("conta.lancar") && (
         <div className="formulario__acoes">
           <Botao variante="contorno" onClick={() => setFrigobar(true)}>Frigobar</Botao>
         </div>
