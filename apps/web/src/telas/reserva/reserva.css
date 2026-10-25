@@ -43,3 +43,11 @@
 .checkout-restante { margin: 0; font-weight: 700; font-size: 1.0625rem; }
 .checkout-restante--pendente { color: var(--terracota); }
 .checkout-restante--ok { color: var(--verde); }
+
+.frigobar-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.frigobar-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.frigobar-item__nome { flex: 1 1 140px; font-weight: 600; }
+.frigobar-item__preco { color: var(--texto-suave, inherit); }
+.frigobar-item__qtd { display: inline-flex; gap: 4px; }
+.frigobar-item__campo { width: 5rem; }
+.frigobar-total { margin: 12px 0 0; text-align: right; }

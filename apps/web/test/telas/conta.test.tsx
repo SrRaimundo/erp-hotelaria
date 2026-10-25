@@ -21,10 +21,10 @@ const linha = (o: Partial<LinhaExtrato>): LinhaExtrato => ({
 
 const extrato: LinhaExtrato[] = [
   linha({}),
-  linha({ id: "l2", tipo: "extra", descricao: "Frigobar", valor: 5000, instante: "2026-11-21T01:30:00.000Z", data: "2026-11-20" }),
+  linha({ id: "l2", tipo: "extra", descricao: "Consumo de frigobar", valor: 5000, instante: "2026-11-21T01:30:00.000Z", data: "2026-11-20" }),
   linha({ id: "l3", tipo: "extra", descricao: "Lavanderia", valor: 3000, instante: "2026-11-21T11:00:00.000Z" }),
   linha({ id: "l4", tipo: "estorno", descricao: "Estorno: Lavanderia", valor: -3000, estornaId: "l3", instante: "2026-11-21T12:00:00.000Z" }),
-  linha({ id: "p1", natureza: "credito", tipo: "pagamento", origem: "caixa", descricao: "Pagamento (pix)", valor: 50000, instante: "2026-11-22T09:00:00.000Z" }),
+  linha({ id: "p1", natureza: "credito", tipo: "pagamento", origem: "caixa", descricao: "Pagamento (pix)", valor: 50000, setor: null, instante: "2026-11-22T09:00:00.000Z" }),
 ];
 
 const formas = [
@@ -55,7 +55,7 @@ const postou = (caminho: string) => chamadas.filter((c) => c.metodo === "POST" &
 describe("aba Conta", () => {
   test("extrato com saldo", async () => {
     montar();
-    expect(await screen.findByText("Frigobar")).toBeInTheDocument();
+    expect(await screen.findByText("Consumo de frigobar")).toBeInTheDocument();
     expect(screen.getByText("Saldo")).toBeInTheDocument();
     expect(screen.getByText("R$ 450,00")).toBeInTheDocument();
     expect(screen.getByText("a receber")).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe("aba Conta", () => {
     expect(screen.getByText("R$ 950,00")).toBeInTheDocument();
     expect(screen.getByText("Pagamento PIX")).toBeInTheDocument();
     // a data exibida é a local do servidor (01:30Z do dia 21 é dia 20 em São Paulo)
-    expect(within(screen.getByText("Frigobar").closest("tr")!).getByText("20/11")).toBeInTheDocument();
+    expect(within(screen.getByText("Consumo de frigobar").closest("tr")!).getByText("20/11")).toBeInTheDocument();
     // estorno em itálico com sinal negativo
     const estorno = screen.getByText("Estorno: Lavanderia").closest("tr")!;
     expect(estorno).toHaveClass("conta-estorno");
@@ -83,7 +83,7 @@ describe("aba Conta", () => {
   test("lançar extra livre envia centavos inteiros", async () => {
     const usuario = userEvent.setup();
     montar("/mapa?reserva=r1&aba=conta", { "POST /api/contas/ct1/lancamentos": { id: "novo" } });
-    await screen.findByText("Frigobar");
+    await screen.findByText("Consumo de frigobar");
     await screen.findByRole("option", { name: /Água mineral/ });
     await usuario.selectOptions(screen.getByLabelText("Produto"), "Outro (descrição livre)");
     await usuario.type(screen.getByLabelText("Descrição"), "Lavagem");
@@ -92,7 +92,7 @@ describe("aba Conta", () => {
     await usuario.type(screen.getByLabelText("Quantidade"), "2");
     await usuario.click(screen.getByRole("button", { name: "Lançar" }));
     await waitFor(() => expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(1));
-    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", descricao: "Lavagem", valorUnitario: 1250, quantidade: 2 });
+    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", descricao: "Lavagem", valorUnitario: 1250, quantidade: 2, setor: "recepcao" });
     await waitFor(() => expect(screen.getByLabelText("Produto")).toHaveValue(""));
   });
 
@@ -104,7 +104,7 @@ describe("aba Conta", () => {
     await usuario.selectOptions(screen.getByLabelText("Produto"), "AGUA");
     await usuario.click(screen.getByRole("button", { name: "Lançar" }));
     await waitFor(() => expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(1));
-    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", produtoCodigo: "AGUA", quantidade: 1 });
+    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", produtoCodigo: "AGUA", quantidade: 1, setor: "recepcao" });
   });
 
   test("lançar extra sem produto ou com quantidade inválida mostra erro e não envia", async () => {
@@ -176,7 +176,7 @@ describe("aba Conta", () => {
   test("estornar pede supervisor e envia motivo e credenciais", async () => {
     const usuario = userEvent.setup();
     montar("/mapa?reserva=r1&aba=conta", { "POST /api/lancamentos/l2/estornar": { id: "e" } });
-    await usuario.click(await screen.findByRole("button", { name: "Estornar Frigobar" }));
+    await usuario.click(await screen.findByRole("button", { name: "Estornar Consumo de frigobar" }));
     const janela = await screen.findByRole("dialog", { name: "Estornar lançamento" });
     await usuario.type(within(janela).getByLabelText("Motivo"), "lançado por engano");
     await usuario.type(within(janela).getByLabelText("Login do supervisor"), "admin");
@@ -202,9 +202,9 @@ describe("aba Conta", () => {
 
   test("estornos e lançamentos já estornados não têm botão Estornar", async () => {
     montar();
-    await screen.findByText("Frigobar");
+    await screen.findByText("Consumo de frigobar");
     const nomes = screen.getAllByRole("button", { name: /^Estornar / }).map((b) => b.getAttribute("aria-label"));
-    expect(nomes).toEqual(["Estornar Diária 20/11", "Estornar Frigobar", "Estornar Pagamento PIX"]);
+    expect(nomes).toEqual(["Estornar Diária 20/11", "Estornar Consumo de frigobar", "Estornar Pagamento PIX"]);
   });
 
   test("a coluna Origem mostra rótulos amigáveis", async () => {
@@ -215,3 +215,68 @@ describe("aba Conta", () => {
     expect(within(tabela).queryByText("hospedagem")).not.toBeInTheDocument();
   });
 });
+
+describe("setor e frigobar", () => {
+  test("lançar extra envia o setor escolhido e filtra produtos pelo setor", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "POST /api/contas/ct1/lancamentos": { id: "novo" } });
+    await screen.findByRole("option", { name: /Água mineral/ });
+    expect(screen.getByLabelText("Setor")).toHaveValue("recepcao");
+    expect(within(screen.getByLabelText("Setor")).getAllByRole("option").map((o) => o.textContent)).toEqual(["Recepção", "Frigobar", "Bar", "Restaurante"]);
+    expect(chamadas.some((c) => c.metodo === "GET" && c.caminho === "/api/produtos?setor=recepcao")).toBe(true);
+    await usuario.selectOptions(screen.getByLabelText("Setor"), "Bar");
+    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/produtos?setor=bar")).toBe(true));
+    await usuario.selectOptions(await screen.findByLabelText("Produto"), "AGUA");
+    await usuario.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/lancamentos")).toHaveLength(1));
+    expect(postou("/api/contas/ct1/lancamentos")[0]!.corpo).toEqual({ tipo: "extra", produtoCodigo: "AGUA", quantidade: 1, setor: "bar" });
+  });
+
+  test("extrato mostra a coluna Setor", async () => {
+    montar();
+    await screen.findByText("Consumo de frigobar");
+    expect(screen.getByRole("columnheader", { name: "Setor" })).toBeInTheDocument();
+    expect(within(screen.getByText("Consumo de frigobar").closest("tr")!).getAllByRole("cell")[3]).toHaveTextContent("Hospedagem");
+    const pagamento = screen.getByText("Pagamento PIX").closest("tr")!;
+    expect(within(pagamento).getAllByRole("cell")[3]).toBeEmptyDOMElement();
+  });
+
+  const frigobar = [
+    { id: "agua", codigo: "AGUA", nome: "Água", precoCentavos: 600, unidade: "un", grupo: "bebidas", tipo: "produto", setores: ["frigobar"] },
+    { id: "choc", codigo: "CHOC", nome: "Chocolate", precoCentavos: 900, unidade: "un", grupo: "doces", tipo: "produto", setores: ["frigobar"] },
+  ];
+
+  test("frigobar: 2 águas + 1 chocolate → total R$ 21,00 e corpo com só os itens > 0", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/produtos": frigobar, "POST /api/contas/ct1/frigobar": { ids: ["a"] } });
+    await usuario.click(await screen.findByRole("button", { name: "Frigobar" }));
+    const janela = await screen.findByRole("dialog", { name: "Frigobar" });
+    expect(chamadas.some((c) => c.caminho === "/api/produtos?setor=frigobar")).toBe(true);
+    expect(within(janela).getByRole("button", { name: "Lançar" })).toBeDisabled();
+    await usuario.click(await within(janela).findByRole("button", { name: "2 de Água" }));
+    await usuario.click(within(janela).getByRole("button", { name: "1 de Chocolate" }));
+    expect(within(janela).getByText("R$ 21,00")).toBeInTheDocument();
+    await usuario.click(within(janela).getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/frigobar")).toHaveLength(1));
+    expect(postou("/api/contas/ct1/frigobar")[0]!.corpo).toEqual({ reservaId: "r1", itens: [{ produtoId: "agua", quantidade: 2 }, { produtoId: "choc", quantidade: 1 }] });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Frigobar" })).not.toBeInTheDocument());
+  });
+
+  test("frigobar: o + abre o campo numérico para quantidades maiores", async () => {
+    const usuario = userEvent.setup();
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/produtos": frigobar, "POST /api/contas/ct1/frigobar": { ids: ["a"] } });
+    await usuario.click(await screen.findByRole("button", { name: "Frigobar" }));
+    await usuario.click(await screen.findByRole("button", { name: "Outra quantidade de Água" }));
+    await usuario.type(screen.getByLabelText("Quantidade de Água"), "5");
+    expect(within(screen.getByRole("dialog", { name: "Frigobar" })).getByText("R$ 30,00")).toBeInTheDocument();
+    await usuario.click(within(screen.getByRole("dialog", { name: "Frigobar" })).getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(postou("/api/contas/ct1/frigobar")[0]?.corpo).toEqual({ reservaId: "r1", itens: [{ produtoId: "agua", quantidade: 5 }] }));
+  });
+
+  test("botão Frigobar só aparece para hospedada", async () => {
+    montar("/mapa?reserva=r1&aba=conta", { "GET /api/reservas/r1": criarReserva({ estado: "confirmada" }) });
+    await screen.findByText("Consumo de frigobar");
+    expect(screen.queryByRole("button", { name: "Frigobar" })).not.toBeInTheDocument();
+  });
+});
+

@@ -4,16 +4,20 @@ import { useAcao, useProdutos } from "../../api/consultas";
 import { Botao } from "../../componentes/Botao";
 import { CampoDinheiro } from "../../componentes/CampoDinheiro";
 import { ErroAcao } from "../../componentes/ErroAcao";
+import type { Setor } from "../../api/tipos";
 import { formatarReais } from "../../lib/dinheiro";
+import { ROTULO_SETOR } from "../../lib/setores";
 
 const LIVRE = "__livre__";
+const SETORES_EXTRA: Setor[] = ["recepcao", "frigobar", "bar", "restaurante"];
 
 type Corpo =
-  | { tipo: "extra"; produtoCodigo: string; quantidade: number }
-  | { tipo: "extra"; descricao: string; valorUnitario: number; quantidade: number };
+  | { tipo: "extra"; produtoCodigo: string; quantidade: number; setor: Setor }
+  | { tipo: "extra"; descricao: string; valorUnitario: number; quantidade: number; setor: Setor };
 
 export function FormLancarExtra({ contaId }: { contaId: string }) {
-  const produtos = useProdutos();
+  const [setor, setSetor] = useState<Setor>("recepcao");
+  const produtos = useProdutos(setor);
   const lancar = useAcao((c: Corpo) => chamarApi("POST", `/api/contas/${encodeURIComponent(contaId)}/lancamentos`, c));
   const [produto, setProduto] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -35,8 +39,8 @@ export function FormLancarExtra({ contaId }: { contaId: string }) {
       return;
     }
     const corpo: Corpo = livre
-      ? { tipo: "extra", descricao: descricao.trim(), valorUnitario: valor!, quantidade: qtd }
-      : { tipo: "extra", produtoCodigo: produto, quantidade: qtd };
+      ? { tipo: "extra", descricao: descricao.trim(), valorUnitario: valor!, quantidade: qtd, setor }
+      : { tipo: "extra", produtoCodigo: produto, quantidade: qtd, setor };
     try {
       await lancar.mutateAsync(corpo);
       setProduto("");
@@ -51,6 +55,21 @@ export function FormLancarExtra({ contaId }: { contaId: string }) {
   return (
     <form className="formulario conta-form" onSubmit={(e) => void enviar(e)} aria-labelledby="titulo-lancar-extra">
       <h4 id="titulo-lancar-extra">Lançar extra</h4>
+      <div className="campo">
+        <label htmlFor="extra-setor">Setor</label>
+        <select
+          id="extra-setor"
+          value={setor}
+          onChange={(e) => {
+            setSetor(e.target.value as Setor);
+            setProduto("");
+          }}
+        >
+          {SETORES_EXTRA.map((s) => (
+            <option key={s} value={s}>{ROTULO_SETOR[s]}</option>
+          ))}
+        </select>
+      </div>
       <div className="campo">
         <label htmlFor="extra-produto">Produto</label>
         <select id="extra-produto" value={produto} onChange={(e) => setProduto(e.target.value)}>
