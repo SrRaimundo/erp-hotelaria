@@ -4,6 +4,8 @@ import { exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
 import { emTransacao } from "../shared/contexto.js";
 import { abrirChamado, avisarControleFaltando, cancelarAvisoControle, cancelarChamado, listarChamados, resolverChamado } from "./chamados.js";
+import { concluirChecklist } from "./checklists.js";
+import { lancarFrigobar } from "./frigobar.js";
 import { obterModelos } from "./modelos.js";
 
 export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): void {
@@ -51,5 +53,38 @@ export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): v
     exigirPermissao(req.usuario, "quartos.situacao");
     await cancelarAvisoControle(ctx, idParam.parse(req.params).id, req.usuario);
     return { ok: true };
+  });
+
+  const quantidade = z.number().int("Informe um número inteiro").min(0, "Não pode ser negativo").max(999, "No máximo 999");
+  const textoId = z.string().min(1, "Campo obrigatório");
+  const corpoResposta = z.object({
+    itemId: textoId,
+    simNao: z.boolean().optional(),
+    quantidade: quantidade.optional(),
+    equipamento: z.enum(["funciona", "nao_funciona", "nao_se_aplica"]).optional(),
+    presenca: z.enum(["presente", "faltando", "nao_se_aplica"]).optional(),
+    observacao: z.string().optional(),
+    chamadoId: z.string().min(1).optional(),
+    alertaId: z.string().min(1).optional(),
+  });
+  const corpoChecklist = z.object({
+    tipo: z.enum(["saida", "diaria"]),
+    iniciadoEm: z.string().min(1, "Campo obrigatório"),
+    respostas: z.array(corpoResposta),
+    frigobar: z.array(z.object({ produtoId: textoId, quantidade })).optional(),
+    resultado: z.enum(["liberado", "bloqueado"]).optional(),
+    motivo: z.string().optional(),
+  });
+  const corpoFrigobar = z.object({ reservaId: textoId, itens: z.array(z.object({ produtoId: textoId, quantidade })) });
+
+  app.post("/api/quartos/:id/checklists", async (req) => {
+    exigirPermissao(req.usuario, "quartos.situacao");
+    const { id } = idParam.parse(req.params);
+    return concluirChecklist(ctx, id, corpoChecklist.parse(req.body), req.usuario);
+  });
+  app.post("/api/contas/:id/frigobar", async (req) => {
+    exigirPermissao(req.usuario, "conta.lancar");
+    const { id } = idParam.parse(req.params);
+    return lancarFrigobar(ctx, id, corpoFrigobar.parse(req.body), req.usuario);
   });
 }

@@ -108,3 +108,51 @@ export const migracaoGovernancaAlertasChave: Migracao = {
     await sql`ALTER TABLE alertas ADD COLUMN chave TEXT`.execute(db);
   },
 };
+
+/** Execuções de checklist, respostas (com cópia do texto do item) e movimentos de frigobar; somente inserção. */
+export const migracaoGovernancaExecucoes: Migracao = {
+  nome: "0530_governanca_execucoes",
+  async up(db) {
+    await db.schema
+      .createTable("checklist_execucoes")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("quarto_id", "text", (c) => c.notNull().references("quartos.id"))
+      .addColumn("tipo", "text", (c) => c.notNull())
+      .addColumn("reserva_id", "text", (c) => c.references("reservas.id"))
+      .addColumn("usuario_id", "text", (c) => c.notNull().references("usuarios.id"))
+      .addColumn("iniciado_em", "text", (c) => c.notNull())
+      .addColumn("concluido_em", "text", (c) => c.notNull())
+      .addColumn("resultado", "text")
+      .addColumn("motivo", "text")
+      .execute();
+    await sql`CREATE INDEX checklist_execucoes_quarto ON checklist_execucoes (quarto_id, concluido_em)`.execute(db);
+    await db.schema
+      .createTable("checklist_respostas")
+      .addColumn("execucao_id", "text", (c) => c.notNull().references("checklist_execucoes.id"))
+      .addColumn("item_id", "text", (c) => c.notNull().references("checklist_itens.id"))
+      .addColumn("etapa", "text", (c) => c.notNull())
+      .addColumn("texto_item", "text", (c) => c.notNull())
+      .addColumn("sim_nao", "integer")
+      .addColumn("quantidade", "integer")
+      .addColumn("equipamento", "text")
+      .addColumn("presenca", "text")
+      .addColumn("observacao", "text")
+      .addColumn("chamado_id", "text", (c) => c.references("chamados.id"))
+      .addColumn("alerta_id", "text", (c) => c.references("alertas.id"))
+      .addPrimaryKeyConstraint("checklist_respostas_pk", ["execucao_id", "item_id"])
+      .execute();
+    await db.schema
+      .createTable("frigobar_movimentos")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("execucao_id", "text", (c) => c.references("checklist_execucoes.id"))
+      .addColumn("quarto_id", "text", (c) => c.notNull().references("quartos.id"))
+      .addColumn("reserva_id", "text", (c) => c.references("reservas.id"))
+      .addColumn("produto_id", "text", (c) => c.notNull().references("produtos.id"))
+      .addColumn("quantidade", "integer", (c) => c.notNull())
+      .addColumn("tipo", "text", (c) => c.notNull())
+      .addColumn("lancamento_id", "text", (c) => c.references("lancamentos.id"))
+      .addColumn("usuario_id", "text", (c) => c.notNull().references("usuarios.id"))
+      .addColumn("instante", "text", (c) => c.notNull())
+      .execute();
+  },
+};
