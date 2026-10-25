@@ -100,3 +100,11 @@ export const migracaoGovernancaChamados: Migracao = {
     await sql`CREATE INDEX chamados_quarto_situacao ON chamados (quarto_id, situacao)`.execute(db);
   },
 };
+
+/** Chave opcional do alerta: permite vários avisos abertos do mesmo tipo para o mesmo alvo (um por item). */
+export const migracaoGovernancaAlertasChave: Migracao = {
+  nome: "0521_governanca_alertas_chave",
+  async up(db) {
+    await sql`ALTER TABLE alertas ADD COLUMN chave TEXT`.execute(db);
+  },
+};

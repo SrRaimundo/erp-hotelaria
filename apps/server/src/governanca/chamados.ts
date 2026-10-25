@@ -165,6 +165,7 @@ export async function avisarControleFaltando(
     tipo: "controle_faltando",
     alvoTipo: "reserva",
     alvoId: reserva.id,
+    chave: item.id,
     mensagem: `${item.texto} não encontrado no ${quarto.numero} — conferir com o hóspede`,
   });
   await auditar(tx, { ator: usuario.id, acao: "aviso_controle.criar", alvoTipo: "alerta", alvoId: alertaId, dados: { quartoId: quarto.id, itemId: item.id } });

@@ -10,16 +10,18 @@ export type Alerta = {
   criadoEm: string;
 };
 
-/** Cria um alerta aberto; se já existe um aberto com o mesmo tipo e alvo, devolve o id dele. */
+/** Cria um alerta aberto; se já existe um aberto com o mesmo tipo, alvo e chave (opcional), devolve o id dele. */
 export async function criarAlerta(
   tx: Contexto,
-  a: { tipo: string; alvoTipo: string; alvoId: string; mensagem: string },
+  a: { tipo: string; alvoTipo: string; alvoId: string; mensagem: string; chave?: string },
 ): Promise<string> {
+  const chave = a.chave ?? null;
   const existente = await tx.db
     .selectFrom("alertas")
     .select("id")
     .where("tipo", "=", a.tipo)
     .where("alvo_id", "=", a.alvoId)
+    .where("chave", chave === null ? "is" : "=", chave)
     .where("resolvido_em", "is", null)
     .executeTakeFirst();
   if (existente) return existente.id;
@@ -32,6 +34,7 @@ export async function criarAlerta(
       alvo_tipo: a.alvoTipo,
       alvo_id: a.alvoId,
       mensagem: a.mensagem,
+      chave,
       criado_em: tx.relogio.agora().toISOString(),
       resolvido_em: null,
       resolvido_por: null,

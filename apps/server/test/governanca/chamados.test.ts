@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { abrirChamado, avisarControleFaltando, cancelarChamado, defeitosAbertos, listarChamados, resolverChamado } from "../../src/governanca/chamados.js";
+import { abrirChamado, avisarControleFaltando, cancelarAvisoControle, cancelarChamado, defeitosAbertos, listarChamados, resolverChamado } from "../../src/governanca/chamados.js";
 import { obterModelos } from "../../src/governanca/modelos.js";
 import { fazerCheckin } from "../../src/hospedagem/checkin.js";
 import { bloquear, liberar } from "../../src/hospedagem/governanca.js";
@@ -122,6 +122,26 @@ describe("chamados", () => {
     expect(alertas).toHaveLength(1);
     expect(alertas[0]).toMatchObject({ id, tipo: "controle_faltando", alvoTipo: "reserva", alvoId: reservaId, mensagem: "Controle da TV não encontrado no 101 — conferir com o hóspede" });
     expect(await aviso(itemAr).catch((e) => e)).toMatchObject({ codigo: "ITEM_SEM_CHAMADO" });
+  });
+});
+
+describe("avisos de controle por item", () => {
+  test("dois controles geram dois avisos; cancelar um mantém o outro; o mesmo controle repete o aviso", async () => {
+    const itemControleAr = (await obterModelos(ctx)).saida.find((i) => i.texto === "Controle do ar-condicionado")!.id;
+    const reservaId = await hospedar(q101);
+    const aviso = (itemId: string) => emTransacao(ctx, (tx) => avisarControleFaltando(tx, { quartoId: q101, itemId }, governanca));
+    const tv = await aviso(itemControleTv);
+    const arCond = await aviso(itemControleAr);
+    expect(arCond).not.toBe(tv);
+    expect(await aviso(itemControleTv)).toBe(tv);
+    const alertas = await alertasAbertos(ctx);
+    expect(alertas.map((a) => a.mensagem).sort()).toEqual([
+      "Controle da TV não encontrado no 101 — conferir com o hóspede",
+      "Controle do ar-condicionado não encontrado no 101 — conferir com o hóspede",
+    ]);
+    expect(alertas.every((a) => a.alvoTipo === "reserva" && a.alvoId === reservaId)).toBe(true);
+    await cancelarAvisoControle(ctx, arCond, governanca);
+    expect((await alertasAbertos(ctx)).map((a) => a.id)).toEqual([tv]);
   });
 });
 
