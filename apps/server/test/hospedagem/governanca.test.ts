@@ -94,10 +94,10 @@ describe("governança", () => {
     ctx.relogio.definir("2026-11-10T18:00:00Z");
     await fazerCheckin(ctx, { reservaId: r.id, quartoId: q102, acompanhantes: [] }, recepcao);
     const lista = await listaGovernanca(ctx);
-    expect(lista.map((q) => q.numero)).toEqual(["103", "101", "102"]);
+    expect(lista.map((q) => q.numero)).toEqual(["103", "102", "101"]);
     expect(lista[0]).toMatchObject({ quartoId: q103, situacao: "sujo" });
-    expect(lista[2]).toMatchObject({ situacao: "ocupado", hospedadoAte: "2026-11-12" });
-    expect(lista[1]!.hospedadoAte).toBeUndefined();
+    expect(lista[1]).toMatchObject({ situacao: "ocupado", hospedadoAte: "2026-11-12" });
+    expect(lista[2]!.hospedadoAte).toBeUndefined();
     const app = criarApp(ctx);
     const res = await app.inject({ method: "GET", url: "/api/governanca", headers: await entrarComo(ctx, "governanca") });
     expect(res.statusCode).toBe(200);

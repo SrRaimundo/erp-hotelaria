@@ -2,6 +2,8 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { lerConfiguracao } from "./config.js";
+import { concluirChecklist, type RespostaEnviada } from "./governanca/checklists.js";
+import { obterModelos, type ItemChecklist } from "./governanca/modelos.js";
 import { fazerCheckin } from "./hospedagem/checkin.js";
 import { lancar, registrarPagamento } from "./hospedagem/conta.js";
 import { colocarEmManutencao } from "./hospedagem/governanca.js";
@@ -68,6 +70,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     await salvarConfig(tx, {
       razaoSocial: "Pousada Sol (demonstração)",
       sinal: { exigir: true, tipo: "percentual", percentual: 30, prazoHoras: 48, toleranciaHoras: 12 },
+      camareiraLancaFrigobar: true,
     }, ator);
     const config = await obterConfig(tx);
     const H = diaHoteleiro(agora, config.fuso, config.viradaDia);
@@ -107,6 +110,12 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     await criarUsuario(tx, { nome: "Recepção", login: "recepcao", senha: "recepcao123", perfil: "recepcao" }, ator);
     await criarUsuario(tx, { nome: "Governança", login: "governanca", senha: "governanca123", perfil: "governanca" }, ator);
     const frigobar = await criarProduto(tx, { codigo: "FRIGOBAR", nome: "Frigobar", precoCentavos: 1800, unidade: "un", grupo: "frigobar", tipo: "produto", setores: ["frigobar"] }, ator);
+
+    const base = { unidade: "un", grupo: "frigobar", tipo: "produto" as const };
+    const agua = await criarProduto(tx, { ...base, codigo: "AGUA", nome: "Água mineral", precoCentavos: 600, setores: ["frigobar", "recepcao", "bar"] }, ator);
+    await criarProduto(tx, { ...base, codigo: "REFRI", nome: "Refrigerante", precoCentavos: 800, setores: ["frigobar", "recepcao", "bar"] }, ator);
+    await criarProduto(tx, { ...base, codigo: "CERVEJA", nome: "Cerveja", precoCentavos: 1200, setores: ["frigobar", "recepcao", "bar"] }, ator);
+    await criarProduto(tx, { ...base, codigo: "CHOCOLATE", nome: "Chocolate", precoCentavos: 900, setores: ["frigobar", "recepcao"] }, ator);
 
     // Hóspedes (o índice 6 fica sem documento, para mostrar a pendência da FNRH)
     const cidades: [string, string][] = [["Recife", "PE"], ["Olinda", "PE"], ["Salvador", "BA"], ["São Paulo", "SP"], ["Fortaleza", "CE"]];
@@ -199,6 +208,40 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     await mudarSituacaoQuarto(tx, quarto("103").id, "em_manutencao", ator, "limpeza pendente");
     await mudarSituacaoQuarto(tx, quarto("103").id, "sujo", ator);
     await colocarEmManutencao(tx, quarto("106").id, "chuveiro", admin);
+
+    // Checklists: o 204 saiu ontem e foi bloqueado (ar-condicionado com defeito, controle da TV faltando);
+    // as arrumações de hoje são do 101 (com 1 água lançada na conta) e do 102.
+    const camareira = (await carregarUsuarioSessao(tx, (await tx.db.selectFrom("usuarios").select("id").where("login", "=", "governanca").executeTakeFirstOrThrow()).id))!;
+    const modelos = await obterModelos(tx);
+    const respostas = (itens: ItemChecklist[], sobre: Record<string, Partial<RespostaEnviada>> = {}): RespostaEnviada[] =>
+      itens.map((i): RespostaEnviada => {
+        const padrao: RespostaEnviada =
+          i.etapa === "limpeza" ? { itemId: i.id, simNao: true }
+          : i.etapa === "enxoval" ? { itemId: i.id, quantidade: 2 }
+          : i.etapa === "equipamento" ? { itemId: i.id, equipamento: "funciona" }
+          : { itemId: i.id, presenca: "presente" };
+        return { ...padrao, ...(sobre[i.texto] ?? {}) };
+      });
+    const ontem = comRelogio(tx, instante(dia(-1), 10));
+    const saiu = comRelogio(tx, instante(dia(-1), 8));
+    await mudarSituacaoQuarto(saiu, quarto("204").id, "em_manutencao", ator, "saída do hóspede");
+    await mudarSituacaoQuarto(saiu, quarto("204").id, "sujo", ator);
+    await concluirChecklist(ontem, quarto("204").id, {
+      tipo: "saida",
+      iniciadoEm: instante(dia(-1), 9),
+      respostas: respostas(modelos.saida, {
+        "Ar-condicionado": { equipamento: "nao_funciona", observacao: "Não gela" },
+        "Controle da TV": { presenca: "faltando" },
+      }),
+      resultado: "bloqueado",
+      motivo: "Ar-condicionado não funciona",
+    }, camareira);
+    const hoje = comRelogio(tx, new Date(agora.getTime() - 60_000).toISOString());
+    const iniciadoHoje = new Date(agora.getTime() - 15 * 60_000).toISOString();
+    await concluirChecklist(hoje, quarto("101").id, {
+      tipo: "diaria", iniciadoEm: iniciadoHoje, respostas: respostas(modelos.diaria), frigobar: [{ produtoId: agua.id, quantidade: 1 }],
+    }, camareira);
+    await concluirChecklist(hoje, quarto("102").id, { tipo: "diaria", iniciadoEm: iniciadoHoje, respostas: respostas(modelos.diaria) }, camareira);
 
     return { quartos: quartos.size, reservas: reservas.length };
   });

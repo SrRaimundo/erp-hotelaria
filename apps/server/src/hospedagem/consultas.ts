@@ -1,3 +1,4 @@
+import { listarChamados, type Chamado } from "../governanca/chamados.js";
 import { alertasAbertos, type Alerta } from "../infra/alertas.js";
 import { buscarHospedes, paraHospede, pendenciasFnrh, type Hospede } from "../nucleo/hospedes.js";
 import { obterConfig } from "../nucleo/pousada.js";
@@ -7,6 +8,7 @@ import { formatarBRL, type Centavos } from "../shared/dinheiro.js";
 import { dataLocal, diaHoteleiro, diasEntre, horaLocal, idadeEm, somarDias, type Data } from "../shared/tempo.js";
 import { pagoNaReserva, saldo } from "./conta.js";
 import type { EstadoReserva } from "./estados.js";
+import { arrumacoesDeHoje, motivoDaSituacao } from "./governanca.js";
 
 export type ItemReserva = {
   reservaId: string;
@@ -77,8 +79,11 @@ export type Painel = {
     quartosSujos: number;
     quartosManutencao: number;
     livresHoje: number;
+    ocupadosSemArrumacao: number;
+    defeitosAbertos: number;
   };
   governanca: { quartoId: string; numero: string; situacao: "sujo" | "em_manutencao" | "bloqueado"; motivo: string | null }[];
+  chamadosAbertos: Chamado[];
   proximosDias: { dia: Data; chegadas: number; saidas: number; ocupacaoPct: number }[];
   atencao: ItemAtencao[];
 };
@@ -153,15 +158,7 @@ async function governancaDoPainel(ctx: Contexto): Promise<Painel["governanca"]> 
   quartos.sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true }));
   const itens: Painel["governanca"] = [];
   for (const q of quartos) {
-    const ultima = await ctx.db
-      .selectFrom("auditoria")
-      .select("motivo")
-      .where("acao", "=", "quarto.situacao")
-      .where("alvo_id", "=", q.id)
-      .orderBy("instante", "desc")
-      .orderBy("id", "desc")
-      .executeTakeFirst();
-    itens.push({ quartoId: q.id, numero: q.numero, situacao: q.situacao as "sujo" | "em_manutencao" | "bloqueado", motivo: ultima?.motivo ?? null });
+    itens.push({ quartoId: q.id, numero: q.numero, situacao: q.situacao as "sujo" | "em_manutencao" | "bloqueado", motivo: await motivoDaSituacao(ctx, q.id, q.situacao !== "sujo") });
   }
   return itens;
 }
@@ -182,7 +179,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     .where("r.chegada", "=", dia)
     .execute();
   const linhasSaidas = await reservasComTitular(ctx).select([...campos, "r.conta_id"]).where("r.estado", "=", "hospedada").where("r.saida", "=", dia).execute();
-  const hospedadas = await ctx.db.selectFrom("reservas").select(["adultos", "criancas"]).where("estado", "=", "hospedada").execute();
+  const hospedadas = await ctx.db.selectFrom("reservas").select(["adultos", "criancas", "quarto_id"]).where("estado", "=", "hospedada").execute();
   const sujos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("situacao", "=", "sujo").orderBy("numero").execute();
   const sinais = await reservasComTitular(ctx)
     .clearOrderBy()
@@ -196,6 +193,9 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
   const vencidas = await reservasComTitular(ctx).select([...campos, "h.telefone"]).where("r.estado", "=", "confirmada").where("r.chegada", "<", dia).execute();
   const excedidas = await reservasComTitular(ctx).select([...campos, "h.telefone"]).where("r.estado", "=", "hospedada").where("r.saida", "<", dia).execute();
   const alertas = await alertasAbertos(ctx);
+  const chamadosAbertos = await listarChamados(ctx, { situacao: "aberto" });
+  const arrumados = await arrumacoesDeHoje(ctx);
+  const ocupadosSemArrumacao = hospedadas.filter((h) => h.quarto_id && !arrumados.has(h.quarto_id)).length;
 
   const situacoes = await ctx.db.selectFrom("quartos").select("situacao").execute();
   const total = situacoes.filter((q) => q.situacao !== "em_manutencao" && q.situacao !== "bloqueado").length;
@@ -310,8 +310,11 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
       quartosSujos: sujos.length,
       quartosManutencao: situacoes.filter((q) => q.situacao === "em_manutencao").length,
       livresHoje: Math.max(0, total - ocupados),
+      ocupadosSemArrumacao,
+      defeitosAbertos: chamadosAbertos.filter((c) => c.tipo === "defeito").length,
     },
     governanca: await governancaDoPainel(ctx),
+    chamadosAbertos,
     proximosDias,
     atencao,
   };

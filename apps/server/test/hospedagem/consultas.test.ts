@@ -130,7 +130,7 @@ describe("painel do dia ampliado", () => {
     expect(p.ocupacao).toEqual({ ocupados: 6, total: 9, percentual: 67 });
     expect(p.numeros).toEqual({
       chegadas: 2, chegadasJaHospedadas: 1, saidas: 0, hospedados: 4, pessoasHospedadas: 9,
-      quartosSujos: 0, quartosManutencao: 1, livresHoje: 3,
+      quartosSujos: 0, quartosManutencao: 1, livresHoje: 3, ocupadosSemArrumacao: 0, defeitosAbertos: 0,
     });
     expect(p.chegadas).toHaveLength(2); // confirmada + já hospedada
     expect(p.chegadas.map((c) => c.estado).sort()).toEqual(["confirmada", "hospedada"]);

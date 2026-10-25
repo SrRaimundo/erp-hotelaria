@@ -8,7 +8,7 @@ import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 import { paraHospede, pendenciasFnrh, type Hospede } from "../nucleo/hospedes.js";
-import { idadeEm, type Data } from "../shared/tempo.js";
+import { diaHoteleiro, idadeEm, type Data } from "../shared/tempo.js";
 import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
 import { listarCanais } from "../tarifas/regras.js";
 import { verificarRestricoes } from "../tarifas/restricoes.js";
@@ -61,6 +61,8 @@ export type ReservaDetalhe = Reserva & {
   quartoNumero: string | null;
   titular: HospedeDaReserva;
   acompanhantes: HospedeDaReserva[];
+  /** Última arrumação do quarto concluída hoje (dia hoteleiro) para esta reserva. */
+  ultimaArrumacao: { em: string; por: string } | null;
 };
 
 function comPendencias(l: any, chegada: Data): HospedeDaReserva {
@@ -238,6 +240,18 @@ export async function obterReserva(ctx: Contexto, id: string): Promise<ReservaDe
     .orderBy("hospedes.nome_busca")
     .orderBy("hospedes.id")
     .execute();
+  const config = await obterConfig(ctx);
+  const arrumacao = await ctx.db
+    .selectFrom("checklist_execucoes as e")
+    .innerJoin("usuarios as u", "u.id", "e.usuario_id")
+    .select(["e.concluido_em", "u.nome"])
+    .where("e.reserva_id", "=", id)
+    .where("e.tipo", "=", "diaria")
+    .orderBy("e.concluido_em", "desc")
+    .orderBy("e.id", "desc")
+    .executeTakeFirst();
+  const hoje = diaHoteleiro(ctx.relogio.agora(), config.fuso, config.viradaDia);
+  const ultimaArrumacao = arrumacao && diaHoteleiro(new Date(arrumacao.concluido_em), config.fuso, config.viradaDia) === hoje ? { em: arrumacao.concluido_em, por: arrumacao.nome } : null;
   return {
     ...paraReserva(l),
     noites,
@@ -246,5 +260,6 @@ export async function obterReserva(ctx: Contexto, id: string): Promise<ReservaDe
     quartoNumero: quarto?.numero ?? null,
     titular: comPendencias(titular, l.chegada),
     acompanhantes: acomp.map((a) => comPendencias(a, l.chegada)),
+    ultimaArrumacao,
   };
 }

@@ -282,6 +282,18 @@ describe("checklist diário", () => {
     expect(rs.every((x) => x.alerta_id)).toBe(true);
   });
 
+  test("alertaId de outra reserva não é reaproveitado: cria um novo aviso para a reserva atual", async () => {
+    const reserva = await hospedar(q101);
+    const ctrl = idDe(diaria, "Controle da TV");
+    const aviso = await emTransacao(ctx, (tx) => avisarControleFaltando(tx, { quartoId: q101, itemId: ctrl }, governanca));
+    await ctx.db.updateTable("alertas").set({ alvo_id: "reserva-antiga" }).where("id", "=", aviso).execute();
+    const r = await concluirDiaria(q101, { respostas: respostasOk(diaria, { "Controle da TV": { presenca: "faltando", alertaId: aviso } }) });
+    const resp = await ctx.db.selectFrom("checklist_respostas").select("alerta_id").where("execucao_id", "=", r.execucaoId).where("item_id", "=", ctrl).executeTakeFirstOrThrow();
+    expect(resp.alerta_id).not.toBe(aviso);
+    const novo = await ctx.db.selectFrom("alertas").select(["alvo_id", "resolvido_em"]).where("id", "=", resp.alerta_id!).executeTakeFirstOrThrow();
+    expect(novo).toMatchObject({ alvo_id: reserva.id, resolvido_em: null });
+  });
+
   test("Review Focus 3: hóspede saiu antes da conclusão da arrumação → QUARTO_NAO_OCUPADO e nada gravado", async () => {
     const reserva = await hospedar(q101);
     await salvarConfig(ctx, { camareiraLancaFrigobar: true }, "u1");

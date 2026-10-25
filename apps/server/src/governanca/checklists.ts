@@ -69,9 +69,9 @@ async function chamadoReaproveitavel(tx: Contexto, id: string | undefined, quart
   return c?.id ?? null;
 }
 
-async function avisoReaproveitavel(tx: Contexto, id: string | undefined, itemId: string): Promise<string | null> {
-  if (!id) return null;
-  const a = await tx.db.selectFrom("alertas").select("id").where("id", "=", id).where("tipo", "=", "controle_faltando").where("chave", "=", itemId).where("resolvido_em", "is", null).executeTakeFirst();
+async function avisoReaproveitavel(tx: Contexto, id: string | undefined, itemId: string, reservaId: string | null): Promise<string | null> {
+  if (!id || !reservaId) return null;
+  const a = await tx.db.selectFrom("alertas").select("id").where("id", "=", id).where("tipo", "=", "controle_faltando").where("alvo_tipo", "=", "reserva").where("alvo_id", "=", reservaId).where("chave", "=", itemId).where("resolvido_em", "is", null).executeTakeFirst();
   return a?.id ?? null;
 }
 
@@ -156,7 +156,7 @@ export async function concluirChecklist(
       if (r.equipamento === "nao_funciona" || (r.presenca === "faltando" && d.tipo === "saida")) {
         chamadoId = await abre();
       } else if (r.presenca === "faltando") {
-        alertaId = (await avisoReaproveitavel(tx, r.alertaId, item.id)) ?? (await avisarControleFaltando(tx, { quartoId, itemId: item.id }, usuario));
+        alertaId = (await avisoReaproveitavel(tx, r.alertaId, item.id, reservaId)) ?? (await avisarControleFaltando(tx, { quartoId, itemId: item.id }, usuario));
       }
       ligacoes.set(item.id, { chamadoId, alertaId });
     }
