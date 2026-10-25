@@ -228,7 +228,8 @@ test("formulário rápido do check-out lança cada item com setor frigobar", asy
 ```ts
 test("lista de governança com tarefas e ordem", async () => {
   // sujo 103, ocupado 105 sem arrumação, ocupado 104 arrumado hoje, bloqueado 201 com 1 defeito
-  // → tarefas ["limpeza_saida", "arrumacao", null(104), null(201)] na ordem 103, 105, 201, 104 conforme regra
+  // → ordem [103, 105, 201, 104] com tarefas ["limpeza_saida", "arrumacao", null, null];
+  //   201.motivoBloqueio === "Ar-condicionado não funciona", 201.chamadosAbertos === 1; 104.arrumadoHojeEm !== null
 });
 test("painel traz chamados abertos e ocupados sem arrumação", async () => {});
 test("reserva mostra a última arrumação de hoje", async () => {});
