@@ -17,7 +17,7 @@ export function criarReserva(extras: Partial<ReservaDetalhe> = {}): ReservaDetal
       { data: "2026-11-21", valor: 32200, passos: [{ rotulo: "Base", valor: 28000 }, { rotulo: "Sábado +15%", valor: 4200 }] },
       { data: "2026-11-22", valor: 28000, passos: [{ rotulo: "Base", valor: 28000 }] },
     ],
-    total: 90200, pago: 27000, quartoNumero: "101", titular, acompanhantes: [],
+    total: 90200, pago: 27000, quartoNumero: "101", titular, acompanhantes: [], ultimaArrumacao: null,
     ...extras,
   };
 }

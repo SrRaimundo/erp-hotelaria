@@ -21,11 +21,12 @@ export function criarPainel(extras: Partial<Painel> = {}): Painel {
     chegadasVencidas: [],
     alertas: [],
     ocupacao: { ocupados: 9, total: 12, percentual: 75 },
-    numeros: { chegadas: 3, chegadasJaHospedadas: 1, saidas: 2, hospedados: 5, pessoasHospedadas: 8, quartosSujos: 1, quartosManutencao: 1, livresHoje: 3 },
+    numeros: { chegadas: 3, chegadasJaHospedadas: 1, saidas: 2, hospedados: 5, pessoasHospedadas: 8, quartosSujos: 1, quartosManutencao: 1, livresHoje: 3, ocupadosSemArrumacao: 0, defeitosAbertos: 0 },
     governanca: [
       { quartoId: "q103", numero: "103", situacao: "sujo", motivo: null },
       { quartoId: "q106", numero: "106", situacao: "em_manutencao", motivo: "chuveiro" },
     ],
+    chamadosAbertos: [],
     proximosDias: [
       { dia: "2026-11-21", chegadas: 4, saidas: 2, ocupacaoPct: 83 },
       { dia: "2026-11-22", chegadas: 1, saidas: 0, ocupacaoPct: 100 },
