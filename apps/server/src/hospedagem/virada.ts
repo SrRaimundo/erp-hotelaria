@@ -25,7 +25,7 @@ export async function lancarDiariasPendentes(tx: Contexto, reservaId: string, at
     await lancar(tx, {
       contaId: reserva.conta_id, reservaId, tipo: "diaria", origem: "hospedagem",
       descricao: `Diária ${dia}/${mes} — ${passos.at(-1)?.rotulo ?? "Diária"}`,
-      quantidade: 1, valorUnitario: noite.valor, dataRef: noite.data,
+      quantidade: 1, valorUnitario: noite.valor, dataRef: noite.data, setor: "hospedagem",
     }, ATOR_SISTEMA);
     total++;
   }

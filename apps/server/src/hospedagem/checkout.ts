@@ -74,10 +74,10 @@ export async function previaCheckout(ctx: Contexto, reservaId: string): Promise<
   const previstas: LinhaExtrato[] = p.pendentes.map((n) => {
     const [, mes, dia] = n.data.split("-");
     const rotulo = (JSON.parse(n.passos) as { rotulo: string }[]).at(-1)?.rotulo ?? "Diária";
-    return { id: `previa-${n.data}`, natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: `Diária ${dia}/${mes} — ${rotulo}`, valor: n.valor, instante, data: p.hoje, estornaId: null, reservaId };
+    return { id: `previa-${n.data}`, natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: `Diária ${dia}/${mes} — ${rotulo}`, valor: n.valor, instante, data: p.hoje, estornaId: null, reservaId, setor: "hospedagem" };
   });
   if (p.taxa > 0) {
-    previstas.push({ id: "previa-late-checkout", natureza: "debito", tipo: "extra", origem: "hospedagem", descricao: "Late check-out", valor: p.taxa, instante, data: p.hoje, estornaId: null, reservaId });
+    previstas.push({ id: "previa-late-checkout", natureza: "debito", tipo: "extra", origem: "hospedagem", descricao: "Late check-out", valor: p.taxa, instante, data: p.hoje, estornaId: null, reservaId, setor: "hospedagem" });
   }
   const adicional = previstas.reduce((s, l) => s + l.valor, 0);
   return {
@@ -108,7 +108,7 @@ export async function fazerCheckout(ctx: Contexto, pedido: PedidoCheckout, usuar
       const produto = await obterProdutoPorCodigo(tx, "LATE_CHECKOUT");
       await lancar(tx, {
         tipo: "extra", origem: "hospedagem", produtoId: produto.id, descricao: "Late check-out",
-        quantidade: 1, valorUnitario: taxa, contaId: r.conta_id, reservaId: r.id,
+        quantidade: 1, valorUnitario: taxa, contaId: r.conta_id, reservaId: r.id, setor: "hospedagem",
       }, usuario.id);
     }
 

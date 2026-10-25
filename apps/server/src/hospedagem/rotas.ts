@@ -12,6 +12,7 @@ import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
 import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } from "./governanca.js";
+import { SETORES, type Setor } from "../governanca/setores.js";
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
 import { listarReservas } from "./lista-reservas.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
@@ -172,6 +173,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     descricao: texto.optional(),
     valorUnitario: z.number().int().min(1).optional(),
     quantidade: z.number().int().min(1),
+    setor: z.enum(SETORES as [Setor, ...Setor[]]).default("recepcao"),
   });
   const corpoPagamento = z.object({ reservaId: texto.optional(), formaCodigo: texto, valor: z.number().int().min(1) });
   const idParam = z.object({ id: texto });
@@ -197,7 +199,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     if (!descricao || valorUnitario === undefined) {
       throw new ErroDominio("LANCAMENTO_INCOMPLETO", "Informe o código do produto ou, então, a descrição e o valor unitário.");
     }
-    const id = await lancar(ctx, { contaId, tipo: "extra", origem: "hospedagem", produtoId, descricao, quantidade: c.quantidade, valorUnitario }, req.usuario.id);
+    const id = await lancar(ctx, { contaId, tipo: "extra", origem: "hospedagem", produtoId, descricao, quantidade: c.quantidade, valorUnitario, setor: c.setor }, req.usuario.id);
     return { id };
   });
   app.post("/api/contas/:id/pagamentos", async (req) => {

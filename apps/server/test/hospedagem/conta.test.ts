@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 
 const extra = (contaId: string, valorUnitario = 5000, quantidade = 1) =>
-  lancar(ctx, { contaId, tipo: "extra", origem: "hospedagem", descricao: "Lavanderia", quantidade, valorUnitario }, recepcao.id);
+  lancar(ctx, { contaId, tipo: "extra", origem: "hospedagem", descricao: "Lavanderia", quantidade, valorUnitario, setor: "recepcao" }, recepcao.id);
 
 describe("conta do hóspede", () => {
   test("pagamento do sinal confirma a pré-reserva", async () => {
@@ -141,7 +141,7 @@ describe("conta do hóspede", () => {
 
   test("diária exige reserva e noite de referência", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
-    const base = { contaId: r.contaId, tipo: "diaria" as const, origem: "hospedagem", descricao: "Diária", quantidade: 1, valorUnitario: 30000 };
+    const base = { contaId: r.contaId, tipo: "diaria" as const, origem: "hospedagem", descricao: "Diária", quantidade: 1, valorUnitario: 30000, setor: "hospedagem" as const };
     await expect(lancar(ctx, { ...base, dataRef: "2026-11-20" }, "Sistema")).rejects.toMatchObject({ codigo: "DIARIA_INVALIDA" });
     await expect(lancar(ctx, { ...base, reservaId: r.id }, "Sistema")).rejects.toMatchObject({ codigo: "DIARIA_INVALIDA" });
   });
@@ -197,7 +197,7 @@ describe("conta do hóspede", () => {
 
   test("diária duplicada para a mesma noite é rejeitada pelo banco", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
-    const diaria = { contaId: r.contaId, reservaId: r.id, tipo: "diaria" as const, origem: "hospedagem", descricao: "Diária", quantidade: 1, valorUnitario: 30000, dataRef: "2026-11-20" };
+    const diaria = { contaId: r.contaId, reservaId: r.id, tipo: "diaria" as const, origem: "hospedagem", descricao: "Diária", quantidade: 1, valorUnitario: 30000, dataRef: "2026-11-20", setor: "hospedagem" as const };
     await lancar(ctx, diaria, "Sistema");
     await expect(lancar(ctx, diaria, "Sistema")).rejects.toThrow();
     expect(await saldo(ctx, r.contaId)).toMatchObject({ debitos: 30000 });

@@ -102,7 +102,7 @@ export async function fazerCheckin(ctx: Contexto, p: PedidoCheckin, usuario: Usu
         const produto = await obterProdutoPorCodigo(tx, "EARLY_CHECKIN");
         await lancar(tx, {
           tipo: "extra", origem: "hospedagem", produtoId: produto.id, descricao: "Early check-in",
-          quantidade: 1, valorUnitario: taxa, contaId: r.contaId, reservaId: r.id,
+          quantidade: 1, valorUnitario: taxa, contaId: r.contaId, reservaId: r.id, setor: "hospedagem",
         }, usuario.id);
       }
     }

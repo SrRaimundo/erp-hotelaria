@@ -7,6 +7,7 @@ import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import { autorizarSupervisor } from "../nucleo/supervisor.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { formatarBRL, type Centavos } from "../shared/dinheiro.js";
+import type { Setor } from "../governanca/setores.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 import { dataLocal, type Data } from "../shared/tempo.js";
@@ -23,6 +24,7 @@ export type NovoLancamento = {
   quantidade: number;
   valorUnitario: Centavos;
   dataRef?: Data;
+  setor: Setor;
 };
 
 export type LinhaExtrato = {
@@ -37,6 +39,8 @@ export type LinhaExtrato = {
   data: Data;
   estornaId: string | null;
   reservaId: string | null;
+  /** Setor do lançamento; pagamentos não têm setor. */
+  setor: Setor | null;
 };
 
 async function exigirContaAberta(tx: Contexto, contaId: string): Promise<void> {
@@ -65,7 +69,7 @@ export async function lancar(ctx: Contexto, d: NovoLancamento, ator: string): Pr
     await tx.db.insertInto("lancamentos").values({
       id, conta_id: d.contaId, reserva_id: d.reservaId ?? null, tipo: d.tipo, origem: d.origem,
       produto_id: d.produtoId ?? null, descricao: d.descricao, quantidade: d.quantidade, valor,
-      data_ref: d.dataRef ?? null, estorna_id: null, instante: tx.relogio.agora().toISOString(), usuario: ator,
+      data_ref: d.dataRef ?? null, setor: d.setor, estorna_id: null, instante: tx.relogio.agora().toISOString(), usuario: ator,
     }).execute();
     await auditar(tx, {
       ator, acao: "conta.lancar", alvoTipo: "lancamento", alvoId: id,
@@ -95,7 +99,7 @@ export async function estornarLancamento(
     const id = novoId();
     await tx.db.insertInto("lancamentos").values({
       id, conta_id: o.conta_id, reserva_id: o.reserva_id, tipo: "estorno", origem: o.origem, produto_id: o.produto_id,
-      descricao: `Estorno: ${o.descricao}`, quantidade: o.quantidade, valor: -o.valor, data_ref: null,
+      descricao: `Estorno: ${o.descricao}`, quantidade: o.quantidade, valor: -o.valor, data_ref: null, setor: o.setor,
       estorna_id: o.id, instante: tx.relogio.agora().toISOString(), usuario: usuario.id,
     }).execute();
     await auditar(tx, {
@@ -257,11 +261,11 @@ export async function extrato(ctx: Contexto, contaId: string): Promise<LinhaExtr
   const linhas: LinhaExtrato[] = [
     ...ls.map((l): LinhaExtrato => ({
       id: l.id, natureza: "debito", tipo: l.tipo, origem: l.origem, descricao: l.descricao, valor: l.valor,
-      instante: l.instante, data: dia(l.instante), estornaId: l.estorna_id, reservaId: l.reserva_id,
+      instante: l.instante, data: dia(l.instante), estornaId: l.estorna_id, reservaId: l.reserva_id, setor: l.setor as Setor,
     })),
     ...ps.map((p): LinhaExtrato => ({
       id: p.id, natureza: "credito", tipo: p.estorna_id ? "estorno" : "pagamento", origem: "caixa",
-      descricao: `Pagamento (${p.forma_codigo})`, valor: p.valor, instante: p.instante, data: dia(p.instante), estornaId: p.estorna_id, reservaId: p.reserva_id,
+      descricao: `Pagamento (${p.forma_codigo})`, valor: p.valor, instante: p.instante, data: dia(p.instante), estornaId: p.estorna_id, reservaId: p.reserva_id, setor: null,
     })),
   ];
   return linhas.sort((a, b) => (a.instante === b.instante ? a.id.localeCompare(b.id) : a.instante.localeCompare(b.instante)));

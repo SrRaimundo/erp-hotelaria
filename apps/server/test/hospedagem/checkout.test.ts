@@ -61,7 +61,7 @@ const situacaoConta = async (id: string) =>
 describe("check-out", () => {
   test("pagamento dividido zera o saldo e finaliza", async () => {
     const r = await hospedar(dados);
-    await lancar(ctx, { contaId: r.contaId, reservaId: r.id, tipo: "extra", origem: "hospedagem", descricao: "Lavanderia", quantidade: 1, valorUnitario: 5000 }, recepcao.id);
+    await lancar(ctx, { contaId: r.contaId, reservaId: r.id, tipo: "extra", origem: "hospedagem", descricao: "Lavanderia", quantidade: 1, valorUnitario: 5000, setor: "recepcao" }, recepcao.id);
     ctx.relogio.definir(as("2026-11-13", "11:00"));
     const previa = await previaCheckout(ctx, r.id);
     expect(previa.saldo).toBe(95000);

@@ -57,7 +57,7 @@ describe("prazo do sinal", () => {
 
   test("I3: cancelamento automático com consumo na conta gera alerta de saldo", async () => {
     const r = await criarReserva(ctx, dados, recepcao);
-    await lancar(ctx, { contaId: r.contaId, tipo: "extra", origem: "hospedagem", descricao: "Transfer", quantidade: 1, valorUnitario: 8000 }, recepcao.id);
+    await lancar(ctx, { contaId: r.contaId, tipo: "extra", origem: "hospedagem", descricao: "Transfer", quantidade: 1, valorUnitario: 8000, setor: "recepcao" }, recepcao.id);
     avancar(48);
     await processarSinais(ctx);
     avancar(12);

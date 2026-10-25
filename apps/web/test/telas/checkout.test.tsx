@@ -16,7 +16,7 @@ function Local() {
 
 const linha = (o: Partial<LinhaExtrato>): LinhaExtrato => ({
   id: "l1", natureza: "debito", tipo: "diaria", origem: "hospedagem", descricao: "Diária 20/11", valor: 90000,
-  instante: "2026-11-20T14:00:00.000Z", data: "2026-11-20", estornaId: null, reservaId: "r1", ...o,
+  instante: "2026-11-20T14:00:00.000Z", data: "2026-11-20", estornaId: null, reservaId: "r1", setor: "hospedagem", ...o,
 });
 
 const extrato: LinhaExtrato[] = [

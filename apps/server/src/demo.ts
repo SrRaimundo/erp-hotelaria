@@ -106,7 +106,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     // Usuários (o admin já existe e mantém a troca de senha obrigatória)
     await criarUsuario(tx, { nome: "Recepção", login: "recepcao", senha: "recepcao123", perfil: "recepcao" }, ator);
     await criarUsuario(tx, { nome: "Governança", login: "governanca", senha: "governanca123", perfil: "governanca" }, ator);
-    const frigobar = await criarProduto(tx, { codigo: "FRIGOBAR", nome: "Frigobar", precoCentavos: 1800, unidade: "un", grupo: "frigobar", tipo: "produto" }, ator);
+    const frigobar = await criarProduto(tx, { codigo: "FRIGOBAR", nome: "Frigobar", precoCentavos: 1800, unidade: "un", grupo: "frigobar", tipo: "produto", setores: ["frigobar"] }, ator);
 
     // Hóspedes (o índice 6 fica sem documento, para mostrar a pendência da FNRH)
     const cidades: [string, string][] = [["Recife", "PE"], ["Olinda", "PE"], ["Salvador", "BA"], ["São Paulo", "SP"], ["Fortaleza", "CE"]];
@@ -151,7 +151,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     for (const r of saemHoje) {
       await lancar(tx, {
         contaId: r.contaId, reservaId: r.id, tipo: "extra", origem: "hospedagem", produtoId: frigobar.id,
-        descricao: "Frigobar", quantidade: 3, valorUnitario: frigobar.precoCentavos,
+        descricao: "Frigobar", quantidade: 3, valorUnitario: frigobar.precoCentavos, setor: "frigobar",
       }, ator);
     }
 

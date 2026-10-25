@@ -8,6 +8,7 @@ import { listarFormas } from "./formas-pagamento.js";
 import { buscarHospedes, obterHospede, salvarHospede } from "./hospedes.js";
 import { exigirPermissao } from "./permissoes.js";
 import { obterConfig, salvarConfig, type ConfigPousada } from "./pousada.js";
+import { SETORES, type Setor } from "../governanca/setores.js";
 import { criarProduto, listarProdutos } from "./produtos.js";
 import { criarQuarto, listarQuartos } from "./quartos.js";
 import { entrar, sair } from "./sessoes.js";
@@ -73,7 +74,9 @@ const corpoProduto = z.object({
   unidade: texto,
   grupo: texto,
   tipo: z.enum(["produto", "servico"]),
+  setores: z.array(z.enum(SETORES as [Setor, ...Setor[]])).min(1, "Informe ao menos um setor").optional(),
 });
+const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional() });
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
 const corpoAbrirCaixa = z.object({ valorInicial: centavos });
 const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
@@ -128,7 +131,7 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     return res.status(201).send(await salvarHospede(ctx, corpoHospede.parse(req.body), req.usuario.id));
   });
 
-  app.get("/api/produtos", async () => listarProdutos(ctx));
+  app.get("/api/produtos", async (req) => listarProdutos(ctx, queryProdutos.parse(req.query).setor));
   app.post("/api/produtos", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
     return res.status(201).send(await criarProduto(ctx, corpoProduto.parse(req.body), req.usuario.id));
