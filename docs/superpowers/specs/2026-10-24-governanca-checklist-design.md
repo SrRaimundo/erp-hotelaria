@@ -43,15 +43,17 @@ Itens podem ser desativados (não aparecem em novos checklists), nunca apagados,
 - Controles: Controle da TV · Controle do ar-condicionado
 - (sem equipamentos no padrão; a pousada poderá incluí-los quando houver a tela de configuração)
 
-### 2.2 Frigobar
+### 2.2 Setores e frigobar
 
-- **Produtos de frigobar** são os produtos do cadastro existente com grupo `Frigobar`; trazem o preço, então ninguém digita valor.
+- **Cadastro de produtos único:** um produto existe uma vez só ("Água mineral" é a mesma no frigobar, no freezer da recepção, no bar e no restaurante), com **preço único**.
+- **Setor:** todo lançamento na conta registra o **setor** em que a venda aconteceu. Setores fixos nesta versão: `hospedagem` (diárias e taxas de early/late), `recepcao`, `frigobar`, `bar`, `restaurante`. Lançamentos existentes recebem `hospedagem` (diárias e taxas) ou `recepcao` (demais extras) na migração.
+- **Onde cada produto é vendido:** o produto indica em quais setores aparece (marcação no próprio cadastro, ex.: Água mineral → Frigobar, Recepção, Bar). Só filtra listas; não duplica o produto. Os **produtos de frigobar** são os marcados para o setor Frigobar; trazem o preço, então ninguém digita valor.
 - **Opção da pousada** `camareiraLancaFrigobar` (padrão: desligada), guardada na configuração da pousada.
 - O frigobar aparece como **última etapa de conteúdo** do checklist (antes do resultado, na saída), com a lista de produtos de frigobar e botões 0 · 1 · 2 · 3 · + por produto:
-  - **Arrumação diária, opção ligada:** a camareira informa o **consumo** de cada produto; o servidor lança cada item na conta do hóspede (origem "Governança", produto, quantidade) e registra a mesma quantidade como **reposição**.
+  - **Arrumação diária, opção ligada:** a camareira informa o **consumo** de cada produto; o servidor lança cada item na conta do hóspede (setor Frigobar, origem "Governança", produto, quantidade) e registra a mesma quantidade como **reposição**.
   - **Arrumação diária, opção desligada:** a etapa não aparece.
   - **Limpeza de saída (sempre):** a camareira informa só a **reposição** (quanto colocou de cada produto); nada é cobrado.
-- **Conferência no check-out:** feita pelo mensageiro ou pela recepção plantonista usando o login da recepção, no formulário rápido **Frigobar** do painel da reserva (seção 4.3). Lança o consumo na conta; não registra reposição (a reposição é registrada pela camareira na limpeza de saída).
+- **Conferência no check-out:** feita pelo mensageiro ou pela recepção plantonista usando o login da recepção, no formulário rápido **Frigobar** do painel da reserva (seção 4.3). Lança o consumo na conta com setor Frigobar; não registra reposição (a reposição é registrada pela camareira na limpeza de saída).
 
 ### 2.3 Checklist (execução)
 
@@ -128,8 +130,10 @@ Na arrumação de quarto ocupado, controle "Faltando" **não** abre chamado: cri
 
 ### 4.3 Painel da reserva
 - Aba Resumo: "Última arrumação: hoje às 10:42 por Ana" (ou "Sem arrumação hoje").
-- Aba Conta (reserva `hospedada`): botão **Frigobar** que abre o formulário rápido — produtos de frigobar com 0 · 1 · 2 · 3 · + e total em reais; "Lançar" cria um lançamento por produto com quantidade > 0 (origem "Frigobar"). Pensado para a conferência do check-out pelo mensageiro ou plantonista.
-- Os lançamentos de frigobar feitos pela camareira aparecem no extrato com origem "Governança" e a descrição do produto.
+- Aba Conta (reserva `hospedada`): botão **Frigobar** que abre o formulário rápido — produtos de frigobar com 0 · 1 · 2 · 3 · + e total em reais; "Lançar" cria um lançamento por produto com quantidade > 0 (setor Frigobar). Pensado para a conferência do check-out pelo mensageiro ou plantonista.
+- Os lançamentos de frigobar feitos pela camareira aparecem no extrato com setor Frigobar, origem "Governança" e a descrição do produto.
+- Formulário de extra da aba Conta ganha o campo **Setor** (padrão Recepção; opções: Recepção, Frigobar, Bar, Restaurante) e a lista de produtos é filtrada pelo setor escolhido.
+- O extrato mostra a coluna **Setor**.
 
 ### 4.4 Mapa
 - Quarto bloqueado continua indisponível para reservas e mostra o motivo no mapa (já existente), agora com o nº de chamados de defeito abertos.
@@ -141,7 +145,8 @@ Na arrumação de quarto ocupado, controle "Faltando" **não** abre chamado: cri
 - `POST /api/quartos/:id/chamados` → `{ itemId, observacao? }` cria chamado aberto (tipo deduzido da etapa do item); `POST /api/chamados/:id/cancelar` (quem abriu); `POST /api/chamados/:id/resolver` → `{ observacao? }` devolve `{ podeLiberar }`.
 - `POST /api/quartos/:id/avisos-controle` → `{ itemId }` cria o aviso da seção 2.5 (usa `criarAlerta`, tipo `controle_faltando`); `POST /api/alertas/:id/cancelar` não é necessário — desmarcar antes de concluir chama `POST /api/alertas/:id/resolver` do próprio aviso.
 - `GET /api/chamados?situacao=aberto` para a recepção.
-- `POST /api/contas/:id/frigobar` → `{ reservaId, itens: { produtoId, quantidade }[] }` (recepção, `conta.lancar`): um lançamento por item com quantidade > 0, origem "frigobar", na mesma transação.
+- `POST /api/contas/:id/frigobar` → `{ reservaId, itens: { produtoId, quantidade }[] }` (recepção, `conta.lancar`): um lançamento por item com quantidade > 0, setor `frigobar`, na mesma transação.
+- `POST /api/contas/:id/lancamentos` passa a aceitar `setor` (padrão `recepcao`); `GET /api/produtos?setor=` filtra pelos setores do produto; o cadastro de produto aceita `setores: string[]`.
 - `GET /api/governanca` ampliado: `tarefa` (`limpeza_saida` | `arrumacao` | null), `arrumadoHojeEm`, `motivoBloqueio`, `chamadosAbertos`.
 - Painel do dia: `chamadosAbertos` (lista) e `numeros.ocupadosSemArrumacao`.
 - `obterReserva`: `ultimaArrumacao: { em, por } | null`.
@@ -157,19 +162,21 @@ Na arrumação de quarto ocupado, controle "Faltando" **não** abre chamado: cri
 - `frigobar_movimentos(id, execucao_id NULL, quarto_id, reserva_id NULL, produto_id, quantidade, tipo "consumo" | "reposicao", lancamento_id NULL, usuario_id, instante)` — consumo lançado pela camareira (com o id do lançamento na conta) e reposições; o formulário rápido do check-out grava só o lançamento na conta.
 - `chamados(id, quarto_id, item_id NULL, tipo "defeito" | "reposicao", descricao, observacao NULL, situacao, aberto_por, aberto_em, encerrado_por NULL, encerrado_em NULL, observacao_encerramento NULL)` — única atualização permitida: a mudança de `aberto` para `resolvido`/`cancelado`.
 - Configuração da pousada: campo `camareiraLancaFrigobar` (boolean, padrão falso).
+- `lancamentos.setor` (nova coluna, `NOT NULL` com padrão; migração preenche os existentes: diárias e taxas de early/late → `hospedagem`, demais → `recepcao`). A coluna nasce com o lançamento e nunca é alterada.
+- `produto_setores(produto_id, setor)` — em quais setores o produto aparece.
 
 Execuções, respostas e movimentos de frigobar: somente inserção.
 
 ## 7. Demonstração
 
-`semearDemonstracao` passa a incluir: produtos de frigobar (Água mineral R$ 6,00, Refrigerante R$ 8,00, Cerveja R$ 12,00, Chocolate R$ 9,00) no grupo `Frigobar`; a opção `camareiraLancaFrigobar` ligada; um quarto `bloqueado` com motivo "Ar-condicionado não funciona" e o chamado de defeito aberto; um chamado de reposição aberto ("Controle da TV faltando"); um checklist de saída concluído ontem e duas arrumações de hoje (uma com consumo de frigobar lançado na conta).
+`semearDemonstracao` passa a incluir: produtos (Água mineral R$ 6,00, Refrigerante R$ 8,00, Cerveja R$ 12,00, Chocolate R$ 9,00) marcados para os setores Frigobar, Recepção e Bar; a opção `camareiraLancaFrigobar` ligada; um quarto `bloqueado` com motivo "Ar-condicionado não funciona" e o chamado de defeito aberto; um chamado de reposição aberto ("Controle da TV faltando"); um checklist de saída concluído ontem e duas arrumações de hoje (uma com consumo de frigobar lançado na conta).
 
 ## 8. Testes
 
-- Servidor: cada regra da seção 3 (liberar com/sem limpeza completa e chamados de defeito abertos, reposição não impede, motivo obrigatório, transição sujo→bloqueado, diária só com hospedada, chamado/aviso offline criados no envio, cancelar só por quem abriu, liberar bloqueado com defeito aberto recusado, `podeLiberar`, consumo de frigobar lançado na conta só com a opção ligada, reposição gravada na saída sem cobrança, produto que não é de frigobar recusado, conta fechada não grava nada, formulário rápido do check-out).
+- Servidor: cada regra da seção 3 (liberar com/sem limpeza completa e chamados de defeito abertos, reposição não impede, motivo obrigatório, transição sujo→bloqueado, diária só com hospedada, chamado/aviso offline criados no envio, cancelar só por quem abriu, liberar bloqueado com defeito aberto recusado, `podeLiberar`, consumo de frigobar lançado na conta só com a opção ligada, reposição gravada na saída sem cobrança, produto não marcado para o setor Frigobar recusado no checklist, setor gravado em cada lançamento e preenchido na migração, conta fechada não grava nada, formulário rápido do check-out).
 - Interface: fluxo por etapas, contagens e "+", abertura/cancelamento de chamado e de aviso, Liberado desabilitado com explicação, motivo sugerido, etapa de frigobar conforme tipo e opção, rascunho salvo e retomado, bloco Chamados abertos com Resolvido → Liberar quarto, formulário Frigobar no painel da reserva.
 - Ponta a ponta (navegador): camareira faz arrumação lançando 1 água no frigobar (aparece na conta); camareira faz limpeza de saída marcando o ar-condicionado com defeito e bloqueia; recepção vê o chamado, resolve e libera; o quarto fica livre no mapa.
 
 ## 9. Fora de escopo
 
-Tela de configuração dos modelos e dos produtos de frigobar (B2), perfil de mensageiro e de manutenção, estoque de frigobar e de enxoval, custos por chamado, relatórios e métricas (os dados ficam prontos para eles), fotos no checklist, cobrança automática de controle perdido.
+Tela de configuração dos modelos e dos setores dos produtos (B2), cadastro de setores pela pousada, preço por setor, perfil de mensageiro e de manutenção, estoque de frigobar e de enxoval, custos por chamado, relatórios e métricas (os dados ficam prontos para eles), fotos no checklist, cobrança automática de controle perdido.
