@@ -24,6 +24,7 @@ export type ConfigPousada = {
   lateCheckout: RegraTaxa;
   idadeAdulto: number;
   limiteCriancasGratis: number;
+  camareiraLancaFrigobar: boolean;
 };
 
 export const CONFIG_PADRAO: ConfigPousada = {
@@ -40,6 +41,7 @@ export const CONFIG_PADRAO: ConfigPousada = {
   lateCheckout: { tipo: "fixo", valor: 0 },
   idadeAdulto: 12,
   limiteCriancasGratis: 1,
+  camareiraLancaFrigobar: false,
 };
 
 function mesclar(base: ConfigPousada, parcial: Partial<ConfigPousada>): ConfigPousada {

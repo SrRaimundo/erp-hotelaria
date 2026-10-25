@@ -10,7 +10,7 @@ export type Quarto = { id: string; numero: string; categoriaId: string; bloco: s
 const TRANSICOES: Record<SituacaoQuarto, SituacaoQuarto[]> = {
   livre: ["ocupado", "em_manutencao", "bloqueado"],
   ocupado: ["sujo"],
-  sujo: ["livre", "em_manutencao"],
+  sujo: ["livre", "em_manutencao", "bloqueado"],
   em_manutencao: ["livre", "sujo"],
   bloqueado: ["livre"],
 };

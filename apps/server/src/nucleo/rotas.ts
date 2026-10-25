@@ -43,6 +43,7 @@ const corpoConfig = z
     lateCheckout: regraTaxa,
     idadeAdulto: naoNegativo,
     limiteCriancasGratis: naoNegativo,
+    camareiraLancaFrigobar: z.boolean(),
   })
   .partial();
 
