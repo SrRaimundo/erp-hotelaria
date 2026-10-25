@@ -45,14 +45,15 @@ beforeEach(async () => {
 });
 
 describe("governança", () => {
-  test("governança marca limpo, mas não coloca em manutenção (403)", async () => {
+  test("governança não marca limpo pela rota antiga e não coloca em manutenção (403)", async () => {
     const app = criarApp(ctx);
     const gov = await entrarComo(ctx, "governanca");
     await mudarSituacaoQuarto(ctx, q101, "em_manutencao", "u1");
     await mudarSituacaoQuarto(ctx, q101, "sujo", "u1");
     const ok = await app.inject({ method: "POST", url: `/api/quartos/${q101}/limpo`, headers: gov });
-    expect(ok.statusCode).toBe(200);
-    expect((await obterQuarto(ctx, q101)).situacao).toBe("livre");
+    expect(ok.statusCode).toBe(422);
+    expect(ok.json()).toMatchObject({ codigo: "CHECKLIST_OBRIGATORIO", mensagem: "Use o checklist para liberar o quarto." });
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("sujo");
     const r = await app.inject({ method: "POST", url: `/api/quartos/${q102}/manutencao`, headers: gov, payload: { motivo: "Torneira" } });
     expect(r.statusCode).toBe(403);
     expect(await colocarEmManutencao(ctx, q102, "Torneira", governanca).catch((e) => e)).toMatchObject({ codigo: "SEM_PERMISSAO" });

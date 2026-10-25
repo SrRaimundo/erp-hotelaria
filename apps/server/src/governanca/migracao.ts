@@ -77,3 +77,26 @@ export const migracaoGovernancaModelos: Migracao = {
     }
   },
 };
+
+/** Chamados de defeito e reposição abertos pela camareira; nunca apagados, só encerrados. */
+export const migracaoGovernancaChamados: Migracao = {
+  nome: "0520_governanca_chamados",
+  async up(db) {
+    await db.schema
+      .createTable("chamados")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("quarto_id", "text", (c) => c.notNull().references("quartos.id"))
+      .addColumn("item_id", "text", (c) => c.references("checklist_itens.id"))
+      .addColumn("tipo", "text", (c) => c.notNull())
+      .addColumn("descricao", "text", (c) => c.notNull())
+      .addColumn("observacao", "text")
+      .addColumn("situacao", "text", (c) => c.notNull())
+      .addColumn("aberto_por", "text", (c) => c.notNull().references("usuarios.id"))
+      .addColumn("aberto_em", "text", (c) => c.notNull())
+      .addColumn("encerrado_por", "text")
+      .addColumn("encerrado_em", "text")
+      .addColumn("observacao_encerramento", "text")
+      .execute();
+    await sql`CREATE INDEX chamados_quarto_situacao ON chamados (quarto_id, situacao)`.execute(db);
+  },
+};

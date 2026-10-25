@@ -1,3 +1,4 @@
+import { defeitosAbertos } from "../governanca/chamados.js";
 import { exigirPermissao, type UsuarioSessao } from "../nucleo/permissoes.js";
 import { listarQuartos, mudarSituacaoQuarto, obterQuarto, type SituacaoQuarto } from "../nucleo/quartos.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
@@ -68,6 +69,10 @@ export async function liberar(ctx: Contexto, quartoId: string, motivo: string, u
     const quarto = await obterQuarto(tx, quartoId);
     if (quarto.situacao !== "em_manutencao" && quarto.situacao !== "bloqueado") {
       throw new ErroDominio("TRANSICAO_QUARTO_INVALIDA", `O quarto ${quarto.numero} não está em manutenção nem bloqueado.`, { de: quarto.situacao, para: "livre" });
+    }
+    const defeitos = await defeitosAbertos(tx, quartoId);
+    if (defeitos > 0) {
+      throw new ErroDominio("CHAMADO_ABERTO", `Há ${defeitos} chamado(s) de defeito aberto(s) neste quarto.`, { defeitos });
     }
     await mudarSituacaoQuarto(tx, quartoId, "livre", usuario.id, m);
   });

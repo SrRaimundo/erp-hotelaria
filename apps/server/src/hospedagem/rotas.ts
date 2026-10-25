@@ -11,7 +11,7 @@ import { estornarLancamento, estornarPagamento, extrato, lancar, registrarPagame
 import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
-import { bloquear, colocarEmManutencao, liberar, listaGovernanca, marcarLimpo } from "./governanca.js";
+import { bloquear, colocarEmManutencao, liberar, listaGovernanca } from "./governanca.js";
 import { SETORES, type Setor } from "../governanca/setores.js";
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
 import { listarReservas } from "./lista-reservas.js";
@@ -254,8 +254,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   });
   app.post("/api/quartos/:id/limpo", async (req) => {
     exigirPermissao(req.usuario, "quartos.situacao");
-    await marcarLimpo(ctx, idParam.parse(req.params).id, req.usuario);
-    return { ok: true };
+    throw new ErroDominio("CHECKLIST_OBRIGATORIO", "Use o checklist para liberar o quarto.");
   });
   const acoesQuarto = { manutencao: colocarEmManutencao, bloquear, liberar } as const;
   for (const [caminho, acao] of Object.entries(acoesQuarto)) {
