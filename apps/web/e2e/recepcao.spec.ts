@@ -110,11 +110,15 @@ test.describe.serial("recepção: um dia de ponta a ponta", () => {
     await gaveta(page).getByRole("button", { name: "Cancelar" }).click();
 
     await gaveta(page).getByRole("tab", { name: "Conta" }).click();
+    // A demonstração já lança frigobar nesta conta (descrição e setor): conta as células antes e depois.
+    const celulasFrigobar = gaveta(page).getByRole("cell", { name: "Frigobar", exact: true });
+    await expect(celulasFrigobar.first()).toBeVisible();
+    const antes = await celulasFrigobar.count();
     await gaveta(page).getByLabel("Produto").selectOption({ label: "Outro (descrição livre)" });
     await gaveta(page).getByLabel("Descrição").fill("Frigobar");
     await gaveta(page).getByLabel("Valor unitário").fill("12,00");
     await gaveta(page).getByRole("button", { name: "Lançar", exact: true }).click();
-    await expect(gaveta(page).getByRole("cell", { name: "Frigobar", exact: true })).toBeVisible();
+    await expect(celulasFrigobar).toHaveCount(antes + 1);
 
     await gaveta(page).getByRole("button", { name: "Fechar" }).click();
     await page.locator("li.hoje-linha", { hasText: "Carlos Eduardo Lima" }).getByRole("button", { name: "Check-out" }).click();
@@ -157,12 +161,30 @@ test.describe.serial("recepção: um dia de ponta a ponta", () => {
   });
 });
 
-test("7. governança no celular marca o quarto sujo como limpo @celular", async ({ page }) => {
+test("7. governança no celular libera o quarto sujo pelo checklist de saída @celular", async ({ page }) => {
   await entrar(page, "governanca", "governanca123");
   await expect(page.getByRole("heading", { name: "Governança" })).toBeVisible();
-  const sujo = page.getByRole("button", { name: /^202 sujo/ });
-  await sujo.click();
-  await page.getByRole("dialog", { name: "Marcar 202 como limpo?" }).getByRole("button", { name: "Confirmar" }).click();
+  await page.getByRole("button", { name: /^202 sujo/ }).click();
+
+  for (let etapa = 0; etapa < 8; etapa++) {
+    const titulo = (await page.locator("h2.checklist__titulo").innerText()).trim();
+    if (titulo === "Resultado") break;
+    for (const grupo of await page.getByRole("group").all()) {
+      const botoes = grupo.getByRole("button");
+      if (titulo === "Limpeza") await botoes.getByText("Sim", { exact: true }).click();
+      else if (titulo === "Equipamentos") await botoes.getByText("Funciona", { exact: true }).click();
+      else if (titulo === "Controles") await botoes.getByText("Presente", { exact: true }).click();
+      else if (titulo === "Reposição do frigobar") await botoes.getByText("0", { exact: true }).click();
+      else if (titulo === "Enxoval recolhido") await botoes.getByText("1", { exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Próxima etapa" }).click();
+  }
+  await page.getByRole("button", { name: "Liberado", exact: true }).click();
+  await page.getByRole("button", { name: "Concluir", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Checklist concluído · Qto 202");
   await expect(page.getByRole("button", { name: /^202 / })).toHaveCount(0);
-  await expect(page.getByText("202", { exact: true })).toBeVisible();
+  const cartao = page.locator("li.governanca__item", { has: page.getByText("202", { exact: true }) });
+  await expect(cartao).toContainText("livre");
+  await expect(cartao).not.toContainText("Limpeza de saída");
 });
