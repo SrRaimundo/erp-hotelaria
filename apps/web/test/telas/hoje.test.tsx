@@ -267,4 +267,61 @@ describe("tela Hoje", () => {
     await u.click(screen.getByRole("button", { name: "Abrir reserva" }));
     expect(screen.getByTestId("local")).toHaveTextContent("/?reserva=r12");
   });
+
+  describe("chamados abertos", () => {
+    const chamado = (extras: Record<string, unknown> = {}) => ({
+      id: "ch1", quartoId: "q101", quartoNumero: "101", itemId: null, tipo: "defeito", descricao: "Ar-condicionado", observacao: "Pingando",
+      situacao: "aberto", abertoPor: "u9", abertoPorNome: "Rita", abertoEm: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      encerradoPor: null, encerradoEm: null, observacaoEncerramento: null, ...extras,
+    });
+    const gerente = { permissoes: ["reservas.gerenciar", "quartos.manutencao"] };
+    const montarComChamados = (rotas: Record<string, unknown>, usuario: Record<string, unknown> = gerente) => {
+      instalarApiFalsa({
+        "GET /api/painel": criarPainel({ chamadosAbertos: [chamado() as never, chamado({ id: "ch2", tipo: "reposicao", descricao: "Toalha", observacao: null, quartoNumero: "102", quartoId: "q102", abertoEm: new Date(Date.now() - 20 * 60_000).toISOString() }) as never] }),
+        "GET /api/config": { horaCheckin: "14:00", horaCheckout: "12:00" },
+        ...rotas,
+      });
+      return renderizar(<TelaHoje />, { usuario });
+    };
+
+    test("chamados abertos com Resolvido e depois Liberar quarto", async () => {
+      const u = userEvent.setup();
+      montarComChamados({
+        "POST /api/chamados/ch1/resolver": { podeLiberar: true },
+        "POST /api/quartos/q101/liberar": { ok: true },
+      });
+      expect(await screen.findByRole("heading", { name: "Chamados abertos (2)" })).toBeInTheDocument();
+      expect(screen.getByText("Defeito · Qto 101 · Ar-condicionado")).toBeInTheDocument();
+      expect(screen.getByText("Pingando")).toBeInTheDocument();
+      expect(screen.getByText("por Rita há 2 h")).toBeInTheDocument();
+      expect(screen.getByText("Reposição · Qto 102 · Toalha")).toBeInTheDocument();
+      expect(screen.getByText("por Rita há 20 min")).toBeInTheDocument();
+
+      await u.click(screen.getAllByRole("button", { name: "Resolvido" })[0]!);
+      const janela = screen.getByRole("dialog");
+      await u.type(within(janela).getByLabelText("Observação (opcional)"), "Trocado o dreno");
+      await u.click(within(janela).getByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(chamadas.find((c) => c.caminho === "/api/chamados/ch1/resolver")?.corpo).toMatchObject({ observacao: "Trocado o dreno" }));
+
+      await u.click(await screen.findByRole("button", { name: "Liberar quarto" }));
+      const liberar = screen.getByRole("dialog");
+      expect(within(liberar).getByLabelText("Motivo")).toHaveValue("Liberado após resolução do chamado");
+      await u.click(within(liberar).getByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(chamadas.find((c) => c.caminho === "/api/quartos/q101/liberar")?.corpo).toEqual({ motivo: "Liberado após resolução do chamado" }));
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Liberar quarto" })).not.toBeInTheDocument());
+    });
+
+    test("sem permissão de manutenção o bloco não aparece", async () => {
+      montarComChamados({}, { permissoes: ["reservas.gerenciar"] });
+      await screen.findByText(/ocupação hoje/);
+      expect(screen.queryByText(/Chamados abertos/)).not.toBeInTheDocument();
+    });
+
+    test("governança agora mostra bloqueado com motivo e ocupados sem arrumação", async () => {
+      const base = criarPainel();
+      montar(criarPainel({ numeros: { ...base.numeros, ocupadosSemArrumacao: 3 }, governanca: [{ quartoId: "q9", numero: "109", situacao: "bloqueado", motivo: "Chamado aberto" }] }));
+      expect(await screen.findByText("109 bloqueado · Chamado aberto")).toBeInTheDocument();
+      expect(screen.getByText("3 ocupados sem arrumação hoje")).toBeInTheDocument();
+    });
+  });
 });

@@ -12,6 +12,9 @@ function dataHora(iso: string): string {
   return `${dois(d.getDate())}/${dois(d.getMonth() + 1)} ${dois(d.getHours())}:${dois(d.getMinutes())}`;
 }
 
+/** "hoje às HH:MM" no fuso do navegador (a arrumação já vem filtrada pelo dia hoteleiro). */
+const horaDe = (iso: string) => `${dois(new Date(iso).getHours())}:${dois(new Date(iso).getMinutes())}`;
+
 export function AbaResumo({ reserva }: { reserva: ReservaDetalhe }) {
   const [abertas, setAbertas] = useState<ReadonlySet<string>>(new Set());
   const alternar = (data: string) =>
@@ -35,6 +38,12 @@ export function AbaResumo({ reserva }: { reserva: ReservaDetalhe }) {
           <>
             <dt>Observações</dt>
             <dd>{reserva.observacoes}</dd>
+          </>
+        )}
+        {reserva.estado === "hospedada" && (
+          <>
+            <dt>Arrumação</dt>
+            <dd>{reserva.ultimaArrumacao ? `Última arrumação: hoje às ${horaDe(reserva.ultimaArrumacao.em)} por ${reserva.ultimaArrumacao.por}` : "Sem arrumação hoje"}</dd>
           </>
         )}
         {sinal && (

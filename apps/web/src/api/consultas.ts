@@ -83,7 +83,8 @@ export const useProdutos = (setor?: Setor) =>
 export const useFormasPagamento = () =>
   useQuery({ queryKey: ["formas-pagamento"], queryFn: () => chamarApi<FormaPagamento[]>("GET", "/api/formas-pagamento"), staleTime: 300_000 });
 
-export const useGovernanca = () => useQuery({ queryKey: ["governanca"], queryFn: () => chamarApi<ItemGovernanca[]>("GET", "/api/governanca") });
+export const useGovernanca = (ativo = true) =>
+  useQuery({ queryKey: ["governanca"], queryFn: () => chamarApi<ItemGovernanca[]>("GET", "/api/governanca"), enabled: ativo });
 
 export const useBusca = (q: string) =>
   useQuery({

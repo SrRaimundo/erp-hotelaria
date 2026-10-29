@@ -12,6 +12,8 @@ type Props = {
   dias: number;
   hoje: string;
   nomesCategoria: Record<string, string>;
+  /** Chamados abertos por quarto (só quem tem permissão de governança os recebe). */
+  chamadosPorQuarto?: Record<string, number>;
   aoAbrirReserva: (reservaId: string) => void;
   aoCriarReserva: (quartoId: string, data: string) => void;
   /** Reserva arrastada ou esticada até uma nova posição (ainda sem gravar). */
@@ -22,7 +24,7 @@ function classeDia(dia: string, hoje: string): string {
   return ["mapa-dia", dia === hoje && "mapa-dia--hoje", ehFimDeSemana(dia) && "mapa-dia--fds"].filter(Boolean).join(" ");
 }
 
-export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirReserva, aoCriarReserva, aoSoltar }: Props) {
+export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, chamadosPorQuarto, aoAbrirReserva, aoCriarReserva, aoSoltar }: Props) {
   const colunas = colunasDoPeriodo(inicio, dias);
   const grupos = linhaDeQuarto(mapa.quartos, mapa.barras, nomesCategoria);
   // O mapa só traz o nome da categoria dos quartos: o id só é usado quando o nome identifica uma única categoria.
@@ -52,7 +54,12 @@ export function GradeMapa({ mapa, inicio, dias, hoje, nomesCategoria, aoAbrirRes
     const pistas = quarto ? posicionadas.map(() => 0) : distribuirPistas(posicionadas.map((p) => p.posicao));
     const nPistas = Math.max(1, ...pistas.map((p) => p + 1));
     const ocupadas = new Set(posicionadas.flatMap(({ posicao: p }) => Array.from({ length: p.largura }, (_, i) => p.coluna + i)));
-    const situacao = quarto ? SITUACOES[quarto.situacao] : undefined;
+    const chamados = quarto ? (chamadosPorQuarto?.[quarto.id] ?? 0) : 0;
+    const situacao = quarto
+      ? quarto.situacao === "bloqueado" && chamados > 0
+        ? `bloqueado · ${chamados} ${chamados === 1 ? "chamado" : "chamados"}`
+        : SITUACOES[quarto.situacao]
+      : undefined;
     return (
       <div
         className="mapa-linha"

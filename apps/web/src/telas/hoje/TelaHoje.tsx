@@ -5,6 +5,7 @@ import { Cartao } from "../../componentes/Cartao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { nomeDiaSemana } from "../../lib/datas";
 import { BlocoAtencao } from "./BlocoAtencao";
+import { BlocoChamados } from "./BlocoChamados";
 import { BlocoGovernanca } from "./BlocoGovernanca";
 import { ListaChegadas } from "./ListaChegadas";
 import { ListaSaidas } from "./ListaSaidas";
@@ -37,7 +38,7 @@ function Numero({ rotulo, valor, legenda }: { rotulo: string; valor: number; leg
 export function TelaHoje() {
   const painel = usePainel();
   const config = useConfigHorarios();
-  const { usuario } = useSessao();
+  const { usuario, pode } = useSessao();
   const navegar = useNavigate();
 
   // Com dados em cache a tela continua (o erro de uma nova consulta aparece na faixa de conexão do Shell).
@@ -66,10 +67,11 @@ export function TelaHoje() {
         <Numero rotulo="Livres hoje" valor={n.livresHoje} legenda="p/ walk-in" />
       </div>
       <BlocoAtencao itens={p.atencao} aoAbrir={abrir} />
+      {pode("quartos.manutencao") && <BlocoChamados chamados={p.chamadosAbertos} />}
       <div className="hoje-grade">
         <ListaChegadas chegadas={p.chegadas} horaCheckin={config.data?.horaCheckin} aoAbrir={abrir} />
         <ListaSaidas saidas={p.saidas} horaCheckout={config.data?.horaCheckout} aoAbrir={(id) => abrir(reserva(id, "&fluxo=checkout"))} />
-        <BlocoGovernanca governanca={p.governanca} />
+        <BlocoGovernanca governanca={p.governanca} ocupadosSemArrumacao={n.ocupadosSemArrumacao} />
         <ProximosDias dias={p.proximosDias} />
       </div>
     </div>

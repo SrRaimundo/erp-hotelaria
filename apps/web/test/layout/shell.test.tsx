@@ -59,6 +59,16 @@ describe("casca", () => {
     expect(await screen.findByLabelText("2 itens de atenção")).toHaveTextContent("2");
   });
 
+  test("contador do menu soma atenção e defeitos abertos", async () => {
+    const base = criarPainel();
+    instalarApiFalsa({
+      "GET /api/painel": criarPainel({ numeros: { ...base.numeros, defeitosAbertos: 3 } }),
+      "GET /api/config": { horaCheckin: "14:00", horaCheckout: "12:00" },
+    });
+    renderizar(<AppRotas />, { usuario: recepcao });
+    expect(await screen.findByLabelText("5 itens de atenção")).toHaveTextContent("5");
+  });
+
   test("sem itens de atenção não há contador", async () => {
     instalarApiFalsa(painel([]));
     renderizar(<AppRotas />, { usuario: recepcao });

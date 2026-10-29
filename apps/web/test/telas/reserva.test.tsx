@@ -257,4 +257,19 @@ describe("ações por estado", () => {
       expect((c?.corpo as { novoPrazo: string }).novoPrazo).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     });
   });
+
+  test("resumo mostra a última arrumação", async () => {
+    const em = new Date(2026, 10, 20, 9, 5).toISOString();
+    const { unmount } = montar(criarReserva({ ultimaArrumacao: { em, por: "Rita Camareira" } }));
+    expect(await screen.findByText("Última arrumação: hoje às 09:05 por Rita Camareira")).toBeInTheDocument();
+    unmount();
+    montar(criarReserva());
+    expect(await screen.findByText("Sem arrumação hoje")).toBeInTheDocument();
+  });
+
+  test("reserva que não está hospedada não mostra arrumação", async () => {
+    montar(criarReserva({ estado: "confirmada" }));
+    await screen.findByText("Chegada tarde");
+    expect(screen.queryByText(/arrumação/i)).not.toBeInTheDocument();
+  });
 });

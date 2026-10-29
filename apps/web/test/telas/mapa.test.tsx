@@ -161,4 +161,19 @@ describe("tela Mapa", () => {
     renderizar(<TelaMapa />, { rota: "/mapa" });
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível carregar o mapa. Banco indisponível.");
   });
+
+  test("mapa mostra o nº de chamados do quarto bloqueado", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": criarPainel({ dia: "2026-11-20" }),
+      "GET /api/categorias": [{ id: "c1", nome: "Standard", maxAdultos: 2, maxCriancas: 1, comodidades: [] }],
+      "GET /api/mapa": { quartos: [{ id: "q101", numero: "101", categoria: "Standard", situacao: "bloqueado" }, { id: "q102", numero: "102", categoria: "Standard", situacao: "bloqueado" }], barras: [] },
+      "GET /api/governanca": [
+        { quartoId: "q101", numero: "101", chamadosAbertos: 2 },
+        { quartoId: "q102", numero: "102", chamadosAbertos: 0 },
+      ],
+    });
+    renderizar(<TelaMapa />, { rota: "/mapa", usuario: { permissoes: ["reservas.gerenciar", "quartos.manutencao"] } });
+    expect(await screen.findByText("bloqueado · 2 chamados")).toBeInTheDocument();
+    expect(screen.getByText("bloqueado")).toBeInTheDocument();
+  });
 });

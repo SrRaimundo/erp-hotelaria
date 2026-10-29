@@ -7,7 +7,7 @@ function rotulo(q: Painel["governanca"][number]): string {
   return `${q.numero} ${nome}${q.motivo ? ` · ${q.motivo}` : ""}`;
 }
 
-export function BlocoGovernanca({ governanca }: { governanca: Painel["governanca"] }) {
+export function BlocoGovernanca({ governanca, ocupadosSemArrumacao }: { governanca: Painel["governanca"]; ocupadosSemArrumacao: number }) {
   return (
     <SecaoHoje titulo="Governança agora">
       {governanca.length === 0 ? (
@@ -20,6 +20,9 @@ export function BlocoGovernanca({ governanca }: { governanca: Painel["governanca
             </li>
           ))}
         </ul>
+      )}
+      {ocupadosSemArrumacao > 0 && (
+        <p className="hoje-suave">{`${ocupadosSemArrumacao} ${ocupadosSemArrumacao === 1 ? "ocupado" : "ocupados"} sem arrumação hoje`}</p>
       )}
     </SecaoHoje>
   );

@@ -11,7 +11,7 @@ export function Shell() {
   const painel = usePainel(pode("reservas.gerenciar"));
   return (
     <div className="shell">
-      <MenuLateral atencao={painel.data?.atencao.length ?? 0} />
+      <MenuLateral atencao={painel.data ? painel.data.atencao.length + painel.data.numeros.defeitosAbertos : 0} />
       <div className="shell__coluna">
         <FaixaConexao />
         <BarraTopo />

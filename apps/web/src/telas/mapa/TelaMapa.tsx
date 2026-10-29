@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useCategorias, useMapa, usePainel } from "../../api/consultas";
+import { useCategorias, useGovernanca, useMapa, usePainel } from "../../api/consultas";
 import { Botao } from "../../componentes/Botao";
+import { useSessao } from "../../auth/SessaoProvider";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { formatarData, somarDiasIso } from "../../lib/datas";
 import { GradeMapa } from "./GradeMapa";
@@ -22,6 +23,10 @@ export function TelaMapa() {
 
 function MapaDoPeriodo({ hoje }: { hoje: string }) {
   const categorias = useCategorias();
+  const { pode } = useSessao();
+  // O mapa não traz chamados: quem pode ver a governança consulta o número por quarto.
+  const governanca = useGovernanca(pode("quartos.manutencao") || pode("quartos.situacao"));
+  const chamadosPorQuarto = useMemo(() => Object.fromEntries((governanca.data ?? []).map((q) => [q.quartoId, q.chamadosAbertos])), [governanca.data]);
   const [params, setParams] = useSearchParams();
   const navegar = useNavigate();
   const [movimento, setMovimento] = useState<Movimento | null>(null);
@@ -79,6 +84,7 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
           dias={dias}
           hoje={hoje}
           nomesCategoria={nomesCategoria}
+          chamadosPorQuarto={chamadosPorQuarto}
           aoAbrirReserva={(id) => alterar({ reserva: id, aba: null, fluxo: null, receber: null })}
           aoSoltar={setMovimento}
           aoCriarReserva={(quarto, data) => void navegar(`/reservas/nova?quarto=${encodeURIComponent(quarto)}&chegada=${data}`)}
