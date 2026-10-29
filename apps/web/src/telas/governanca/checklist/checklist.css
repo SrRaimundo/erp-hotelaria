@@ -1,0 +1,29 @@
+.checklist { display: flex; flex-direction: column; gap: 16px; }
+.checklist__cabecalho { display: flex; justify-content: space-between; gap: 8px; color: var(--texto-suave); font-size: 0.875rem; }
+.checklist__cabecalho p { margin: 0; }
+.checklist__titulo { font-size: 1.375rem; margin: 0; }
+.checklist__aviso { background: var(--alerta-fundo); color: var(--terracota); border-radius: var(--raio-controle); padding: 8px 12px; margin: 0; }
+.checklist__itens { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.checklist__item { border: 1px solid var(--borda); border-radius: var(--raio-cartao); background: var(--superficie); padding: 12px; }
+.checklist__grupo { display: flex; flex-direction: column; gap: 8px; }
+.checklist__texto { font-weight: 600; }
+.checklist__detalhe { font-weight: 400; color: var(--texto-suave); }
+.checklist__opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.checklist__opcao { min-height: 48px; min-width: 48px; padding: 0 16px; border: 1px solid var(--verde); border-radius: var(--raio-controle); background: transparent; color: var(--verde); font: inherit; font-weight: 600; cursor: pointer; }
+.checklist__opcao--numero { padding: 0; }
+.checklist__opcao[aria-pressed="true"] { background: var(--verde); color: var(--superficie); }
+.checklist__opcao:disabled { opacity: 0.5; cursor: not-allowed; }
+.checklist__opcao:focus-visible { outline: 2px solid var(--amarelo); outline-offset: 2px; }
+.checklist__nota { font-size: 0.875rem; color: var(--texto-suave); }
+.checklist__nota--aviso { color: var(--terracota); font-weight: 600; }
+.checklist__quantidade { display: flex; align-items: flex-end; gap: 8px; }
+.checklist__quantidade label, .checklist__observacao { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.checklist__quantidade input, .checklist__observacao textarea { min-height: 48px; font: inherit; padding: 8px; border: 1px solid var(--borda); border-radius: var(--raio-controle); }
+.checklist__confirmar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.checklist__confirmar p { margin: 0; flex-basis: 100%; font-weight: 600; }
+.checklist__resultado { display: flex; flex-direction: column; gap: 12px; }
+.checklist__resumo { border-top: 1px solid var(--borda); padding-top: 12px; }
+.checklist__resumo h3 { margin: 0 0 8px; font-size: 1rem; }
+.checklist__resumo ul { margin: 0; padding-left: 20px; }
+.checklist__botoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.checklist__botoes .botao { min-height: 48px; }
