@@ -167,6 +167,18 @@ describe("governança", () => {
     expect(await within(janela).findByRole("alert")).toHaveTextContent("Há chamado de defeito aberto neste quarto.");
   });
 
+  test("I4: liberar que devolve o quarto para a limpeza mostra a mensagem do servidor", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/governanca": lista, "POST /api/quartos/q4/liberar": { ok: true, situacao: "sujo", mensagem: "O quarto volta para limpeza (sem checklist de saída)." } });
+    renderizar(<TelaGovernanca />, gerente);
+    await screen.findByText("103");
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 104" }));
+    await u.click(screen.getByRole("menuitem", { name: "Liberar" }));
+    await u.type(within(screen.getByRole("dialog")).getByLabelText("Motivo"), "Consertado");
+    await u.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar" }));
+    expect(await screen.findByText("O quarto volta para limpeza (sem checklist de saída).")).toBeInTheDocument();
+  });
+
   test("quarto livre não é acionável para limpo", async () => {
     const u = userEvent.setup();
     instalarApiFalsa({ "GET /api/governanca": lista });

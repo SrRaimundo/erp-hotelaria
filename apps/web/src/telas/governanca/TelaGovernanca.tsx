@@ -154,22 +154,22 @@ export function TelaGovernanca() {
           );
         })}
       </ul>
-      {motivo && <PedirMotivo quarto={motivo.quarto} acao={motivo.acao} aoFechar={() => setMotivo(null)} />}
+      {motivo && <PedirMotivo quarto={motivo.quarto} acao={motivo.acao} aoFechar={() => setMotivo(null)} aoConcluir={(mensagem) => { setMotivo(null); if (mensagem) setConcluido(mensagem); }} />}
     </div>
   );
 }
 
-function PedirMotivo({ quarto, acao, aoFechar }: { quarto: ItemGovernanca; acao: AcaoMotivo; aoFechar: () => void }) {
+function PedirMotivo({ quarto, acao, aoFechar, aoConcluir }: { quarto: ItemGovernanca; acao: AcaoMotivo; aoFechar: () => void; aoConcluir: (mensagem?: string) => void }) {
   const [texto, setTexto] = useState("");
   const [faltou, setFaltou] = useState(false);
-  const enviar = useAcao((corpo: { motivo: string }) => chamarApi("POST", `/api/quartos/${encodeURIComponent(quarto.quartoId)}/${acao}`, corpo));
+  const enviar = useAcao((corpo: { motivo: string }) => chamarApi<{ mensagem?: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.quartoId)}/${acao}`, corpo));
   const submeter = (e: FormEvent) => {
     e.preventDefault();
     if (!texto.trim()) {
       setFaltou(true);
       return;
     }
-    enviar.mutate({ motivo: texto.trim() }, { onSuccess: aoFechar });
+    enviar.mutate({ motivo: texto.trim() }, { onSuccess: (r) => aoConcluir(r?.mensagem) });
   };
   return (
     <Janela aberta aoFechar={aoFechar} titulo={`${ROTULO_ACAO[acao]} — quarto ${quarto.numero}`}>
