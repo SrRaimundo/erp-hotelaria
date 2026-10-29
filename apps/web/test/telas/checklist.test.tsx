@@ -21,6 +21,12 @@ const gov = { usuario: { permissoes: ["quartos.situacao"] } };
 const quarto = { id: "q9", numero: "109" };
 type U = ReturnType<typeof userEvent.setup>;
 
+function adiado<T>() {
+  let resolver!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolver = r));
+  return { promise, resolver };
+}
+
 function montar(rotas: Record<string, unknown>, tipo: "saida" | "diaria" = "saida", extra: object = {}) {
   instalarApiFalsa({ "GET /api/checklists/modelos": modelos(extra), ...rotas });
   const aoConcluir = vi.fn();
@@ -83,6 +89,7 @@ describe("checklist por etapas", () => {
     montar({ "POST /api/quartos/q9/chamados": { id: "ch1" } });
     await ateEquipamentos(u, "Não");
     await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
     expect(await screen.findByText("Chamado aberto")).toBeInTheDocument();
     await proxima(u);
     await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
@@ -107,6 +114,7 @@ describe("checklist por etapas", () => {
     await ateEquipamentos(u);
     const ativarNaoFunciona = async (esperado: number) => {
       await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+      await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
       await waitFor(() => expect(postsDe("/chamados")).toHaveLength(esperado));
       await screen.findByText("Chamado aberto");
     };
@@ -222,7 +230,9 @@ describe("checklist por etapas", () => {
       throw new TypeError("rede");
     });
     await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
     expect(await screen.findByText("Será registrado ao concluir")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(grupo("TV").getByRole("button", { name: "Não funciona" })).toHaveAttribute("aria-pressed", "true");
     await proxima(u);
     await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
@@ -255,5 +265,111 @@ describe("checklist por etapas", () => {
     expect(screen.getByRole("heading", { name: "Consumo do hóspede" })).toBeInTheDocument();
     await u.click(grupo("Água").getByRole("button", { name: "2" }));
     expect(screen.getByText("Lançado na conta: R$ 10,00")).toBeInTheDocument();
+  });
+
+  test("R7: o chamado leva a observação digitada e o campo trava depois de aberto", async () => {
+    const u = userEvent.setup();
+    montar({ "POST /api/quartos/q9/chamados": { id: "ch1" } });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    expect(postsDe("/chamados")).toHaveLength(0);
+    await u.type(screen.getByLabelText("O que aconteceu? (opcional)"), "Sem imagem");
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
+    expect(await screen.findByText("Chamado aberto")).toBeInTheDocument();
+    expect(postsDe("/chamados")[0]!.corpo).toEqual({ itemId: "q1", observacao: "Sem imagem" });
+    expect(screen.getByLabelText("O que aconteceu? (opcional)")).toHaveAttribute("readonly");
+    expect(screen.queryByRole("button", { name: "Abrir chamado" })).not.toBeInTheDocument();
+  });
+
+  test("R7: sair da etapa abre sozinho o chamado pendente", async () => {
+    const u = userEvent.setup();
+    montar({ "POST /api/quartos/q9/chamados": { id: "ch1" } });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await u.type(screen.getByLabelText("O que aconteceu? (opcional)"), "Quebrada");
+    await proxima(u);
+    expect(await screen.findByRole("heading", { name: "Controles" })).toBeInTheDocument();
+    expect(postsDe("/chamados")).toHaveLength(1);
+    expect(postsDe("/chamados")[0]!.corpo).toEqual({ itemId: "q1", observacao: "Quebrada" });
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    expect(await screen.findByText("Chamado aberto")).toBeInTheDocument();
+  });
+
+  test("R7: Faltando na saída também pede a observação e abre chamado", async () => {
+    const u = userEvent.setup();
+    montar({ "POST /api/quartos/q9/chamados": { id: "ch1" } });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Funciona" }));
+    await proxima(u);
+    await u.click(grupo("Controle da TV").getByRole("button", { name: "Faltando" }));
+    await u.type(screen.getByLabelText("O que aconteceu? (opcional)"), "Sumiu");
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
+    await screen.findByText("Chamado aberto");
+    expect(postsDe("/chamados")[0]!.corpo).toEqual({ itemId: "c1", observacao: "Sumiu" });
+  });
+
+  test("Review Focus 1: toques enquanto o chamado está sendo aberto são ignorados", async () => {
+    const u = userEvent.setup();
+    const d = adiado<{ id: string }>();
+    montar({ "POST /api/quartos/q9/chamados": () => d.promise });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
+    await waitFor(() => expect(postsDe("/chamados")).toHaveLength(1));
+    expect(grupo("TV").getByRole("button", { name: "Funciona" })).toBeDisabled();
+    expect(grupo("TV").getByRole("button", { name: "Não funciona" })).toBeDisabled();
+    await u.click(grupo("TV").getByRole("button", { name: "Funciona" }));
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    expect(postsDe("/chamados")).toHaveLength(1);
+    expect(postsDe("/cancelar")).toHaveLength(0);
+    d.resolver({ id: "ch1" });
+    expect(await screen.findByText("Chamado aberto")).toBeInTheDocument();
+    expect(grupo("TV").getByRole("button", { name: "Não funciona" })).toHaveAttribute("aria-pressed", "true");
+    expect(lerRascunho("q9", "saida")!.respostas.q1).toMatchObject({ equipamento: "nao_funciona", chamadoId: "ch1" });
+  });
+
+  test("Review Focus 1: toques enquanto o cancelamento está pendente são ignorados", async () => {
+    const u = userEvent.setup();
+    const d = adiado<{ ok: boolean }>();
+    montar({ "POST /api/quartos/q9/chamados": { id: "ch1" }, "POST /api/chamados/ch1/cancelar": () => d.promise });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await u.click(screen.getByRole("button", { name: "Abrir chamado" }));
+    await screen.findByText("Chamado aberto");
+    await u.click(grupo("TV").getByRole("button", { name: "Funciona" }));
+    await u.click(within(screen.getByRole("dialog", { name: "Cancelar o chamado aberto?" })).getByRole("button", { name: "Cancelar chamado" }));
+    await waitFor(() => expect(postsDe("/cancelar")).toHaveLength(1));
+    expect(grupo("TV").getByRole("button", { name: "Não funciona" })).toBeDisabled();
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    expect(postsDe("/chamados")).toHaveLength(1);
+    expect(postsDe("/cancelar")).toHaveLength(1);
+    d.resolver({ ok: true });
+    await waitFor(() => expect(grupo("TV").getByRole("button", { name: "Funciona" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.queryByText("Chamado aberto")).not.toBeInTheDocument();
+    expect(lerRascunho("q9", "saida")!.respostas.q1?.chamadoId).toBeUndefined();
+  });
+
+  test("Liberado impedido depois de escolhido zera o resultado; motivo sugerido acompanha os equipamentos", async () => {
+    const u = userEvent.setup();
+    montar({ "POST /api/quartos/q9/chamados": { id: "ch1" } });
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Funciona" }));
+    await proxima(u);
+    await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
+    await proxima(u);
+    await u.click(grupo("Água").getByRole("button", { name: "0" }));
+    await proxima(u);
+    await u.click(screen.getByRole("button", { name: "Liberado" }));
+    expect(lerRascunho("q9", "saida")!.resultado).toBe("liberado");
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    await u.click(grupo("TV").getByRole("button", { name: "Não funciona" }));
+    await waitFor(() => expect(lerRascunho("q9", "saida")!.resultado).toBeUndefined());
+    for (let i = 0; i < 3; i++) await proxima(u);
+    await u.click(screen.getByRole("button", { name: "Bloqueado" }));
+    expect(screen.getByLabelText("Motivo")).toHaveValue("TV não funciona");
+    await u.type(screen.getByLabelText("Motivo"), " e riscada");
+    expect(screen.getByLabelText("Motivo")).toHaveValue("TV não funciona e riscada");
   });
 });

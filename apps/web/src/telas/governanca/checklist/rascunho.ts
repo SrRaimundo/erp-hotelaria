@@ -17,6 +17,8 @@ export type EstadoChecklist = {
   frigobar: Record<string, number>;
   resultado?: "liberado" | "bloqueado";
   motivo?: string;
+  /** true quando a pessoa digitou o motivo; antes disso ele acompanha os equipamentos com defeito. */
+  motivoEditado?: boolean;
 };
 export type Rascunho = EstadoChecklist & { salvoEm: string };
 

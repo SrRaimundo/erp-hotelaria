@@ -33,7 +33,7 @@ export function instalarApiFalsa(rotas: Record<string, Rota>): void {
       return new Response(JSON.stringify({ codigo: "API_FALSA_ROTA_NAO_PREVISTA", mensagem }), { status: 599 });
     }
     const definicao = rotas[chave];
-    const valor = typeof definicao === "function" ? (definicao as (c: unknown, u: URL) => unknown)(corpo, url) : definicao;
+    const valor = typeof definicao === "function" ? await (definicao as (c: unknown, u: URL) => unknown)(corpo, url) : definicao;
     const status = typeof valor === "object" && valor !== null && "__status" in valor ? Number((valor as { __status: number }).__status) : 200;
     let envio = valor;
     if (status !== 200 && typeof valor === "object" && valor !== null) {

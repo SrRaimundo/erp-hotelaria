@@ -19,10 +19,12 @@ type ListaProps = {
   perguntaObservacao?: string;
   aoEscolher: (id: string, valor: string) => void;
   aoObservar?: (id: string, texto: string) => void;
+  /** Quando existe, o chamado só abre ao tocar em "Abrir chamado" (ou ao sair da etapa), levando a observação. */
+  aoAbrir?: (id: string) => void;
 };
 
 /** Lista de itens com botões de resposta e o estado do chamado/aviso ligado ao item. */
-export function ListaOpcoes({ itens, respostas, campo, opcoes, pendentes, erros, online, rotuloRegistrado, perguntaObservacao, aoEscolher, aoObservar }: ListaProps) {
+export function ListaOpcoes({ itens, respostas, campo, opcoes, pendentes, erros, online, rotuloRegistrado, perguntaObservacao, aoEscolher, aoObservar, aoAbrir }: ListaProps) {
   return (
     <ul className="checklist__itens">
       {itens.map((i) => {
@@ -45,10 +47,15 @@ export function ListaOpcoes({ itens, respostas, campo, opcoes, pendentes, erros,
               {problema && !registrado && pendentes.has(i.id) && <span className="checklist__nota">Registrando…</span>}
               {problema && !registrado && !pendentes.has(i.id) && !online && <span className="checklist__nota">Será registrado ao concluir</span>}
               <ErroAcao erro={erros[i.id]} />
+              {problema && aoAbrir && !registrado && online && !pendentes.has(i.id) && (
+                <button type="button" className="checklist__opcao" onClick={() => aoAbrir(i.id)}>
+                  Abrir chamado
+                </button>
+              )}
               {problema && perguntaObservacao && aoObservar && (
                 <label className="checklist__observacao">
                   {perguntaObservacao}
-                  <textarea value={r?.observacao ?? ""} onChange={(e) => aoObservar(i.id, e.target.value)} rows={2} />
+                  <textarea value={r?.observacao ?? ""} readOnly={r?.chamadoId !== undefined} onChange={(e) => aoObservar(i.id, e.target.value)} rows={2} />
                 </label>
               )}
             </div>
@@ -59,7 +66,7 @@ export function ListaOpcoes({ itens, respostas, campo, opcoes, pendentes, erros,
   );
 }
 
-type Props = Omit<ListaProps, "campo" | "opcoes" | "rotuloRegistrado" | "perguntaObservacao">;
+type Props = Omit<ListaProps, "campo" | "opcoes" | "rotuloRegistrado" | "perguntaObservacao"> & { aoAbrir: (id: string) => void };
 
 const OPCOES: OpcaoResposta[] = [
   { valor: "funciona", rotulo: "Funciona" },
@@ -68,5 +75,5 @@ const OPCOES: OpcaoResposta[] = [
 ];
 
 export function EtapaEquipamentos(props: Props) {
-  return <ListaOpcoes {...props} campo="equipamento" opcoes={OPCOES} rotuloRegistrado="Chamado aberto" perguntaObservacao="O que aconteceu?" />;
+  return <ListaOpcoes {...props} campo="equipamento" opcoes={OPCOES} rotuloRegistrado="Chamado aberto" perguntaObservacao="O que aconteceu? (opcional)" />;
 }

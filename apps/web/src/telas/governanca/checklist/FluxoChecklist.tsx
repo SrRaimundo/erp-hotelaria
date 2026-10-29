@@ -60,6 +60,13 @@ function estadoInicial(quartoId: string, tipo: Tipo, situacaoAtual: string): { e
   };
 }
 
+/** O que impede "Liberado": limpeza com "Não" ou equipamento com defeito. */
+function impedimentoDe(itens: ItemModelo[], respostas: Record<string, Resposta>): string | undefined {
+  if (itens.some((i) => i.etapa === "limpeza" && respostas[i.id]?.simNao === false)) return "Há itens de limpeza marcados como Não";
+  if (itens.some((i) => i.etapa === "equipamento" && respostas[i.id]?.equipamento === "nao_funciona")) return "Há chamado de defeito aberto";
+  return undefined;
+}
+
 const semConexao = (e: unknown) => e instanceof ErroApi && e.codigo === "SEM_CONEXAO";
 
 export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair }: Props) {
@@ -68,7 +75,9 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
   const [inicio] = useState(() => estadoInicial(quarto.id, tipo, situacaoAtual));
   const [estado, setEstado] = useState<EstadoChecklist>(inicio.estado);
   const [pendentes, setPendentes] = useState<ReadonlySet<string>>(new Set());
-  const emAndamento = useRef(new Set<string>());
+  const emAndamento = useRef(new Map<string, Promise<void>>());
+  const estadoRef = useRef(estado);
+  estadoRef.current = estado;
   const [erros, setErros] = useState<Record<string, Error | undefined>>({});
   const [confirmarCancelar, setConfirmarCancelar] = useState<{ id: string; valor: string } | null>(null);
   const concluir = useAcao((corpo: unknown) => chamarApi<{ execucaoId: string; totalFrigobar: number }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/checklists`, corpo));
@@ -79,6 +88,12 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
 
   const modelos = modelosQ.data;
   const itens = useMemo(() => (modelos ? modelos[tipo] : []), [modelos, tipo]);
+  const impedimento = impedimentoDe(itens, estado.respostas);
+  // "Liberado" que deixou de valer não fica escondido no rascunho nem é enviado.
+  const liberadoInvalido = estado.resultado === "liberado" && impedimento !== undefined;
+  useEffect(() => {
+    if (liberadoInvalido) setEstado((s) => ({ ...s, resultado: undefined }));
+  }, [liberadoInvalido]);
   const produtos = modelos?.produtosFrigobar ?? [];
   const lancaConsumo = tipo === "diaria" && modelos?.camareiraLancaFrigobar === true;
   const etapas = useMemo(() => {
@@ -121,11 +136,10 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
     return itensDa(e).every(respondido);
   };
 
-  const limpezaNao = itensDa("limpeza").some((i) => respostas[i.id]?.simNao === false);
   const quebrados = itensDa("equipamento").filter((i) => respostas[i.id]?.equipamento === "nao_funciona");
-  const impedimento = limpezaNao ? "Há itens de limpeza marcados como Não" : quebrados.length > 0 ? "Há chamado de defeito aberto" : undefined;
-  const resultado = estado.resultado === "liberado" && impedimento ? undefined : estado.resultado;
-  const motivo = estado.motivo ?? "";
+  const resultado = liberadoInvalido ? undefined : estado.resultado;
+  const sugerido = quebrados.map((i) => `${i.texto} não funciona`).join("; ");
+  const motivo = estado.motivoEditado ? (estado.motivo ?? "") : sugerido;
 
   const patch = (p: Partial<EstadoChecklist>) => setEstado((s) => ({ ...s, ...p }));
   const mudarResposta = (id: string, r: Partial<Resposta>) => setEstado((s) => ({ ...s, respostas: { ...s.respostas, [id]: { ...s.respostas[id], ...r } } }));
@@ -134,14 +148,13 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
   /** Uma chamada por item de cada vez; toques novos no mesmo item são ignorados enquanto ela não termina. */
   async function serializado(id: string, fn: () => Promise<void>) {
     if (emAndamento.current.has(id)) return;
-    emAndamento.current.add(id);
-    setPendentes(new Set(emAndamento.current));
-    try {
-      await fn();
-    } finally {
+    const execucao = fn().finally(() => {
       emAndamento.current.delete(id);
-      setPendentes(new Set(emAndamento.current));
-    }
+      setPendentes(new Set(emAndamento.current.keys()));
+    });
+    emAndamento.current.set(id, execucao);
+    setPendentes(new Set(emAndamento.current.keys()));
+    await execucao;
   }
 
   async function desfazer(id: string, r: Resposta | undefined) {
@@ -172,19 +185,52 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
         }
       }
       mudarResposta(item.id, { [campo]: valor });
-      if (valor !== problema || !online) return;
+      // Equipamento e controle da saída só abrem o chamado depois (com a observação); o aviso da diária é imediato.
+      if (valor !== problema || !online || item.etapa !== "controles" || tipo !== "diaria") return;
       try {
-        if (item.etapa === "controles" && tipo === "diaria") {
-          const r = await chamarApi<{ alertaId: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/avisos-controle`, { itemId: item.id });
-          mudarResposta(item.id, { alertaId: r.alertaId });
-        } else {
-          const r = await chamarApi<{ id: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/chamados`, { itemId: item.id });
-          mudarResposta(item.id, { chamadoId: r.id });
-        }
+        const r = await chamarApi<{ alertaId: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/avisos-controle`, { itemId: item.id });
+        mudarResposta(item.id, { alertaId: r.alertaId });
       } catch (e) {
         if (!semConexao(e)) mudarErro(item.id, e as Error); // será criado ao concluir
       }
     });
+  }
+
+  const abreChamadoManual = (i: ItemModelo) => i.etapa === "equipamento" || (i.etapa === "controles" && tipo === "saida");
+  const emProblema = (i: ItemModelo, r: Resposta | undefined) => (i.etapa === "equipamento" ? r?.equipamento === "nao_funciona" : r?.presenca === "faltando");
+
+  /** Abre o chamado do item com a observação digitada; sem conexão ou com erro, ele nasce na conclusão. */
+  function abrirChamado(item: ItemModelo): Promise<void> {
+    return serializado(item.id, async () => {
+      const r = estadoRef.current.respostas[item.id];
+      if (!emProblema(item, r) || r?.chamadoId) return;
+      mudarErro(item.id, undefined);
+      const observacao = r?.observacao?.trim() || undefined;
+      try {
+        const c = await chamarApi<{ id: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/chamados`, { itemId: item.id, observacao });
+        mudarResposta(item.id, { chamadoId: c.id });
+      } catch (e) {
+        if (!semConexao(e)) mudarErro(item.id, e as Error);
+      }
+    });
+  }
+
+  /** Ao sair da etapa, abre os chamados que a pessoa deixou pendentes (espera os que já estão a caminho). */
+  async function abrirPendentes() {
+    for (const i of itens.filter((x) => x.etapa === etapa)) {
+      if (!abreChamadoManual(i)) continue;
+      await emAndamento.current.get(i.id);
+      const r = estadoRef.current.respostas[i.id];
+      if (online && emProblema(i, r) && !r?.chamadoId) await abrirChamado(i);
+    }
+  }
+  async function irPara(destino: IdEtapa) {
+    await abrirPendentes();
+    patch({ etapa: destino });
+  }
+  async function sair() {
+    await abrirPendentes();
+    aoSair();
   }
 
   const itemPorId = (id: string) => itens.find((i) => i.id === id)!;
@@ -201,9 +247,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
   const podeConcluir = tudoRespondido && resultadoOk;
 
   function escolherResultado(r: "liberado" | "bloqueado") {
-    if (r === "bloqueado" && estado.motivo === undefined) {
-      patch({ resultado: r, motivo: quebrados.map((i) => `${i.texto} não funciona`).join("; ") });
-    } else patch({ resultado: r });
+    patch({ resultado: r });
   }
 
   function enviar() {
@@ -217,7 +261,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
         return {
           itemId: i.id,
           [campoDe[i.etapa]]: r[campoDe[i.etapa]],
-          ...(obs && (r.equipamento === "nao_funciona") ? { observacao: obs } : {}),
+          ...(obs && (r.equipamento === "nao_funciona" || (tipo === "saida" && r.presenca === "faltando")) ? { observacao: obs } : {}),
           ...(r.chamadoId ? { chamadoId: r.chamadoId } : {}),
           ...(r.alertaId ? { alertaId: r.alertaId } : {}),
         };
@@ -263,9 +307,18 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
           respostas={respostas}
           aoEscolher={escolherPorId}
           aoObservar={(id, texto) => mudarResposta(id, { observacao: texto })}
+          aoAbrir={(id) => void abrirChamado(itemPorId(id))}
         />
       )}
-      {etapa === "controles" && <EtapaControles {...propsOpcoes} tipo={tipo} itens={itensDa("controles")} respostas={respostas} aoEscolher={escolherPorId} />}
+      {etapa === "controles" && <EtapaControles
+          {...propsOpcoes}
+          tipo={tipo}
+          itens={itensDa("controles")}
+          respostas={respostas}
+          aoEscolher={escolherPorId}
+          aoObservar={tipo === "saida" ? (id, texto) => mudarResposta(id, { observacao: texto }) : undefined}
+          aoAbrir={tipo === "saida" ? (id) => void abrirChamado(itemPorId(id)) : undefined}
+        />}
       {etapa === "frigobar" && (
         <EtapaFrigobar
           produtos={produtos}
@@ -275,7 +328,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
         />
       )}
       {etapa === "resultado" && (
-        <EtapaResultado resultado={resultado} motivo={motivo} impedimento={impedimento} aoEscolher={escolherResultado} aoMotivo={(t) => patch({ motivo: t })} />
+        <EtapaResultado resultado={resultado} motivo={motivo} impedimento={impedimento} aoEscolher={escolherResultado} aoMotivo={(t) => patch({ motivo: t, motivoEditado: true })} />
       )}
 
       {ultima && (
@@ -295,12 +348,12 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
       <ErroAcao erro={concluir.error} />
 
       <div className="checklist__botoes">
-        <Botao variante="contorno" ignorarConexao onClick={aoSair}>Sair</Botao>
+        <Botao variante="contorno" ignorarConexao onClick={() => void sair()}>Sair</Botao>
         {indice > 0 && (
-          <Botao variante="contorno" ignorarConexao onClick={() => patch({ etapa: etapas[indice - 1]! })}>Voltar</Botao>
+          <Botao variante="contorno" ignorarConexao onClick={() => void irPara(etapas[indice - 1]!)}>Voltar</Botao>
         )}
         {!ultima && (
-          <Botao disabled={!etapaCompleta(etapa)} ignorarConexao onClick={() => patch({ etapa: etapas[indice + 1]! })}>Próxima etapa</Botao>
+          <Botao disabled={!etapaCompleta(etapa)} ignorarConexao onClick={() => void irPara(etapas[indice + 1]!)}>Próxima etapa</Botao>
         )}
         {ultima && <Botao disabled={!podeConcluir || concluir.isPending} onClick={enviar}>Concluir</Botao>}
       </div>
