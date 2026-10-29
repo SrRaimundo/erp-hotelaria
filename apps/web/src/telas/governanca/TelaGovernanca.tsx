@@ -8,6 +8,7 @@ import { ErroAcao } from "../../componentes/ErroAcao";
 import { Janela } from "../../componentes/Janela";
 import { useEsc } from "../../componentes/useEsc";
 import { formatarData } from "../../lib/datas";
+import { FluxoChecklist } from "./checklist/FluxoChecklist";
 import "./governanca.css";
 
 type Situacao = ItemGovernanca["situacao"];
@@ -31,10 +32,23 @@ function transicoes(situacao: Situacao): AcaoMotivo[] {
   return [];
 }
 
+type Fluxo = { quarto: ItemGovernanca; tipo: "saida" | "diaria" };
+
+function horaLocal(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function textoBloqueio(q: ItemGovernanca): string {
+  const chamados = q.chamadosAbertos > 0 ? ` · ${q.chamadosAbertos} ${q.chamadosAbertos === 1 ? "chamado" : "chamados"}` : "";
+  return `Bloqueado: ${q.motivoBloqueio ?? ""}${chamados}`;
+}
+
 export function TelaGovernanca() {
   const { pode } = useSessao();
   const governanca = useGovernanca();
-  const [limpando, setLimpando] = useState<ItemGovernanca | null>(null);
+  const [fluxo, setFluxo] = useState<Fluxo | null>(null);
+  const [concluido, setConcluido] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [motivo, setMotivo] = useState<{ quarto: ItemGovernanca; acao: AcaoMotivo } | null>(null);
   const podeManutencao = pode("quartos.manutencao");
@@ -51,29 +65,63 @@ export function TelaGovernanca() {
     return () => document.removeEventListener("mousedown", fora);
   }, [menu]);
 
+  if (fluxo) {
+    return (
+      <FluxoChecklist
+        quarto={{ id: fluxo.quarto.quartoId, numero: fluxo.quarto.numero }}
+        tipo={fluxo.tipo}
+        situacaoAtual={fluxo.tipo === "saida" ? "sujo" : "ocupado"}
+        aoConcluir={() => {
+          setConcluido(`Checklist concluído · Qto ${fluxo.quarto.numero}`);
+          setFluxo(null);
+        }}
+        aoSair={() => setFluxo(null)}
+      />
+    );
+  }
+
+  const abrir = (quarto: ItemGovernanca, tipo: Fluxo["tipo"]) => {
+    setConcluido(null);
+    setFluxo({ quarto, tipo });
+  };
+
   return (
     <div className="governanca">
       <h1>Governança</h1>
+      {concluido && <p role="status" className="governanca__concluido">{concluido}</p>}
       {!governanca.data && (governanca.isError ? <ErroAcao erro={governanca.error} /> : <p>Carregando…</p>)}
       <ul className="governanca__grade">
         {(governanca.data ?? []).map((q) => {
           const opcoes = podeManutencao ? transicoes(q.situacao) : [];
           const comMenu = opcoes.length > 0 ? " governanca__cartao--com-menu" : "";
+          const classe = `governanca__cartao governanca__cartao--${TOM[q.situacao]}${comMenu}`;
+          const tipo: Fluxo["tipo"] | null = q.tarefa === "limpeza_saida" ? "saida" : q.tarefa === "arrumacao" ? "diaria" : null;
+          const tarefa = tipo === "saida" ? "Limpeza de saída" : tipo === "diaria" ? "Arrumação" : null;
           const conteudo = (
             <>
               <span className="governanca__numero">{q.numero}</span>
               <span className="governanca__situacao">{ROTULO_SITUACAO[q.situacao]}</span>
+              {tarefa && <span className="governanca__tarefa">{tarefa}</span>}
+              {q.situacao === "bloqueado" && <span className="governanca__tarefa">{textoBloqueio(q)}</span>}
               {q.hospedadoAte && <span className="governanca__ate">hospedado até {formatarData(q.hospedadoAte)}</span>}
             </>
           );
           return (
             <li key={q.quartoId} className="governanca__item">
-              {q.situacao === "sujo" ? (
-                <button type="button" className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}${comMenu}`} onClick={() => setLimpando(q)}>
+              {tipo ? (
+                <button type="button" className={classe} onClick={() => abrir(q, tipo)}>
                   {conteudo}
                 </button>
+              ) : q.situacao === "ocupado" && q.arrumadoHojeEm ? (
+                <div className={classe}>
+                  {conteudo}
+                  <span className="governanca__tarefa">Arrumado às {horaLocal(q.arrumadoHojeEm)}</span>
+                  <button type="button" className="governanca__nova" onClick={() => abrir(q, "diaria")}>
+                    Nova arrumação
+                  </button>
+                </div>
               ) : (
-                <div className={`governanca__cartao governanca__cartao--${TOM[q.situacao]}${comMenu}`}>{conteudo}</div>
+                <div className={classe}>{conteudo}</div>
               )}
               {opcoes.length > 0 && (
                 <>
@@ -103,27 +151,8 @@ export function TelaGovernanca() {
           );
         })}
       </ul>
-      {limpando && <ConfirmarLimpo quarto={limpando} aoFechar={() => setLimpando(null)} />}
       {motivo && <PedirMotivo quarto={motivo.quarto} acao={motivo.acao} aoFechar={() => setMotivo(null)} />}
     </div>
-  );
-}
-
-function ConfirmarLimpo({ quarto, aoFechar }: { quarto: ItemGovernanca; aoFechar: () => void }) {
-  const limpar = useAcao(() => chamarApi("POST", `/api/quartos/${encodeURIComponent(quarto.quartoId)}/limpo`));
-  const confirmar = () => limpar.mutate(undefined, { onSuccess: aoFechar });
-  return (
-    <Janela aberta aoFechar={aoFechar} titulo={`Marcar ${quarto.numero} como limpo?`}>
-      <ErroAcao erro={limpar.error} />
-      <div className="governanca__botoes">
-        <Botao variante="contorno" ignorarConexao onClick={aoFechar}>
-          Cancelar
-        </Botao>
-        <Botao onClick={confirmar} disabled={limpar.isPending}>
-          Confirmar
-        </Botao>
-      </div>
-    </Janela>
   );
 }
 

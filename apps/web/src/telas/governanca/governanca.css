@@ -12,6 +12,9 @@ button.governanca__cartao { cursor: pointer; }
 .governanca__cartao--inativo { background: var(--borda); color: var(--texto-suave); }
 .governanca__numero { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
 .governanca__situacao { font-weight: 600; }
+.governanca__tarefa { font-size: 0.9375rem; font-weight: 600; }
+.governanca__concluido { margin: 0; padding: 10px 14px; border-radius: var(--raio-controle); background: color-mix(in srgb, var(--verde) 18%, var(--superficie)); }
+.governanca__nova { min-height: 44px; margin-top: 4px; padding: 0 12px; border: 1px solid var(--borda); border-radius: var(--raio-controle); background: transparent; color: var(--texto); font: inherit; cursor: pointer; }
 .governanca__ate { font-size: 0.875rem; color: var(--texto-suave); }
 .governanca__menu-botao { position: absolute; top: 6px; right: 6px; min-width: 40px; min-height: 40px; border: 0; border-radius: var(--raio-controle); background: transparent; color: var(--texto); font-size: 1.25rem; cursor: pointer; }
 .governanca__menu { position: absolute; top: 46px; right: 6px; z-index: 5; display: flex; flex-direction: column; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-controle); overflow: hidden; }

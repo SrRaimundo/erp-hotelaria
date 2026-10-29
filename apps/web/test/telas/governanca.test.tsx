@@ -7,12 +7,15 @@ import { renderizar } from "../ajuda";
 
 afterEach(() => vi.unstubAllGlobals());
 
+const base = { tarefa: null, arrumadoHojeEm: null, motivoBloqueio: null, chamadosAbertos: 0 };
 const lista = [
-  { quartoId: "q3", numero: "103", situacao: "sujo" },
-  { quartoId: "q1", numero: "101", situacao: "livre" },
-  { quartoId: "q2", numero: "102", situacao: "ocupado", hospedadoAte: "2026-10-25" },
-  { quartoId: "q4", numero: "104", situacao: "bloqueado" },
+  { ...base, quartoId: "q3", numero: "103", situacao: "sujo", tarefa: "limpeza_saida" },
+  { ...base, quartoId: "q5", numero: "105", situacao: "ocupado", hospedadoAte: "2026-10-26", tarefa: "arrumacao" },
+  { ...base, quartoId: "q2", numero: "102", situacao: "ocupado", hospedadoAte: "2026-10-25", arrumadoHojeEm: "2026-10-24T14:05:00.000Z" },
+  { ...base, quartoId: "q4", numero: "104", situacao: "bloqueado", motivoBloqueio: "Vazamento", chamadosAbertos: 2 },
+  { ...base, quartoId: "q1", numero: "101", situacao: "livre" },
 ];
+const modelosFalsos = { saida: [], diaria: [{ id: "l1", etapa: "limpeza", texto: "Pia limpa", ordem: 1 }], produtosFrigobar: [], camareiraLancaFrigobar: false };
 const gov = { usuario: { permissoes: ["quartos.situacao"] } };
 const gerente = { usuario: { permissoes: ["quartos.situacao", "quartos.manutencao"] } };
 
@@ -26,16 +29,83 @@ describe("governança", () => {
     expect(screen.queryByRole("button", { name: /Ações do quarto/ })).not.toBeInTheDocument();
   });
 
-  test("tocar em quarto sujo marca limpo após confirmar", async () => {
+  test("cartões mostram a tarefa de cada quarto", async () => {
+    instalarApiFalsa({ "GET /api/governanca": lista });
+    renderizar(<TelaGovernanca />, gov);
+    expect(await screen.findByText("Limpeza de saída")).toBeInTheDocument();
+    expect(screen.getByText("Arrumação")).toBeInTheDocument();
+    const hora = new Date("2026-10-24T14:05:00.000Z");
+    const hhmm = `${String(hora.getHours()).padStart(2, "0")}:${String(hora.getMinutes()).padStart(2, "0")}`;
+    expect(screen.getByText(`Arrumado às ${hhmm}`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Nova arrumação/ })).toBeInTheDocument();
+    expect(screen.getByText("Bloqueado: Vazamento · 2 chamados")).toBeInTheDocument();
+  });
+
+  test("bloqueado com um chamado usa o singular e sem chamados omite a contagem", async () => {
+    instalarApiFalsa({
+      "GET /api/governanca": [
+        { ...base, quartoId: "q4", numero: "104", situacao: "bloqueado", motivoBloqueio: "Vazamento", chamadosAbertos: 1 },
+        { ...base, quartoId: "q6", numero: "106", situacao: "bloqueado", motivoBloqueio: "Reforma" },
+      ],
+    });
+    renderizar(<TelaGovernanca />, gov);
+    expect(await screen.findByText("Bloqueado: Vazamento · 1 chamado")).toBeInTheDocument();
+    expect(screen.getByText("Bloqueado: Reforma")).toBeInTheDocument();
+  });
+
+  test("tocar no sujo abre a limpeza de saída; no ocupado, a arrumação", async () => {
     const u = userEvent.setup();
-    instalarApiFalsa({ "GET /api/governanca": lista, "POST /api/quartos/q3/limpo": { ok: true } });
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": modelosFalsos });
     renderizar(<TelaGovernanca />, gov);
     await u.click(await screen.findByRole("button", { name: /103/ }));
-    const janela = screen.getByRole("dialog", { name: "Marcar 103 como limpo?" });
-    expect(chamadas.some((c) => c.metodo === "POST")).toBe(false);
+    expect(await screen.findByText("Quarto 103 · Limpeza de saída")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Governança" })).not.toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Sair" }));
+    await u.click(await screen.findByRole("button", { name: /105/ }));
+    expect(await screen.findByText("Quarto 105 · Arrumação")).toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Sair" }));
+    await u.click(await screen.findByRole("button", { name: /Nova arrumação/ }));
+    expect(await screen.findByText("Quarto 102 · Arrumação")).toBeInTheDocument();
+  });
+
+  test("ao concluir volta à lista com a mensagem de checklist concluído", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({
+      "GET /api/governanca": lista,
+      "GET /api/checklists/modelos": modelosFalsos,
+      "POST /api/quartos/q5/checklists": { execucaoId: "x", totalFrigobar: 0 },
+    });
+    renderizar(<TelaGovernanca />, gov);
+    await u.click(await screen.findByRole("button", { name: /105/ }));
+    await u.click(await screen.findByRole("button", { name: "Sim" }));
+    await u.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(await screen.findByText("Checklist concluído · Qto 105")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Governança" })).toBeInTheDocument();
+  });
+
+  test("não existe mais 'Marcar como limpo'", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": modelosFalsos });
+    renderizar(<TelaGovernanca />, gerente);
+    await u.click(await screen.findByRole("button", { name: /^103/ }));
+    expect(screen.queryByText(/marcar .* como limpo/i)).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("liberar com defeito aberto mostra CHAMADO_ABERTO", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({
+      "GET /api/governanca": lista,
+      "POST /api/quartos/q4/liberar": { __status: 409, codigo: "CHAMADO_ABERTO", mensagem: "Há chamado de defeito aberto neste quarto." },
+    });
+    renderizar(<TelaGovernanca />, gerente);
+    await screen.findByText("103");
+    await u.click(screen.getByRole("button", { name: "Ações do quarto 104" }));
+    await u.click(screen.getByRole("menuitem", { name: "Liberar" }));
+    const janela = screen.getByRole("dialog");
+    await u.type(within(janela).getByLabelText("Motivo"), "Consertado");
     await u.click(within(janela).getByRole("button", { name: "Confirmar" }));
-    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/quartos/q3/limpo")).toBe(true));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await within(janela).findByRole("alert")).toHaveTextContent("Há chamado de defeito aberto neste quarto.");
   });
 
   test("quarto livre não é acionável para limpo", async () => {
@@ -107,7 +177,7 @@ describe("governança", () => {
     instalarApiFalsa({ "GET /api/governanca": lista });
     const { container } = renderizar(<TelaGovernanca />, gerente);
     await screen.findByText("103");
-    // 101 (livre), 103 (sujo) e 104 (bloqueado) têm menu; 102 (ocupado) não.
+    // 101 (livre), 103 (sujo) e 104 (bloqueado) têm menu; 102 e 105 (ocupados) não.
     const comMenu = Array.from(container.querySelectorAll(".governanca__cartao--com-menu")).map((e) => e.textContent);
     expect(comMenu.some((t) => t?.includes("102"))).toBe(false);
     expect(comMenu).toHaveLength(3);
