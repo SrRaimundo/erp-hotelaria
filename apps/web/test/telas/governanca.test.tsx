@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { salvarRascunho } from "../../src/telas/governanca/checklist/rascunho";
 import { TelaGovernanca } from "../../src/telas/governanca/TelaGovernanca";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
@@ -81,6 +82,30 @@ describe("governança", () => {
     await u.click(screen.getByRole("button", { name: "Concluir" }));
     expect(await screen.findByText("Checklist concluído · Qto 105")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Governança" })).toBeInTheDocument();
+  });
+
+  test("o rascunho é retomado conforme a situação do quarto (sujo na saída, ocupado na diária) e sobrevive a Sair", async () => {
+    const u = userEvent.setup();
+    localStorage.clear();
+    const itens = [
+      { id: "l1", etapa: "limpeza", texto: "Pia limpa", ordem: 1 },
+      { id: "e1", etapa: "enxoval", texto: "Toalhas", ordem: 1 },
+    ];
+    const rascunho = (situacaoQuarto: string) => ({ situacaoQuarto, iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "enxoval", respostas: { l1: { simNao: true } }, frigobar: {} });
+    salvarRascunho("q3", "saida", rascunho("sujo"));
+    salvarRascunho("q5", "diaria", rascunho("ocupado"));
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": { saida: itens, diaria: itens, produtosFrigobar: [], camareiraLancaFrigobar: false } });
+    renderizar(<TelaGovernanca />, gov);
+    for (let vez = 0; vez < 2; vez++) {
+      await u.click(await screen.findByRole("button", { name: /^103/ }));
+      expect(await screen.findByRole("heading", { name: "Enxoval recolhido" })).toBeInTheDocument();
+      expect(screen.queryByText(/foi reiniciado/)).not.toBeInTheDocument();
+      await u.click(screen.getByRole("button", { name: "Sair" }));
+      await u.click(await screen.findByRole("button", { name: /^105/ }));
+      expect(await screen.findByRole("heading", { name: "Enxoval recolhido" })).toBeInTheDocument();
+      expect(screen.queryByText(/foi reiniciado/)).not.toBeInTheDocument();
+      await u.click(screen.getByRole("button", { name: "Sair" }));
+    }
   });
 
   test("não existe mais 'Marcar como limpo'", async () => {
