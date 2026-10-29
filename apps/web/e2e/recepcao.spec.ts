@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { percorrerChecklist } from "./checklist";
 
 /** "R$ 1.234,56" (ou "−R$ ...") -> centavos. */
 function centavos(texto: string): number {
@@ -166,20 +167,14 @@ test("7. governança no celular libera o quarto sujo pelo checklist de saída @c
   await expect(page.getByRole("heading", { name: "Governança" })).toBeVisible();
   await page.getByRole("button", { name: /^202 sujo/ }).click();
 
-  for (let etapa = 0; etapa < 8; etapa++) {
-    const titulo = (await page.locator("h2.checklist__titulo").innerText()).trim();
-    if (titulo === "Resultado") break;
-    for (const grupo of await page.getByRole("group").all()) {
-      const botoes = grupo.getByRole("button");
-      if (titulo === "Limpeza") await botoes.getByText("Sim", { exact: true }).click();
-      else if (titulo === "Equipamentos") await botoes.getByText("Funciona", { exact: true }).click();
-      else if (titulo === "Controles") await botoes.getByText("Presente", { exact: true }).click();
-      else if (titulo === "Reposição do frigobar") await botoes.getByText("0", { exact: true }).click();
-      else if (titulo === "Enxoval recolhido") await botoes.getByText("1", { exact: true }).click();
-    }
-    await page.getByRole("button", { name: "Próxima etapa" }).click();
-  }
-  await page.getByRole("button", { name: "Liberado", exact: true }).click();
+  await percorrerChecklist(page, {
+    Limpeza: { padrao: "Sim" },
+    "Enxoval recolhido": { padrao: "1" },
+    Equipamentos: { padrao: "Funciona" },
+    Controles: { padrao: "Presente" },
+    "Reposição do frigobar": { padrao: "0" },
+    Resultado: { padrao: "", depois: () => page.getByRole("button", { name: "Liberado", exact: true }).click() },
+  });
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
 
   await expect(page.getByRole("status")).toContainText("Checklist concluído · Qto 202");
