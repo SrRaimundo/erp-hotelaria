@@ -26,7 +26,7 @@ function MapaDoPeriodo({ hoje }: { hoje: string }) {
   const { pode } = useSessao();
   // O mapa não traz chamados: quem pode ver a governança consulta o número por quarto.
   const governanca = useGovernanca(pode("quartos.manutencao") || pode("quartos.situacao"));
-  const chamadosPorQuarto = useMemo(() => Object.fromEntries((governanca.data ?? []).map((q) => [q.quartoId, q.chamadosAbertos])), [governanca.data]);
+  const chamadosPorQuarto = useMemo(() => Object.fromEntries((governanca.data ?? []).map((q) => [q.quartoId, q.defeitosAbertos])), [governanca.data]);
   const [params, setParams] = useSearchParams();
   const navegar = useNavigate();
   const [movimento, setMovimento] = useState<Movimento | null>(null);

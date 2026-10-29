@@ -1,17 +1,20 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { salvarRascunho } from "../../src/telas/governanca/checklist/rascunho";
+import { lerRascunho, salvarRascunho } from "../../src/telas/governanca/checklist/rascunho";
 import { TelaGovernanca } from "../../src/telas/governanca/TelaGovernanca";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
-const base = { tarefa: null, arrumadoHojeEm: null, motivoBloqueio: null, chamadosAbertos: 0 };
+const base = { tarefa: null, arrumadoHojeEm: null, motivoBloqueio: null, chamadosAbertos: 0, defeitosAbertos: 0, reservaId: null, situacaoDesde: null };
 const lista = [
-  { ...base, quartoId: "q3", numero: "103", situacao: "sujo", tarefa: "limpeza_saida" },
-  { ...base, quartoId: "q5", numero: "105", situacao: "ocupado", hospedadoAte: "2026-10-26", tarefa: "arrumacao" },
+  { ...base, quartoId: "q3", numero: "103", situacao: "sujo", tarefa: "limpeza_saida", situacaoDesde: "2026-10-24T08:00:00.000Z" },
+  { ...base, quartoId: "q5", numero: "105", situacao: "ocupado", hospedadoAte: "2026-10-26", tarefa: "arrumacao", reservaId: "r5" },
   { ...base, quartoId: "q2", numero: "102", situacao: "ocupado", hospedadoAte: "2026-10-25", arrumadoHojeEm: "2026-10-24T14:05:00.000Z" },
   { ...base, quartoId: "q4", numero: "104", situacao: "bloqueado", motivoBloqueio: "Vazamento", chamadosAbertos: 2 },
   { ...base, quartoId: "q1", numero: "101", situacao: "livre" },
@@ -91,9 +94,9 @@ describe("governança", () => {
       { id: "l1", etapa: "limpeza", texto: "Pia limpa", ordem: 1 },
       { id: "e1", etapa: "enxoval", texto: "Toalhas", ordem: 1 },
     ];
-    const rascunho = (situacaoQuarto: string) => ({ situacaoQuarto, iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "enxoval", respostas: { l1: { simNao: true } }, frigobar: {} });
-    salvarRascunho("q3", "saida", rascunho("sujo"));
-    salvarRascunho("q5", "diaria", rascunho("ocupado"));
+    const rascunho = (situacaoQuarto: string, extra: object) => ({ situacaoQuarto, iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "enxoval", respostas: { l1: { simNao: true } }, frigobar: {}, execucaoId: "e1", ...extra });
+    salvarRascunho("q3", "saida", rascunho("sujo", { situacaoDesde: "2026-10-24T08:00:00.000Z" }));
+    salvarRascunho("q5", "diaria", rascunho("ocupado", { reservaId: "r5" }));
     instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": { saida: itens, diaria: itens, produtosFrigobar: [], camareiraLancaFrigobar: false } });
     renderizar(<TelaGovernanca />, gov);
     for (let vez = 0; vez < 2; vez++) {
@@ -106,6 +109,37 @@ describe("governança", () => {
       expect(screen.queryByText(/foi reiniciado/)).not.toBeInTheDocument();
       await u.click(screen.getByRole("button", { name: "Sair" }));
     }
+  });
+
+  test("I1: rascunho de arrumação de outra reserva do mesmo quarto é descartado", async () => {
+    const u = userEvent.setup();
+    const itens = [{ id: "l1", etapa: "limpeza", texto: "Pia limpa", ordem: 1 }, { id: "e1", etapa: "enxoval", texto: "Toalhas", ordem: 1 }];
+    salvarRascunho("q5", "diaria", { situacaoQuarto: "ocupado", reservaId: "r-anterior", execucaoId: "e1", iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "enxoval", respostas: { l1: { simNao: true } }, frigobar: {} });
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": { saida: itens, diaria: itens, produtosFrigobar: [], camareiraLancaFrigobar: false } });
+    renderizar(<TelaGovernanca />, gov);
+    await u.click(await screen.findByRole("button", { name: /^105/ }));
+    expect(await screen.findByText("O quarto mudou de situação; o checklist foi reiniciado.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Limpeza" })).toBeInTheDocument();
+  });
+
+  test("I1: rascunho de saída de um período sujo anterior é descartado", async () => {
+    const u = userEvent.setup();
+    const itens = [{ id: "l1", etapa: "limpeza", texto: "Pia limpa", ordem: 1 }, { id: "e1", etapa: "enxoval", texto: "Toalhas", ordem: 1 }];
+    salvarRascunho("q3", "saida", { situacaoQuarto: "sujo", situacaoDesde: "2026-10-20T08:00:00.000Z", execucaoId: "e1", iniciadoEm: "2026-10-20T10:00:00.000Z", etapa: "enxoval", respostas: { l1: { simNao: true } }, frigobar: {} });
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": { saida: itens, diaria: itens, produtosFrigobar: [], camareiraLancaFrigobar: false } });
+    renderizar(<TelaGovernanca />, gov);
+    await u.click(await screen.findByRole("button", { name: /^103/ }));
+    expect(await screen.findByText("O quarto mudou de situação; o checklist foi reiniciado.")).toBeInTheDocument();
+  });
+
+  test("I1: abrir e sair sem responder não deixa rascunho", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/governanca": lista, "GET /api/checklists/modelos": modelosFalsos });
+    renderizar(<TelaGovernanca />, gov);
+    await u.click(await screen.findByRole("button", { name: /^105/ }));
+    await screen.findByText("Quarto 105 · Arrumação");
+    await u.click(screen.getByRole("button", { name: "Sair" }));
+    expect(lerRascunho("q5", "diaria")).toBeNull();
   });
 
   test("não existe mais 'Marcar como limpo'", async () => {

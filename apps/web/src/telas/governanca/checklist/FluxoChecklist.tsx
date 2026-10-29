@@ -4,6 +4,7 @@ import { chamarApi, ErroApi } from "../../../api/cliente";
 import { useAcao } from "../../../api/consultas";
 import type { Produto } from "../../../api/tipos";
 import { useConexao } from "../../../api/useConexao";
+import { useSessao } from "../../../auth/SessaoProvider";
 import { Botao } from "../../../componentes/Botao";
 import { ErroAcao } from "../../../componentes/ErroAcao";
 import { Janela } from "../../../componentes/Janela";
@@ -14,7 +15,7 @@ import { EtapaEquipamentos } from "./EtapaEquipamentos";
 import { EtapaFrigobar } from "./EtapaFrigobar";
 import { EtapaResultado } from "./EtapaResultado";
 import { EtapaSimNao } from "./EtapaSimNao";
-import { apagarRascunho, lerRascunho, salvarRascunho, type EstadoChecklist, type Resposta } from "./rascunho";
+import { apagarRascunho, lerRascunho, novoIdLocal, salvarRascunho, type EstadoChecklist, type Resposta } from "./rascunho";
 import "./checklist.css";
 
 type Tipo = "saida" | "diaria";
@@ -28,6 +29,11 @@ type Props = {
   tipo: Tipo;
   /** Situação do quarto agora ("sujo" na saída, "ocupado" na diária); um rascunho de outra situação é descartado. */
   situacaoAtual: string;
+  /** Reserva hospedada no quarto (arrumação) e instante em que ele ficou na situação atual (saída): identificam o rascunho. */
+  reservaId?: string | null;
+  situacaoDesde?: string | null;
+  /** Chamados de defeito já abertos no quarto: impedem "Liberado". */
+  defeitosAbertos?: number;
   aoConcluir: () => void;
   aoSair: () => void;
 };
@@ -48,31 +54,35 @@ function titulo(e: IdEtapa, tipo: Tipo): string {
   }
 }
 
-function estadoInicial(quartoId: string, tipo: Tipo, situacaoAtual: string): { estado: EstadoChecklist; descartado: boolean } {
+function estadoInicial(quartoId: string, tipo: Tipo, situacaoAtual: string, reservaId: string | null, situacaoDesde: string | null): { estado: EstadoChecklist; descartado: boolean } {
   const r = lerRascunho(quartoId, tipo);
-  if (r && r.situacaoQuarto === situacaoAtual) {
+  // O rascunho só vale para a mesma estadia (arrumação) ou o mesmo período sujo (saída).
+  const mesmoContexto = r !== null && r.situacaoQuarto === situacaoAtual && (r.reservaId ?? null) === reservaId && (r.situacaoDesde ?? null) === situacaoDesde;
+  if (r && mesmoContexto) {
     const { salvoEm: _, ...estado } = r;
     return { estado, descartado: false };
   }
+  if (r) apagarRascunho(quartoId, tipo);
   return {
-    estado: { situacaoQuarto: situacaoAtual, iniciadoEm: new Date().toISOString(), etapa: "limpeza", respostas: {}, frigobar: {} },
+    estado: { situacaoQuarto: situacaoAtual, reservaId, situacaoDesde, execucaoId: novoIdLocal(), iniciadoEm: new Date().toISOString(), etapa: "limpeza", respostas: {}, frigobar: {} },
     descartado: r !== null,
   };
 }
 
 /** O que impede "Liberado": limpeza com "Não" ou equipamento com defeito. */
-function impedimentoDe(itens: ItemModelo[], respostas: Record<string, Resposta>): string | undefined {
+function impedimentoDe(itens: ItemModelo[], respostas: Record<string, Resposta>, defeitosAbertos: number): string | undefined {
   if (itens.some((i) => i.etapa === "limpeza" && respostas[i.id]?.simNao === false)) return "Há itens de limpeza marcados como Não";
-  if (itens.some((i) => i.etapa === "equipamento" && respostas[i.id]?.equipamento === "nao_funciona")) return "Há chamado de defeito aberto";
+  if (defeitosAbertos > 0 || itens.some((i) => i.etapa === "equipamento" && respostas[i.id]?.equipamento === "nao_funciona")) return "Há chamado de defeito aberto";
   return undefined;
 }
 
 const semConexao = (e: unknown) => e instanceof ErroApi && e.codigo === "SEM_CONEXAO";
 
-export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair }: Props) {
+export function FluxoChecklist({ quarto, tipo, situacaoAtual, reservaId = null, situacaoDesde = null, defeitosAbertos = 0, aoConcluir, aoSair }: Props) {
   const { online } = useConexao();
+  const { usuario } = useSessao();
   const modelosQ = useQuery({ queryKey: ["checklist-modelos"], queryFn: () => chamarApi<Modelos>("GET", "/api/checklists/modelos") });
-  const [inicio] = useState(() => estadoInicial(quarto.id, tipo, situacaoAtual));
+  const [inicio] = useState(() => estadoInicial(quarto.id, tipo, situacaoAtual, reservaId, situacaoDesde));
   const [estado, setEstado] = useState<EstadoChecklist>(inicio.estado);
   const [pendentes, setPendentes] = useState<ReadonlySet<string>>(new Set());
   const emAndamento = useRef(new Map<string, Promise<void>>());
@@ -82,13 +92,15 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
   const [confirmarCancelar, setConfirmarCancelar] = useState<{ id: string; valor: string } | null>(null);
   const concluir = useAcao((corpo: unknown) => chamarApi<{ execucaoId: string; totalFrigobar: number }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/checklists`, corpo));
 
+  // O rascunho só nasce na primeira resposta: abrir e sair sem responder não deixa nada guardado.
+  const respondeuAlgo = Object.keys(estado.respostas).length > 0 || Object.keys(estado.frigobar).length > 0;
   useEffect(() => {
-    salvarRascunho(quarto.id, tipo, estado);
-  }, [quarto.id, tipo, estado]);
+    if (respondeuAlgo) salvarRascunho(quarto.id, tipo, estado);
+  }, [quarto.id, tipo, estado, respondeuAlgo]);
 
   const modelos = modelosQ.data;
   const itens = useMemo(() => (modelos ? modelos[tipo] : []), [modelos, tipo]);
-  const impedimento = impedimentoDe(itens, estado.respostas);
+  const impedimento = impedimentoDe(itens, estado.respostas, defeitosAbertos);
   // "Liberado" que deixou de valer não fica escondido no rascunho nem é enviado.
   const liberadoInvalido = estado.resultado === "liberado" && impedimento !== undefined;
   useEffect(() => {
@@ -157,10 +169,21 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
     await execucao;
   }
 
+  /** Chamado aberto por outra pessoa não é nosso para cancelar: só se desfaz o vínculo. */
+  const chamadoDeOutro = (r: Resposta | undefined) => r?.chamadoAbertoPor !== undefined && r.chamadoAbertoPor !== usuario?.id;
+
   async function desfazer(id: string, r: Resposta | undefined) {
-    if (r?.chamadoId) await chamarApi("POST", `/api/chamados/${encodeURIComponent(r.chamadoId)}/cancelar`);
-    else if (r?.alertaId) await chamarApi("POST", `/api/avisos-controle/${encodeURIComponent(r.alertaId)}/cancelar`);
-    mudarResposta(id, { chamadoId: undefined, alertaId: undefined });
+    if (r?.chamadoId) {
+      if (!chamadoDeOutro(r)) {
+        try {
+          await chamarApi("POST", `/api/chamados/${encodeURIComponent(r.chamadoId)}/cancelar`);
+        } catch (e) {
+          // Sem conexão a resposta muda mesmo assim; o servidor reconcilia os chamados ao concluir.
+          if (!semConexao(e)) throw e;
+        }
+      }
+    } else if (r?.alertaId) await chamarApi("POST", `/api/avisos-controle/${encodeURIComponent(r.alertaId)}/cancelar`);
+    mudarResposta(id, { chamadoId: undefined, chamadoAbertoPor: undefined, alertaId: undefined });
   }
 
   /** Equipamento ("nao_funciona") e controle ("faltando") abrem chamado/aviso na hora; sair da opção cancela primeiro. */
@@ -170,7 +193,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
     const atual = respostas[item.id];
     if (emAndamento.current.has(item.id) || atual?.[campo] === valor) return;
     const registrado = atual?.chamadoId !== undefined || atual?.alertaId !== undefined;
-    if (registrado && item.etapa === "equipamento" && !confirmado) {
+    if (atual?.chamadoId !== undefined && !chamadoDeOutro(atual) && item.etapa === "equipamento" && !confirmado) {
       setConfirmarCancelar({ id: item.id, valor });
       return;
     }
@@ -207,8 +230,8 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
       mudarErro(item.id, undefined);
       const observacao = r?.observacao?.trim() || undefined;
       try {
-        const c = await chamarApi<{ id: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/chamados`, { itemId: item.id, observacao });
-        mudarResposta(item.id, { chamadoId: c.id });
+        const c = await chamarApi<{ id: string; abertoPor?: string }>("POST", `/api/quartos/${encodeURIComponent(quarto.id)}/chamados`, { itemId: item.id, observacao });
+        mudarResposta(item.id, { chamadoId: c.id, chamadoAbertoPor: c.abertoPor });
       } catch (e) {
         if (!semConexao(e)) mudarErro(item.id, e as Error);
       }
@@ -253,6 +276,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, aoConcluir, aoSair
   function enviar() {
     const frigobarAtivo = etapas.includes("frigobar");
     const corpo = {
+      execucaoId: estado.execucaoId,
       tipo,
       iniciadoEm: estado.iniciadoEm,
       respostas: itens.map((i) => {

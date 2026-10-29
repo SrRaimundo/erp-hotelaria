@@ -71,6 +71,9 @@ export function TelaGovernanca() {
         quarto={{ id: fluxo.quarto.quartoId, numero: fluxo.quarto.numero }}
         tipo={fluxo.tipo}
         situacaoAtual={fluxo.tipo === "saida" ? "sujo" : "ocupado"}
+        reservaId={fluxo.tipo === "diaria" ? fluxo.quarto.reservaId : null}
+        situacaoDesde={fluxo.tipo === "saida" ? fluxo.quarto.situacaoDesde : null}
+        defeitosAbertos={fluxo.quarto.defeitosAbertos}
         aoConcluir={() => {
           setConcluido(`Checklist concluído · Qto ${fluxo.quarto.numero}`);
           setFluxo(null);

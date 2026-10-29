@@ -72,7 +72,7 @@ function LinhaContagem({ item, valor, maximoBotao, aoMudar, detalhe }: { item: I
           <div className="checklist__quantidade">
             <label>
               Quantidade de {item.texto}
-              <input type="number" inputMode="numeric" min={0} max={MAXIMO} value={texto} onChange={(e) => { setTexto(e.target.value); setPendente(null); }} />
+              <input type="number" inputMode="numeric" min={0} max={MAXIMO} value={texto} onChange={(e) => { setTexto(e.target.value); setPendente(null); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); aplicar(); } }} />
             </label>
             <button type="button" className="checklist__opcao" onClick={aplicar}>
               Aplicar
