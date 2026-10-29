@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
+import { abrirChamado } from "../../src/governanca/chamados.js";
+import { emTransacao } from "../../src/shared/contexto.js";
 import { concluirChecklist, type RespostaEnviada } from "../../src/governanca/checklists.js";
 import { obterModelos, type ItemChecklist } from "../../src/governanca/modelos.js";
 import { fazerCheckin } from "../../src/hospedagem/checkin.js";
@@ -104,6 +106,36 @@ describe("consultas de governança", () => {
     ctx.relogio.definir("2026-11-11T18:00:00Z");
     const item = (await listaGovernanca(ctx)).find((i) => i.numero === "104")!;
     expect(item).toMatchObject({ tarefa: "arrumacao", arrumadoHojeEm: null });
+  });
+
+  test("hóspede novo no mesmo dia volta a ter a tarefa de arrumação e o item traz reservaId", async () => {
+    const r1 = await hospedar(q["104"]!);
+    await arrumar(q["104"]!);
+    expect((await listaGovernanca(ctx)).find((i) => i.numero === "104")).toMatchObject({ reservaId: r1.id, tarefa: null });
+    // sai o primeiro hóspede e entra outro no mesmo dia hoteleiro
+    await ctx.db.updateTable("reservas").set({ estado: "finalizada" }).where("id", "=", r1.id).execute();
+    await ctx.db.updateTable("quartos").set({ situacao: "livre" }).where("id", "=", q["104"]!).execute();
+    const r2 = await hospedar(q["104"]!);
+    const item = (await listaGovernanca(ctx)).find((i) => i.numero === "104")!;
+    expect(item).toMatchObject({ reservaId: r2.id, tarefa: "arrumacao", arrumadoHojeEm: null });
+    expect((await painelDoDia(ctx)).numeros.ocupadosSemArrumacao).toBe(1);
+  });
+
+  test("situacaoDesde = instante da última entrada na situação atual; defeitosAbertos só conta defeitos", async () => {
+    ctx.relogio.definir("2026-11-10T10:00:00Z");
+    await sujar(q["103"]!);
+    ctx.relogio.definir("2026-11-10T12:00:00Z");
+    await mudarSituacaoQuarto(ctx, q["103"]!, "livre", "u1");
+    ctx.relogio.definir("2026-11-10T13:00:00Z");
+    await mudarSituacaoQuarto(ctx, q["103"]!, "bloqueado", "u1", "x");
+    await mudarSituacaoQuarto(ctx, q["103"]!, "sujo", "u1");
+    const item = (await listaGovernanca(ctx)).find((i) => i.numero === "103")!;
+    expect(item).toMatchObject({ situacao: "sujo", situacaoDesde: "2026-11-10T13:00:00.000Z", reservaId: null, defeitosAbertos: 0 });
+    await cenario();
+    const por = (await listaGovernanca(ctx)).find((i) => i.numero === "201")!;
+    expect(por).toMatchObject({ chamadosAbertos: 1, defeitosAbertos: 1 });
+    await emTransacao(ctx, (tx) => abrirChamado(tx, { quartoId: q["105"]!, itemId: diaria.find((i) => i.etapa === "controles")!.id }, governanca));
+    expect((await listaGovernanca(ctx)).find((i) => i.numero === "105")).toMatchObject({ chamadosAbertos: 1, defeitosAbertos: 0 });
   });
 
   test("painel traz chamados abertos e ocupados sem arrumação", async () => {

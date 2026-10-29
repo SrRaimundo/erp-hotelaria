@@ -109,7 +109,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     // Usuários (o admin já existe e mantém a troca de senha obrigatória)
     await criarUsuario(tx, { nome: "Recepção", login: "recepcao", senha: "recepcao123", perfil: "recepcao" }, ator);
     await criarUsuario(tx, { nome: "Governança", login: "governanca", senha: "governanca123", perfil: "governanca" }, ator);
-    const frigobar = await criarProduto(tx, { codigo: "FRIGOBAR", nome: "Frigobar", precoCentavos: 1800, unidade: "un", grupo: "frigobar", tipo: "produto", setores: ["frigobar"] }, ator);
+    const frigobar = await criarProduto(tx, { codigo: "FRIGOBAR", nome: "Frigobar", precoCentavos: 1800, unidade: "un", grupo: "frigobar", tipo: "produto", setores: ["recepcao"] }, ator);
 
     const base = { unidade: "un", grupo: "frigobar", tipo: "produto" as const };
     const agua = await criarProduto(tx, { ...base, codigo: "AGUA", nome: "Água mineral", precoCentavos: 600, setores: ["frigobar", "recepcao", "bar"] }, ator);

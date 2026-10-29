@@ -48,6 +48,8 @@ describe("pousada de demonstração", () => {
     expect(produtos.filter((x) => ["Água mineral", "Cerveja", "Chocolate", "Refrigerante"].includes(x.nome)).map((x) => [x.nome, x.preco_centavos]).sort((x, y) => String(x[0]).localeCompare(String(y[0]), "pt-BR"))).toEqual([["Água mineral", 600], ["Cerveja", 1200], ["Chocolate", 900], ["Refrigerante", 800]]);
     const setores = await ctx.db.selectFrom("produto_setores").select("setor").where("produto_id", "=", produtos.find((x) => x.nome === "Água mineral")!.id).orderBy("setor").execute();
     expect(setores.map((s) => s.setor)).toEqual(["bar", "frigobar", "recepcao"]);
+    const generico = await ctx.db.selectFrom("produtos").select("id").where("codigo", "=", "FRIGOBAR").executeTakeFirstOrThrow();
+    expect((await ctx.db.selectFrom("produto_setores").select("setor").where("produto_id", "=", generico.id).execute()).map((s) => s.setor)).toEqual(["recepcao"]);
     expect((await obterConfig(ctx)).camareiraLancaFrigobar).toBe(true);
 
     const mov = await ctx.db.selectFrom("frigobar_movimentos").select(["tipo", "quantidade", "lancamento_id"]).orderBy("tipo").execute();

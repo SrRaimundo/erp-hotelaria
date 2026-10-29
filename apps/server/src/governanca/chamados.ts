@@ -85,6 +85,9 @@ export async function abrirChamado(
   } else {
     throw new ErroDominio("ITEM_SEM_CHAMADO", "Só equipamentos e controles abrem chamado.");
   }
+  // Um único chamado aberto por quarto e item: quem tenta abrir de novo recebe o que já existe.
+  const existente = await tx.db.selectFrom("chamados").select("id").where("quarto_id", "=", quarto.id).where("item_id", "=", item.id).where("situacao", "=", "aberto").orderBy("aberto_em").orderBy("id").executeTakeFirst();
+  if (existente) return obterChamado(tx, existente.id);
   const id = novoId();
   const observacao = d.observacao?.trim() || null;
   await tx.db

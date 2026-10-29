@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
 import { obterModelos } from "../../src/governanca/modelos.js";
 import { criarCategoria } from "../../src/nucleo/categorias.js";
-import { obterConfig, salvarConfig } from "../../src/nucleo/pousada.js";
+import { CONFIG_PADRAO, obterConfig, salvarConfig } from "../../src/nucleo/pousada.js";
 import { criarProduto } from "../../src/nucleo/produtos.js";
 import { criarQuarto, mudarSituacaoQuarto, obterQuarto } from "../../src/nucleo/quartos.js";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
@@ -51,6 +51,14 @@ describe("modelos de checklist", () => {
     await salvarConfig(ctx, { camareiraLancaFrigobar: true }, "u1");
     expect((await obterConfig(ctx)).camareiraLancaFrigobar).toBe(true);
     expect((await obterModelos(ctx)).camareiraLancaFrigobar).toBe(true);
+  });
+
+  test("configuração antiga, sem camareiraLancaFrigobar, carrega como falso", async () => {
+    const legado = { ...CONFIG_PADRAO } as Partial<typeof CONFIG_PADRAO>;
+    delete legado.camareiraLancaFrigobar;
+    await ctx.db.insertInto("config_pousada").values({ id: 1, dados: JSON.stringify(legado) }).onConflict((oc) => oc.column("id").doUpdateSet({ dados: JSON.stringify(legado) })).execute();
+    expect(JSON.parse((await ctx.db.selectFrom("config_pousada").select("dados").executeTakeFirstOrThrow()).dados)).not.toHaveProperty("camareiraLancaFrigobar");
+    expect((await obterConfig(ctx)).camareiraLancaFrigobar).toBe(false);
   });
 
   test("sujo → bloqueado é permitido", async () => {

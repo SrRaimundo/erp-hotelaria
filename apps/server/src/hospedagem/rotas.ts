@@ -12,7 +12,6 @@ import { obterProdutoPorCodigo } from "../nucleo/produtos.js";
 import { fazerCheckin, sugerirQuartos } from "./checkin.js";
 import { fazerCheckout, previaCheckout } from "./checkout.js";
 import { bloquear, colocarEmManutencao, liberar, listaGovernanca } from "./governanca.js";
-import { SETORES, type Setor } from "../governanca/setores.js";
 import { buscaUniversal, historicoEstadias, mapaOcupacao, painelDoDia } from "./consultas.js";
 import { listarReservas } from "./lista-reservas.js";
 import { criarGrupo, criarReserva, obterReserva } from "./reservas.js";
@@ -173,7 +172,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     descricao: texto.optional(),
     valorUnitario: z.number().int().min(1).optional(),
     quantidade: z.number().int().min(1),
-    setor: z.enum(SETORES as [Setor, ...Setor[]]).default("recepcao"),
+    setor: z.enum(["recepcao", "frigobar", "bar", "restaurante"]).default("recepcao"),
   });
   const corpoPagamento = z.object({ reservaId: texto.optional(), formaCodigo: texto, valor: z.number().int().min(1) });
   const idParam = z.object({ id: texto });
@@ -247,7 +246,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     return historicoEstadias(ctx, idParam.parse(req.params).id);
   });
 
-  const corpoMotivo = z.object({ motivo: texto });
+  const corpoMotivo = z.object({ motivo: texto.max(500, "No máximo 500 caracteres") });
   app.get("/api/governanca", async (req) => {
     exigirPermissao(req.usuario, "quartos.situacao");
     return listaGovernanca(ctx);
@@ -260,8 +259,8 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
   for (const [caminho, acao] of Object.entries(acoesQuarto)) {
     app.post(`/api/quartos/:id/${caminho}`, async (req) => {
       exigirPermissao(req.usuario, "quartos.manutencao");
-      await acao(ctx, idParam.parse(req.params).id, corpoMotivo.parse(req.body).motivo, req.usuario);
-      return { ok: true };
+      const situacao = await acao(ctx, idParam.parse(req.params).id, corpoMotivo.parse(req.body).motivo, req.usuario);
+      return situacao === "sujo" ? { ok: true, situacao, mensagem: "O quarto volta para limpeza (sem checklist de saída)." } : { ok: true, situacao };
     });
   }
 }

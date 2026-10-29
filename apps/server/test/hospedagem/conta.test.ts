@@ -265,6 +265,7 @@ describe("rotas da conta", () => {
 
     expect((await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: gov, payload: { tipo: "extra", produtoCodigo: "AGUA", quantidade: 2 } })).statusCode).toBe(403);
     expect((await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "diaria", descricao: "x", valorUnitario: 1, quantidade: 1 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", descricao: "x", valorUnitario: 100, quantidade: 1, setor: "hospedagem" } })).statusCode).toBe(400);
     const l1 = await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", produtoCodigo: "AGUA", quantidade: 2 } });
     expect(l1.statusCode).toBe(200);
     const l2 = await app.inject({ method: "POST", url: `${url}/lancamentos`, headers: rec, payload: { tipo: "extra", descricao: "Lavanderia", valorUnitario: 3000, quantidade: 1 } });

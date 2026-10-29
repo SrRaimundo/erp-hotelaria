@@ -12,7 +12,7 @@ const TRANSICOES: Record<SituacaoQuarto, SituacaoQuarto[]> = {
   ocupado: ["sujo"],
   sujo: ["livre", "em_manutencao", "bloqueado"],
   em_manutencao: ["livre", "sujo"],
-  bloqueado: ["livre"],
+  bloqueado: ["livre", "sujo"],
 };
 
 function paraQuarto(l: any): Quarto {

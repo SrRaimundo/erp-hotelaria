@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { listaGovernanca, bloquear, colocarEmManutencao, liberar, marcarLimpo } from "../../src/hospedagem/governanca.js";
+import { concluirChecklist } from "../../src/governanca/checklists.js";
+import { obterModelos } from "../../src/governanca/modelos.js";
+import { listaGovernanca, bloquear, colocarEmManutencao, liberar } from "../../src/hospedagem/governanca.js";
 import { fazerCheckin } from "../../src/hospedagem/checkin.js";
 import { criarReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { criarApp } from "../../src/http/app.js";
@@ -104,8 +106,43 @@ describe("governança", () => {
     expect(res.json()).toHaveLength(3);
   });
 
-  test("marcar limpo só vale para quarto sujo", async () => {
-    expect(await marcarLimpo(ctx, q101, governanca).catch((e) => e)).toMatchObject({ codigo: "TRANSICAO_QUARTO_INVALIDA" });
+  test("I4: quarto sujo que foi à manutenção volta sujo, não livre", async () => {
+    await mudarSituacaoQuarto(ctx, q101, "em_manutencao", "u1");
+    await mudarSituacaoQuarto(ctx, q101, "sujo", "u1");
+    await colocarEmManutencao(ctx, q101, "Torneira", recepcao);
+    await liberar(ctx, q101, "Consertado", recepcao);
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("sujo");
+    await mudarSituacaoQuarto(ctx, q102, "em_manutencao", "u1");
+    await mudarSituacaoQuarto(ctx, q102, "sujo", "u1");
+    await bloquear(ctx, q102, "Reforma", recepcao);
+    const rec = await entrarComo(ctx, "recepcao");
+    const res = await criarApp(ctx).inject({ method: "POST", url: `/api/quartos/${q102}/liberar`, headers: rec, payload: { motivo: "Fim" } });
+    expect(res.json()).toMatchObject({ ok: true, situacao: "sujo", mensagem: "O quarto volta para limpeza (sem checklist de saída)." });
+    expect((await obterQuarto(ctx, q102)).situacao).toBe("sujo");
+  });
+
+  test("motivo de manutenção/bloqueio/liberação aceita no máximo 500 caracteres", async () => {
+    const rec = await entrarComo(ctx, "recepcao");
+    const app = criarApp(ctx);
+    for (const caminho of ["manutencao", "bloquear", "liberar"]) {
+      const r = await app.inject({ method: "POST", url: `/api/quartos/${q101}/${caminho}`, headers: rec, payload: { motivo: "x".repeat(501) } });
+      expect(r.statusCode).toBe(400);
+    }
+    expect((await app.inject({ method: "POST", url: `/api/quartos/${q101}/manutencao`, headers: rec, payload: { motivo: "x".repeat(500) } })).statusCode).toBe(200);
+  });
+
+  test("I4: sujo → checklist de saída bloqueado → liberar volta livre; livre → bloquear → liberar volta livre", async () => {
+    await mudarSituacaoQuarto(ctx, q101, "em_manutencao", "u1");
+    await mudarSituacaoQuarto(ctx, q101, "sujo", "u1");
+    const itens = (await obterModelos(ctx)).saida;
+    const ok = itens.map((i) => (i.etapa === "limpeza" ? { itemId: i.id, simNao: true } : i.etapa === "enxoval" ? { itemId: i.id, quantidade: 1 } : i.etapa === "equipamento" ? { itemId: i.id, equipamento: "funciona" as const } : { itemId: i.id, presenca: "presente" as const }));
+    await concluirChecklist(ctx, q101, { tipo: "saida", iniciadoEm: "2026-11-10T14:30:00Z", respostas: ok, resultado: "bloqueado", motivo: "Pintura" }, governanca);
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("bloqueado");
+    await liberar(ctx, q101, "Pintado", recepcao);
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("livre");
+    await bloquear(ctx, q101, "Reforma", recepcao);
+    await liberar(ctx, q101, "Fim", recepcao);
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("livre");
   });
 
   test("quarto em manutenção some da disponibilidade", async () => {

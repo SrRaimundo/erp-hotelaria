@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { alertasAbertos } from "../../src/infra/alertas.js";
 import { concluirChecklist, type RespostaEnviada } from "../../src/governanca/checklists.js";
 import { lancarFrigobar } from "../../src/governanca/frigobar.js";
-import { abrirChamado, avisarControleFaltando, cancelarChamado, listarChamados } from "../../src/governanca/chamados.js";
+import { abrirChamado, avisarControleFaltando, cancelarChamado, listarChamados, resolverChamado } from "../../src/governanca/chamados.js";
 import { obterModelos, type ItemChecklist } from "../../src/governanca/modelos.js";
 import { fazerCheckin } from "../../src/hospedagem/checkin.js";
 import { extrato } from "../../src/hospedagem/conta.js";
@@ -367,5 +367,51 @@ describe("rotas", () => {
     expect(lancado.statusCode).toBe(200);
     expect(lancado.json()).toMatchObject({ total: 600 });
     expect((await app.inject({ method: "POST", url: f, headers: rec, payload: { reservaId: reserva.id, itens: [{ produtoId: agua, quantidade: -1 }] } })).statusCode).toBe(400);
+  });
+});
+
+describe("correções da revisão final", () => {
+  test("I2: Concluir repetido com o mesmo execucaoId não grava de novo e devolve o mesmo resultado", async () => {
+    const reserva = await hospedar(q101);
+    await salvarConfig(ctx, { camareiraLancaFrigobar: true }, "u1");
+    const pedido = { execucaoId: "exec-cliente-1", frigobar: [{ produtoId: agua, quantidade: 2 }] };
+    const a = await concluirDiaria(q101, pedido);
+    const b = await concluirDiaria(q101, pedido);
+    expect(a).toEqual({ execucaoId: "exec-cliente-1", totalFrigobar: 1200 });
+    expect(b).toEqual(a);
+    expect(await contagem("checklist_execucoes")).toBe(1);
+    expect(await contagem("frigobar_movimentos")).toBe(2);
+    expect((await extrato(ctx, reserva.contaId)).filter((l) => l.setor === "frigobar")).toHaveLength(1);
+  });
+
+  test("I2: mesmo execucaoId em outro quarto ou outro tipo → RESPOSTA_INVALIDA", async () => {
+    await hospedar(q101);
+    await hospedar(q102);
+    await concluirDiaria(q101, { execucaoId: "exec-cliente-2" });
+    expect(await concluirDiaria(q102, { execucaoId: "exec-cliente-2" }).catch((e) => e)).toMatchObject({ codigo: "RESPOSTA_INVALIDA" });
+    expect(await contagem("checklist_execucoes")).toBe(1);
+  });
+
+  test("I3: chamadoId já resolvido pela recepção conta como atendido: sem chamado novo e Liberado permitido", async () => {
+    await sujar(q101);
+    const ar = idDe(saida, "Ar-condicionado");
+    const c = await emTransacao(ctx, (tx) => abrirChamado(tx, { quartoId: q101, itemId: ar }, governanca));
+    await resolverChamado(ctx, c.id, "Consertado", recepcao);
+    await concluirSaida(q101, { respostas: respostasOk(saida, { "Ar-condicionado": { equipamento: "nao_funciona", chamadoId: c.id } }) });
+    expect((await obterQuarto(ctx, q101)).situacao).toBe("livre");
+    const todos = await listarChamados(ctx, { quartoId: q101 });
+    expect(todos).toHaveLength(1);
+    expect(todos[0]).toMatchObject({ id: c.id, situacao: "resolvido" });
+    const r = await ctx.db.selectFrom("checklist_respostas").select("chamado_id").where("item_id", "=", ar).executeTakeFirstOrThrow();
+    expect(r.chamado_id).toBe(c.id);
+  });
+
+  test("I3: defeito já aberto no quarto é reaproveitado na conclusão, mesmo sem chamadoId", async () => {
+    await sujar(q101);
+    const ar = idDe(saida, "Ar-condicionado");
+    const c = await emTransacao(ctx, (tx) => abrirChamado(tx, { quartoId: q101, itemId: ar }, governanca));
+    await concluirSaida(q101, { respostas: respostasOk(saida, { "Ar-condicionado": { equipamento: "nao_funciona" } }), resultado: "bloqueado", motivo: "Ar" });
+    const abertos = await listarChamados(ctx, { quartoId: q101, situacao: "aberto" });
+    expect(abertos.map((x) => x.id)).toEqual([c.id]);
   });
 });

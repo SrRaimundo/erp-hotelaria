@@ -125,6 +125,20 @@ describe("chamados", () => {
   });
 });
 
+describe("chamado único por quarto e item", () => {
+  test("I3: segundo abrir para o mesmo item devolve o chamado aberto, sem inserir outro", async () => {
+    const a = await abrir(q101, itemAr);
+    const b = await abrir(q101, itemAr, recepcao);
+    expect(b.id).toBe(a.id);
+    expect(await listarChamados(ctx, { quartoId: q101 })).toHaveLength(1);
+    const outro = await abrir(q102, itemAr);
+    expect(outro.id).not.toBe(a.id);
+    await cancelarChamado(ctx, a.id, governanca);
+    const c = await abrir(q101, itemAr);
+    expect(c.id).not.toBe(a.id);
+  });
+});
+
 describe("avisos de controle por item", () => {
   test("dois controles geram dois avisos; cancelar um mantém o outro; o mesmo controle repete o aviso", async () => {
     const itemControleAr = (await obterModelos(ctx)).saida.find((i) => i.texto === "Controle do ar-condicionado")!.id;
@@ -175,6 +189,19 @@ describe("rotas", () => {
     expect((await app.inject({ method: "POST", url: `/api/chamados/${c2.id}/cancelar`, headers: rec })).json()).toMatchObject({ codigo: "CHAMADO_NAO_CANCELAVEL" });
     expect((await app.inject({ method: "POST", url: `/api/chamados/${c2.id}/cancelar`, headers: gov })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/api/chamados?situacao=aberto", headers: rec })).json()).toHaveLength(0);
+  });
+
+  test("observação e motivo aceitam no máximo 500 caracteres", async () => {
+    const app = criarApp(ctx);
+    const gov = await entrarComo(ctx, "governanca");
+    const rec = await entrarComo(ctx, "recepcao");
+    const longo = "x".repeat(501);
+    expect((await app.inject({ method: "POST", url: `/api/quartos/${q101}/chamados`, headers: gov, payload: { itemId: itemAr, observacao: longo } })).statusCode).toBe(400);
+    const c = (await app.inject({ method: "POST", url: `/api/quartos/${q101}/chamados`, headers: gov, payload: { itemId: itemAr, observacao: "x".repeat(500) } })).json();
+    expect((await app.inject({ method: "POST", url: `/api/chamados/${c.id}/resolver`, headers: rec, payload: { observacao: longo } })).statusCode).toBe(400);
+    const base = { tipo: "saida", iniciadoEm: "2026-11-10T14:30:00Z", respostas: [] };
+    expect((await app.inject({ method: "POST", url: `/api/quartos/${q101}/checklists`, headers: gov, payload: { ...base, motivo: longo } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `/api/quartos/${q101}/checklists`, headers: gov, payload: { ...base, respostas: [{ itemId: itemAr, equipamento: "funciona", observacao: longo }] } })).statusCode).toBe(400);
   });
 
   test("aviso de controle: criar e cancelar pela rota", async () => {

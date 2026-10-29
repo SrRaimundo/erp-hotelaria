@@ -23,6 +23,8 @@ export type RespostaEnviada = {
   alertaId?: string;
 };
 export type PedidoChecklist = {
+  /** Gerado pelo cliente ao abrir o checklist; repetir o envio devolve o resultado já gravado. */
+  execucaoId?: string;
   tipo: "saida" | "diaria";
   iniciadoEm: string;
   respostas: RespostaEnviada[];
@@ -65,7 +67,8 @@ function validarFrigobar(frigobar: ItemFrigobar[]): void {
 
 async function chamadoReaproveitavel(tx: Contexto, id: string | undefined, quartoId: string, itemId: string): Promise<string | null> {
   if (!id) return null;
-  const c = await tx.db.selectFrom("chamados").select("id").where("id", "=", id).where("quarto_id", "=", quartoId).where("item_id", "=", itemId).where("situacao", "=", "aberto").executeTakeFirst();
+  // Resolvido nesse meio-tempo pela recepção também vale: o defeito foi atendido, não se abre outro.
+  const c = await tx.db.selectFrom("chamados").select("id").where("id", "=", id).where("quarto_id", "=", quartoId).where("item_id", "=", itemId).where("situacao", "in", ["aberto", "resolvido"]).executeTakeFirst();
   return c?.id ?? null;
 }
 
@@ -87,6 +90,20 @@ export async function concluirChecklist(
 ): Promise<{ execucaoId: string; totalFrigobar: number }> {
   exigirPermissao(usuario, "quartos.situacao");
   return emTransacao(ctx, async (tx) => {
+    if (d.execucaoId) {
+      const previa = await tx.db.selectFrom("checklist_execucoes").select(["quarto_id", "tipo"]).where("id", "=", d.execucaoId).executeTakeFirst();
+      if (previa) {
+        if (previa.quarto_id !== quartoId || previa.tipo !== d.tipo) throw invalida("Este envio já foi usado em outro checklist. Reabra o checklist e tente novamente.");
+        const soma = await tx.db
+          .selectFrom("frigobar_movimentos as m")
+          .innerJoin("lancamentos as l", "l.id", "m.lancamento_id")
+          .select((eb) => eb.fn.sum<number>("l.valor").as("total"))
+          .where("m.execucao_id", "=", d.execucaoId)
+          .where("m.tipo", "=", "consumo")
+          .executeTakeFirst();
+        return { execucaoId: d.execucaoId, totalFrigobar: Number(soma?.total ?? 0) };
+      }
+    }
     const agora = tx.relogio.agora();
     const inicio = /^\d{4}-\d{2}-\d{2}T/.test(d.iniciadoEm) ? Date.parse(d.iniciadoEm) : NaN;
     if (Number.isNaN(inicio) || inicio > agora.getTime()) {
@@ -167,7 +184,7 @@ export async function concluirChecklist(
       }
     }
 
-    const execucaoId = novoId();
+    const execucaoId = d.execucaoId ?? novoId();
     const instante = agora.toISOString();
     await tx.db.insertInto("checklist_execucoes").values({
       id: execucaoId, quarto_id: quartoId, tipo: d.tipo, reserva_id: reservaId, usuario_id: usuario.id,

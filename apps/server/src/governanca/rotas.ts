@@ -16,8 +16,9 @@ export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): v
 
   const idParam = z.object({ id: z.string().min(1) });
   const corpoItem = z.object({ itemId: z.string().min(1, "Campo obrigatório") });
-  const corpoChamado = corpoItem.extend({ observacao: z.string().optional() });
-  const corpoResolver = z.object({ observacao: z.string().optional() }).default({});
+  const observacao = z.string().max(500, "No máximo 500 caracteres");
+  const corpoChamado = corpoItem.extend({ observacao: observacao.optional() });
+  const corpoResolver = z.object({ observacao: observacao.optional() }).default({});
   const queryChamados = z.object({
     situacao: z.enum(["aberto", "resolvido", "cancelado"]).optional(),
     quartoId: z.string().min(1).optional(),
@@ -63,17 +64,18 @@ export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): v
     quantidade: quantidade.optional(),
     equipamento: z.enum(["funciona", "nao_funciona", "nao_se_aplica"]).optional(),
     presenca: z.enum(["presente", "faltando", "nao_se_aplica"]).optional(),
-    observacao: z.string().optional(),
+    observacao: observacao.optional(),
     chamadoId: z.string().min(1).optional(),
     alertaId: z.string().min(1).optional(),
   });
   const corpoChecklist = z.object({
+    execucaoId: z.string().min(1).max(64).optional(),
     tipo: z.enum(["saida", "diaria"]),
     iniciadoEm: z.string().min(1, "Campo obrigatório"),
     respostas: z.array(corpoResposta),
     frigobar: z.array(z.object({ produtoId: textoId, quantidade })).optional(),
     resultado: z.enum(["liberado", "bloqueado"]).optional(),
-    motivo: z.string().optional(),
+    motivo: observacao.optional(),
   });
   const corpoFrigobar = z.object({ reservaId: textoId, itens: z.array(z.object({ produtoId: textoId, quantidade })) });
 
