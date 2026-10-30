@@ -7,9 +7,10 @@ import { Shell } from "./layout/Shell";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
-import { EmConstrucao } from "./telas/configuracoes/EmConstrucao";
+import { TelaChecklists } from "./telas/configuracoes/TelaChecklists";
 import { TelaCategoriasQuartos } from "./telas/configuracoes/TelaCategoriasQuartos";
 import { LayoutConfiguracoes, PrimeiraConfiguracao } from "./telas/configuracoes/LayoutConfiguracoes";
+import { TelaProdutos } from "./telas/configuracoes/TelaProdutos";
 import { TelaPerfis } from "./telas/configuracoes/TelaPerfis";
 import { TelaPousada } from "./telas/configuracoes/TelaPousada";
 import { TelaUsuarios } from "./telas/configuracoes/TelaUsuarios";
@@ -33,12 +34,11 @@ export function AppRotas() {
           <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
             <Route index element={<PrimeiraConfiguracao />} />
             <Route path="pousada" element={<ExigePermissao permissao="config.gerenciar"><TelaPousada /></ExigePermissao>} />
-            {/* Marcadores: as tarefas 7 a 9 trocam cada um pela tela real. */}
             <Route path="categorias" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaCategoriasQuartos /></ExigePermissao>} />
             <Route path="usuarios" element={<ExigePermissao permissao="config.gerenciar"><TelaUsuarios /></ExigePermissao>} />
             <Route path="perfis" element={<ExigePermissao permissao="config.gerenciar"><TelaPerfis /></ExigePermissao>} />
-            <Route path="produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><EmConstrucao titulo="Produtos" /></ExigePermissao>} />
-            <Route path="checklists" element={<ExigePermissao permissao="config.gerenciar"><EmConstrucao titulo="Checklists" /></ExigePermissao>} />
+            <Route path="produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaProdutos /></ExigePermissao>} />
+            <Route path="checklists" element={<ExigePermissao permissao="config.gerenciar"><TelaChecklists /></ExigePermissao>} />
           </Route>
         </Route>
       </Route>

@@ -49,3 +49,18 @@
 .cq__extra { display: block; }
 .ur__senha { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; letter-spacing: 0.08em; user-select: all; margin-bottom: 8px; }
 .cq__dicas { padding-left: 18px; }
+
+.checklists { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
+.checklists h1 { font-size: 1.5rem; }
+.checklists__abas { display: flex; gap: 8px; }
+.checklists__painel { display: flex; flex-direction: column; gap: 16px; }
+.checklists__etapa { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; }
+.checklists__etapa h2 { font-size: 1.0625rem; }
+.checklists__lista { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.checklists__item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.checklists__item--edicao { align-items: flex-end; justify-content: flex-start; }
+.checklists__item--edicao .campo { flex: 1 1 260px; }
+.checklists__item--inativo .checklists__texto { color: var(--texto-suave); }
+.checklists__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.checklists__novo { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px; width: 100%; }
+.checklists__novo .campo { flex: 1 1 260px; }
