@@ -28,6 +28,8 @@ export type PedidoChecklist = {
   tipo: "saida" | "diaria";
   iniciadoEm: string;
   respostas: RespostaEnviada[];
+  /** Ids dos itens que o aparelho exibiu ao abrir o checklist; rascunhos antigos não enviam. */
+  itensExibidos?: string[];
   frigobar?: ItemFrigobar[];
   resultado?: "liberado" | "bloqueado";
   motivo?: string;
@@ -129,25 +131,31 @@ export async function concluirChecklist(
     const motivo = d.tipo === "saida" && d.resultado === "bloqueado" ? (d.motivo?.trim() ?? "") : null;
     if (motivo === "") throw new ErroDominio("MOTIVO_OBRIGATORIO", "Informe o motivo do bloqueio.");
 
-    const itens: ItemAtivo[] = await tx.db
+    const todos = await tx.db
       .selectFrom("checklist_itens as i")
       .innerJoin("checklist_modelos as m", "m.id", "i.modelo_id")
-      .select(["i.id", "i.etapa", "i.texto"])
+      .select(["i.id", "i.etapa", "i.texto", "i.ativo"])
       .where("m.tipo", "=", d.tipo)
-      .where("i.ativo", "=", 1)
       .orderBy("i.ordem")
       .execute();
-    const porId = new Map(itens.map((i) => [i.id, i]));
+    // Com `itensExibidos`, vale o que o aparelho mostrou: itens criados depois não são exigidos e
+    // itens desativados nesse meio-tempo têm a resposta ignorada. Sem a lista, só os ativos de hoje.
+    const exibidos = d.itensExibidos ? new Set(d.itensExibidos) : null;
+    const elegiveis = todos.filter((i) => (exibidos ? exibidos.has(i.id) : i.ativo === 1));
+    const itens: ItemAtivo[] = elegiveis.filter((i) => i.ativo === 1);
+    const porId = new Map(elegiveis.map((i) => [i.id, i]));
     const respondidos = new Set<string>();
     for (const r of d.respostas) {
       const item = porId.get(r.itemId);
       if (!item) throw invalida("Há uma resposta para um item que não faz parte deste checklist.", { itemId: r.itemId });
       if (respondidos.has(r.itemId)) throw invalida(`O item "${item.texto}" foi respondido mais de uma vez.`, { itemId: r.itemId });
       respondidos.add(r.itemId);
-      validarResposta(item, r);
+      if (item.ativo === 1) validarResposta(item, r);
     }
     const faltando = itens.filter((i) => !respondidos.has(i.id)).map((i) => i.texto);
     if (faltando.length > 0) throw new ErroDominio("RESPOSTA_FALTANDO", `Faltam respostas: ${faltando.join(", ")}.`, { itens: faltando });
+    // Respostas de itens desativados durante o preenchimento não são gravadas.
+    const respostas = d.respostas.filter((r) => porId.get(r.itemId)!.ativo === 1);
 
     const frigobar = d.frigobar ?? [];
     validarFrigobar(frigobar);
@@ -157,13 +165,13 @@ export async function concluirChecklist(
     }
     const produtos = await produtosDoFrigobar(tx, frigobar);
 
-    if (d.resultado === "liberado" && d.tipo === "saida" && d.respostas.some((r) => r.simNao === false)) {
+    if (d.resultado === "liberado" && d.tipo === "saida" && respostas.some((r) => r.simNao === false)) {
       throw new ErroDominio("LIMPEZA_INCOMPLETA", "Há itens de limpeza marcados como Não. Corrija-os ou bloqueie o quarto com um motivo.");
     }
 
     // Chamados e avisos que ainda não existem (marcados sem conexão) são criados agora.
     const ligacoes = new Map<string, { chamadoId: string | null; alertaId: string | null }>();
-    for (const r of d.respostas) {
+    for (const r of respostas) {
       const item = porId.get(r.itemId)!;
       const observacao = r.observacao?.trim() || undefined;
       const abre = async () =>
@@ -190,7 +198,7 @@ export async function concluirChecklist(
       id: execucaoId, quarto_id: quartoId, tipo: d.tipo, reserva_id: reservaId, usuario_id: usuario.id,
       iniciado_em: d.iniciadoEm, concluido_em: instante, resultado: d.tipo === "saida" ? d.resultado! : null, motivo,
     }).execute();
-    for (const r of d.respostas) {
+    for (const r of respostas) {
       const item = porId.get(r.itemId)!;
       const lig = ligacoes.get(item.id)!;
       await tx.db.insertInto("checklist_respostas").values({

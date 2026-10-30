@@ -451,3 +451,54 @@ describe("correções da revisão final", () => {
     expect(lerRascunho("q9", "saida")!.respostas.e1.quantidade).toBe(7);
   });
 });
+
+describe("itensExibidos no rascunho", () => {
+  const IDS = ["l1", "e1", "q1", "c1"];
+  /** Responde a diária inteira (sem frigobar) a partir de Limpeza. */
+  async function responderTudo(u: U) {
+    await ateEquipamentos(u);
+    await u.click(grupo("TV").getByRole("button", { name: "Funciona" }));
+    await proxima(u);
+    await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
+  }
+
+  test("guarda os ids exibidos no rascunho e envia no Concluir", async () => {
+    const u = userEvent.setup();
+    montar({ "POST /api/quartos/q9/checklists": { execucaoId: "x", totalFrigobar: 0 } }, "diaria");
+    await responderTudo(u);
+    expect(lerRascunho("q9", "diaria")!.itensExibidos).toEqual(IDS);
+    await u.click(screen.getByRole("button", { name: "Concluir" }));
+    await waitFor(() => expect(postsDe("/checklists")).toHaveLength(1));
+    expect((postsDe("/checklists")[0]!.corpo as any).itensExibidos).toEqual(IDS);
+  });
+
+  test("rascunho retomado mantém a lista original: item criado depois não aparece nem é enviado", async () => {
+    const u = userEvent.setup();
+    salvarRascunho("q9", "diaria", { execucaoId: "e1", situacaoQuarto: "ocupado", iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "limpeza", respostas: { l1: { simNao: true }, e1: { quantidade: 2 }, q1: { equipamento: "funciona" } }, frigobar: {}, itensExibidos: IDS });
+    const novos = [...itens, item("c2", "controles", "Controle do ar", 2)];
+    montar({ "POST /api/quartos/q9/checklists": { execucaoId: "x", totalFrigobar: 0 } }, "diaria", { diaria: novos });
+    await screen.findByRole("heading", { name: "Limpeza" });
+    await proxima(u);
+    await proxima(u);
+    await proxima(u);
+    expect(screen.queryByRole("group", { name: "Controle do ar" })).not.toBeInTheDocument();
+    await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
+    await u.click(screen.getByRole("button", { name: "Concluir" }));
+    await waitFor(() => expect(postsDe("/checklists")).toHaveLength(1));
+    const corpo = postsDe("/checklists")[0]!.corpo as any;
+    expect(corpo.itensExibidos).toEqual(IDS);
+    expect(corpo.respostas.map((r: any) => r.itemId)).toEqual(IDS);
+  });
+
+  test("rascunho antigo, sem o campo, continua funcionando e não envia itensExibidos", async () => {
+    const u = userEvent.setup();
+    salvarRascunho("q9", "diaria", { execucaoId: "e1", situacaoQuarto: "ocupado", iniciadoEm: "2026-10-24T10:00:00.000Z", etapa: "controles", respostas: { l1: { simNao: true }, e1: { quantidade: 2 }, q1: { equipamento: "funciona" } }, frigobar: {} });
+    montar({ "POST /api/quartos/q9/checklists": { execucaoId: "x", totalFrigobar: 0 } }, "diaria");
+    await screen.findByRole("heading", { name: "Controles" });
+    await u.click(grupo("Controle da TV").getByRole("button", { name: "Presente" }));
+    expect(lerRascunho("q9", "diaria")!.itensExibidos).toBeUndefined();
+    await u.click(screen.getByRole("button", { name: "Concluir" }));
+    await waitFor(() => expect(postsDe("/checklists")).toHaveLength(1));
+    expect(postsDe("/checklists")[0]!.corpo).not.toHaveProperty("itensExibidos");
+  });
+});
