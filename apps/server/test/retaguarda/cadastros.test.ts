@@ -114,14 +114,37 @@ describe("quartos", () => {
     expect((await mapaOcupacao(ctx, { inicio: "2026-11-20", fim: "2026-11-25" })).quartos).toHaveLength(2);
   });
 
-  test("Review Focus 3: número de quarto inativo não pode ser reaproveitado por edição nem criação; reativar sem conflito funciona", async () => {
+  test("Review Focus 3 (R3): número de quarto inativo continua ocupado — criar, editar e lote → NUMERO_QUARTO_DUPLICADO", async () => {
     await definirQuartoAtivo(ctx, q101, false, "u1");
-    const e = await erro(editarQuarto(ctx, q102, { numero: "101", categoriaId: cat, bloco: null }, "u1"));
-    expect(e.codigo).toBe("NUMERO_QUARTO_DUPLICADO");
+    expect((await erro(editarQuarto(ctx, q102, { numero: "101", categoriaId: cat, bloco: null }, "u1"))).codigo).toBe("NUMERO_QUARTO_DUPLICADO");
     expect((await erro(criarQuarto(ctx, { numero: "101", categoriaId: cat }, "u1"))).codigo).toBe("NUMERO_QUARTO_DUPLICADO");
+    const lote = await erro(emTransacao(ctx, (tx) => criarQuartosEmLote(tx, { categoriaId: cat, de: 101, ate: 101 }, "u1")));
+    expect([lote.codigo, (lote.detalhes as any).numeros]).toEqual(["NUMERO_QUARTO_DUPLICADO", ["101"]]);
     await definirQuartoAtivo(ctx, q101, true, "u1");
     expect((await listarQuartos(ctx)).map((q) => q.numero)).toEqual(["101", "102"]);
     expect(await ctx.db.selectFrom("auditoria").select("id").where("acao", "in", ["quarto.desativar", "quarto.reativar"]).execute()).toHaveLength(2);
+  });
+
+  test("categoria inativa: criar, editar para ela, lote e reativar quarto → CATEGORIA_INATIVA", async () => {
+    const outra = (await criarCategoria(ctx, { nome: "Luxo", maxAdultos: 2, maxCriancas: 0, comodidades: [] }, "u1")).id;
+    await definirCategoriaAtiva(ctx, outra, false, "u1");
+    expect((await erro(criarQuarto(ctx, { numero: "900", categoriaId: outra }, "u1"))).codigo).toBe("CATEGORIA_INATIVA");
+    expect((await erro(editarQuarto(ctx, q101, { numero: "101", categoriaId: outra, bloco: null }, "u1"))).codigo).toBe("CATEGORIA_INATIVA");
+    expect((await erro(emTransacao(ctx, (tx) => criarQuartosEmLote(tx, { categoriaId: outra, de: 900, ate: 901 }, "u1")))).codigo).toBe("CATEGORIA_INATIVA");
+    await definirQuartoAtivo(ctx, q101, false, "u1");
+    await definirQuartoAtivo(ctx, q102, false, "u1");
+    await definirCategoriaAtiva(ctx, cat, false, "u1");
+    expect((await erro(definirQuartoAtivo(ctx, q101, true, "u1"))).codigo).toBe("CATEGORIA_INATIVA");
+  });
+
+  test("editar categoria de quarto com reserva ativa → QUARTO_COM_RESERVAS; sem reserva, troca", async () => {
+    const outra = (await criarCategoria(ctx, { nome: "Luxo", maxAdultos: 2, maxCriancas: 0, comodidades: [] }, "u1")).id;
+    const r = await criarReserva(ctx, { ...dados, quartoId: q101 }, recepcao);
+    const e = await erro(editarQuarto(ctx, q101, { numero: "101", categoriaId: outra, bloco: null }, "u1"));
+    expect(e.codigo).toBe("QUARTO_COM_RESERVAS");
+    expect((e.detalhes as any).codigos).toEqual([r.codigo]);
+    expect((await editarQuarto(ctx, q101, { numero: "111", categoriaId: cat, bloco: null }, "u1")).numero).toBe("111");
+    expect((await editarQuarto(ctx, q102, { numero: "102", categoriaId: outra, bloco: null }, "u1")).categoriaId).toBe(outra);
   });
 
   test("lote cria números de..ate como texto, com bloco", async () => {
@@ -178,6 +201,18 @@ describe("produtos", () => {
 });
 
 describe("rotas", () => {
+  test("produto inativo não pode ser lançado na conta → PRODUTO_INATIVO; ativo segue o fluxo", async () => {
+    const app = criarApp(ctx);
+    const h = await entrarComo(ctx, "recepcao");
+    const p = await criarProduto(ctx, { codigo: "AGUA", nome: "Água", precoCentavos: 500, unidade: "un", grupo: "bebidas", tipo: "produto", setores: ["recepcao"] }, "u1");
+    await definirProdutoAtivo(ctx, p.id, false, "u1");
+    const lancar = () => app.inject({ method: "POST", url: "/api/contas/qualquer/lancamentos", headers: h, payload: { tipo: "extra", produtoCodigo: "AGUA", quantidade: 1 } });
+    const r = await lancar();
+    expect([r.statusCode, r.json().codigo]).toEqual([422, "PRODUTO_INATIVO"]);
+    await definirProdutoAtivo(ctx, p.id, true, "u1");
+    expect((await lancar()).json().codigo).not.toBe("PRODUTO_INATIVO");
+  });
+
   test("governança não edita cadastros (403)", async () => {
     const app = criarApp(ctx);
     const h = await entrarComo(ctx, "governanca");

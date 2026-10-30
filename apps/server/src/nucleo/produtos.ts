@@ -59,9 +59,10 @@ export async function criarProduto(ctx: Contexto, d: Omit<Produto, "id" | "setor
   });
 }
 
-export async function obterProdutoPorCodigo(ctx: Contexto, codigo: string): Promise<Produto> {
+export async function obterProdutoPorCodigo(ctx: Contexto, codigo: string, opcoes?: { exigirAtivo?: boolean }): Promise<Produto> {
   const l = await ctx.db.selectFrom("produtos").selectAll().where("codigo", "=", codigo).executeTakeFirst();
   if (!l) throw new ErroDominio("PRODUTO_NAO_ENCONTRADO", `Produto ${codigo} não encontrado.`);
+  if (opcoes?.exigirAtivo && !l.ativo) throw new ErroDominio("PRODUTO_INATIVO", `${l.nome} está desativado e não pode ser lançado.`, { produtoCodigo: codigo });
   return paraProduto(l, await setoresDe(ctx, [l.id]).then((m) => m.get(l.id) ?? []));
 }
 

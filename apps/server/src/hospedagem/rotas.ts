@@ -190,7 +190,7 @@ export function registrarRotasHospedagem(app: FastifyInstance, ctx: Contexto): v
     let valorUnitario = c.valorUnitario;
     let produtoId: string | undefined;
     if (c.produtoCodigo) {
-      const p = await obterProdutoPorCodigo(ctx, c.produtoCodigo);
+      const p = await obterProdutoPorCodigo(ctx, c.produtoCodigo, { exigirAtivo: true });
       produtoId = p.id;
       descricao = p.nome;
       valorUnitario = p.precoCentavos;

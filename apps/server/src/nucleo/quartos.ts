@@ -44,8 +44,30 @@ export async function criarQuarto(
 const MAX_LOTE = 200;
 
 async function exigirCategoria(tx: Contexto, id: string): Promise<void> {
-  const cat = await tx.db.selectFrom("categorias").select("id").where("id", "=", id).executeTakeFirst();
+  const cat = await tx.db.selectFrom("categorias").select(["id", "ativo"]).where("id", "=", id).executeTakeFirst();
   if (!cat) throw new ErroDominio("CATEGORIA_NAO_ENCONTRADA", "Categoria não encontrada. Escolha uma categoria cadastrada.");
+  if (!cat.ativo) throw new ErroDominio("CATEGORIA_INATIVA", "Esta categoria está desativada. Reative a categoria ou escolha outra.");
+}
+
+/** Bloqueia (QUARTO_COM_RESERVAS) se o quarto está ocupado ou tem reserva ativa com saída a partir do dia hoteleiro. */
+async function exigirSemReservas(tx: Contexto, quarto: Quarto): Promise<void> {
+  const config = await obterConfig(tx);
+  const dia = diaHoteleiro(tx.relogio.agora(), config.fuso, config.viradaDia);
+  const reservas = await tx.db
+    .selectFrom("reservas")
+    .select("codigo")
+    .where("quarto_id", "=", quarto.id)
+    .where("estado", "in", ESTADOS_ATIVOS)
+    .where("saida", ">=", dia)
+    .orderBy("codigo")
+    .execute();
+  if (reservas.length > 0 || quarto.situacao === "ocupado") {
+    throw new ErroDominio(
+      "QUARTO_COM_RESERVAS",
+      `O quarto ${quarto.numero} está ocupado ou tem reservas ativas. Mude as reservas de quarto antes de alterá-lo.`,
+      { codigos: reservas.map((r) => r.codigo) },
+    );
+  }
 }
 
 /** Número livre = nenhum outro quarto (ativo ou inativo) o usa; o banco também garante a unicidade. */
@@ -70,7 +92,10 @@ export async function editarQuarto(
 ): Promise<Quarto> {
   return emTransacao(ctx, async (tx) => {
     const antes = await obterQuarto(tx, id);
-    await exigirCategoria(tx, d.categoriaId);
+    if (d.categoriaId !== antes.categoriaId) {
+      await exigirCategoria(tx, d.categoriaId);
+      await exigirSemReservas(tx, antes);
+    }
     await exigirNumeroLivre(tx, d.numero, id);
     const depois: Quarto = { ...antes, numero: d.numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null };
     await tx.db.updateTable("quartos").set({ numero: depois.numero, categoria_id: depois.categoriaId, bloco: depois.bloco }).where("id", "=", id).execute();
@@ -82,33 +107,14 @@ export async function editarQuarto(
 
 /**
  * Desativar: bloqueado se o quarto está ocupado ou tem reserva ativa com saída a partir do dia hoteleiro
- * (QUARTO_COM_RESERVAS, detalhes.codigos). Reativar: o número não pode estar em uso por outro quarto ativo.
+ * (QUARTO_COM_RESERVAS, detalhes.codigos). Reativar: a categoria do quarto precisa estar ativa.
+ * Números são únicos entre todos os quartos (ativos e inativos), então reativar nunca gera duplicidade.
  */
 export async function definirQuartoAtivo(ctx: Contexto, id: string, ativo: boolean, ator: string): Promise<void> {
   await emTransacao(ctx, async (tx) => {
     const quarto = await obterQuarto(tx, id);
-    if (!ativo) {
-      const config = await obterConfig(tx);
-      const dia = diaHoteleiro(tx.relogio.agora(), config.fuso, config.viradaDia);
-      const reservas = await tx.db
-        .selectFrom("reservas")
-        .select("codigo")
-        .where("quarto_id", "=", id)
-        .where("estado", "in", ESTADOS_ATIVOS)
-        .where("saida", ">=", dia)
-        .orderBy("codigo")
-        .execute();
-      if (reservas.length > 0 || quarto.situacao === "ocupado") {
-        throw new ErroDominio(
-          "QUARTO_COM_RESERVAS",
-          `O quarto ${quarto.numero} está ocupado ou tem reservas ativas. Mude as reservas de quarto antes de desativá-lo.`,
-          { codigos: reservas.map((r) => r.codigo) },
-        );
-      }
-    } else {
-      const outro = await tx.db.selectFrom("quartos").select("id").where("numero", "=", quarto.numero).where("ativo", "=", 1).where("id", "!=", id).executeTakeFirst();
-      if (outro) throw new ErroDominio("NUMERO_QUARTO_DUPLICADO", `Já existe um quarto ativo com o número ${quarto.numero}. Renumere um deles.`, { numeros: [quarto.numero] });
-    }
+    if (!ativo) await exigirSemReservas(tx, quarto);
+    else await exigirCategoria(tx, quarto.categoriaId);
     await tx.db.updateTable("quartos").set({ ativo: ativo ? 1 : 0 }).where("id", "=", id).execute();
     await auditar(tx, { ator, acao: ativo ? "quarto.reativar" : "quarto.desativar", alvoTipo: "quarto", alvoId: id });
     await registrarEvento(tx, ativo ? "nucleo.QuartoReativado" : "nucleo.QuartoDesativado", { quartoId: id });
