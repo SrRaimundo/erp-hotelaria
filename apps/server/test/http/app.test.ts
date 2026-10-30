@@ -103,7 +103,10 @@ describe("API HTTP base", () => {
     const u = await app.inject({ method: "POST", url: "/api/usuarios", headers: admin, payload: novo });
     expect(u.statusCode).toBe(201);
     expect(u.json()).not.toHaveProperty("senha");
-    expect((await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "ana", senha: "s" } })).statusCode).toBe(201);
+    const sessaoAna = await app.inject({ method: "POST", url: "/api/sessoes", payload: { login: "ana", senha: "s" } });
+    expect(sessaoAna.statusCode).toBe(201);
+    // Usuário criado pela retaguarda troca a senha no primeiro acesso (spec do assistente, passo Equipe).
+    expect(sessaoAna.json().usuario.trocarSenha).toBe(true);
   });
 
   test("I6: trocar a própria senha", async () => {

@@ -211,7 +211,7 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
 
   app.post("/api/usuarios", async (req, res) => {
     exigirPermissao(req.usuario, "config.gerenciar");
-    return res.status(201).send(await criarUsuario(ctx, corpoUsuario.parse(req.body), req.usuario.id));
+    return res.status(201).send(await criarUsuario(ctx, corpoUsuario.parse(req.body), req.usuario.id, { trocarSenha: true }));
   });
 
   app.get("/api/usuarios", async (req) => {

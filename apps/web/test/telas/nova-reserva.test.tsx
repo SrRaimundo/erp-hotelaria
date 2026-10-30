@@ -246,3 +246,19 @@ describe("nova reserva", () => {
     expect(screen.getByText("Falha no servidor.")).toBeInTheDocument();
   });
 });
+
+describe("nova reserva: cadastro de hóspede novo", () => {
+  test("a janela de cadastro não fica dentro do formulário da reserva e o novo hóspede vira o titular", async () => {
+    const criado = { ...maria, id: "h9", nome: "Joana Lima" };
+    montar("/reservas/nova", { "POST /api/hospedes": criado });
+    const usuario = userEvent.setup();
+    await usuario.click(await screen.findByRole("button", { name: "Cadastrar novo" }));
+    const janela = await screen.findByRole("dialog", { name: "Cadastrar hóspede" });
+    // Formulário dentro de formulário faz o navegador recarregar a página ao salvar.
+    expect(janela.parentElement?.closest("form")).toBeNull();
+    await usuario.type(within(janela).getByLabelText("Nome"), "Joana Lima");
+    await usuario.click(within(janela).getByRole("button", { name: "Salvar hóspede" }));
+    await screen.findByText(/Titular: Joana Lima/);
+    expect(chamadas.some((c) => c.metodo === "POST" && c.caminho === "/api/reservas")).toBe(false);
+  });
+});

@@ -33,6 +33,8 @@ export async function criarUsuario(
   ctx: Contexto,
   d: { nome: string; login: string; senha: string; perfil: string },
   ator: string,
+  /** `trocarSenha`: exige a troca da senha no primeiro acesso (padrão: não). */
+  opcoes: { trocarSenha?: boolean } = {},
 ): Promise<Usuario> {
   const { hash, salt } = await hashSenha(d.senha);
   return emTransacao(ctx, async (tx) => {
@@ -43,7 +45,7 @@ export async function criarUsuario(
     const u: Usuario = { id: novoId(), nome: d.nome, login: d.login, perfil: d.perfil };
     await tx.db
       .insertInto("usuarios")
-      .values({ ...u, senha_hash: hash, senha_salt: salt, trocar_senha: 0 })
+      .values({ ...u, senha_hash: hash, senha_salt: salt, trocar_senha: opcoes.trocarSenha ? 1 : 0 })
       .execute();
     await auditar(tx, { ator, acao: "usuario.criar", alvoTipo: "usuario", alvoId: u.id, dados: u });
     await registrarEvento(tx, "nucleo.UsuarioCriado", { usuarioId: u.id });

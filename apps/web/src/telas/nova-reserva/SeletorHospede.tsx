@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { chamarApi } from "../../api/cliente";
 import type { Hospede } from "../../api/tipos";
 import { Botao } from "../../componentes/Botao";
@@ -58,16 +59,20 @@ export function SeletorHospede({ valor, aoEscolher }: Props) {
       <Botao variante="secundario" tamanho="pequeno" onClick={() => setCadastrando(true)}>
         Cadastrar novo
       </Botao>
-      <Janela aberta={cadastrando} aoFechar={() => setCadastrando(false)} titulo="Cadastrar hóspede">
-        <CadastroRapidoHospede
-          inicial={texto.trim() ? { nome: texto.trim() } : undefined}
-          aoSalvar={(h) => {
-            setCadastrando(false);
-            aoEscolher(h);
-          }}
-          aoCancelar={() => setCadastrando(false)}
-        />
-      </Janela>
+      {/* Fora do <form> da reserva: formulário dentro de formulário recarrega a página ao salvar. */}
+      {createPortal(
+        <Janela aberta={cadastrando} aoFechar={() => setCadastrando(false)} titulo="Cadastrar hóspede">
+          <CadastroRapidoHospede
+            inicial={texto.trim() ? { nome: texto.trim() } : undefined}
+            aoSalvar={(h) => {
+              setCadastrando(false);
+              aoEscolher(h);
+            }}
+            aoCancelar={() => setCadastrando(false)}
+          />
+        </Janela>,
+        document.body,
+      )}
     </div>
   );
 }
