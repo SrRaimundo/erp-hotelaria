@@ -81,12 +81,6 @@ export async function trocarSenha(ctx: Contexto, usuarioId: string, senhaAtual: 
   });
 }
 
-const ROTULOS_PERFIL: Record<string, string> = { admin: "Administrador", recepcao: "Recepção", governanca: "Governança" };
-/** Nome de exibição do perfil. Provisório: a coluna `perfis.rotulo` chega com a gestão de perfis. */
-function rotuloPerfil(nome: string): string {
-  return ROTULOS_PERFIL[nome] ?? nome.charAt(0).toUpperCase() + nome.slice(1);
-}
-
 export type UsuarioLista = {
   id: string;
   nome: string;
@@ -101,16 +95,17 @@ export type UsuarioLista = {
 export async function listarUsuarios(ctx: Contexto): Promise<UsuarioLista[]> {
   const linhas = await ctx.db
     .selectFrom("usuarios")
-    .select(["id", "nome", "login", "perfil", "ativo", "ultimo_acesso", "trocar_senha"])
-    .orderBy("nome")
-    .orderBy("login")
+    .innerJoin("perfis", "perfis.nome", "usuarios.perfil")
+    .select(["usuarios.id", "usuarios.nome", "usuarios.login", "usuarios.perfil", "perfis.rotulo", "usuarios.ativo", "usuarios.ultimo_acesso", "usuarios.trocar_senha"])
+    .orderBy("usuarios.nome")
+    .orderBy("usuarios.login")
     .execute();
   return linhas.map((u) => ({
     id: u.id,
     nome: u.nome,
     login: u.login,
     perfil: u.perfil,
-    perfilRotulo: rotuloPerfil(u.perfil),
+    perfilRotulo: u.rotulo,
     ativo: u.ativo === 1,
     ultimoAcesso: u.ultimo_acesso,
     trocarSenha: u.trocar_senha === 1,

@@ -6,7 +6,8 @@ import { abrirCaixa, fecharCaixa, resumoCaixa } from "./caixa.js";
 import { criarCategoria, definirCategoriaAtiva, editarCategoria, listarCategorias } from "./categorias.js";
 import { listarFormas } from "./formas-pagamento.js";
 import { buscarHospedes, obterHospede, salvarHospede } from "./hospedes.js";
-import { exigirPermissao } from "./permissoes.js";
+import { criarPerfil, editarPerfil, excluirPerfil, listarPerfis } from "./perfis.js";
+import { DESCRICOES_PERMISSOES, exigirPermissao, PERMISSOES } from "./permissoes.js";
 import { obterConfig, salvarConfig, type ConfigPousada } from "./pousada.js";
 import { SETORES, type Setor } from "../governanca/setores.js";
 import { criarProduto, definirProdutoAtivo, editarProduto, listarProdutos } from "./produtos.js";
@@ -91,6 +92,13 @@ const corpoEdicaoProduto = z.object({
 const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional(), incluirInativos: flagInativos });
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
 const corpoEdicaoUsuario = z.object({ nome: texto, perfil: texto });
+const corpoPerfil = z.object({ rotulo: texto, copiarDe: texto });
+const corpoEdicaoPerfil = z.object({
+  rotulo: texto.optional(),
+  limiteDesconto: z.number().int().min(0, "Mínimo 0").max(100, "Máximo 100").optional(),
+  permissoes: z.array(z.string()).optional(),
+});
+const paramNome = z.object({ nome: z.string().min(1) });
 const corpoAbrirCaixa = z.object({ valorInicial: centavos });
 const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
 const corpoTrocaSenha = z
@@ -222,6 +230,24 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
   app.post("/api/usuarios/:id/redefinir-senha", async (req) => {
     exigirPermissao(req.usuario, "config.gerenciar");
     return redefinirSenha(ctx, paramId.parse(req.params).id, req.usuario);
+  });
+  app.get("/api/permissoes", async () => PERMISSOES.map((permissao) => ({ permissao, descricao: DESCRICOES_PERMISSOES[permissao] })));
+  app.get("/api/perfis", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return listarPerfis(ctx);
+  });
+  app.post("/api/perfis", async (req, res) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return res.status(201).send(await criarPerfil(ctx, corpoPerfil.parse(req.body), req.usuario));
+  });
+  app.put("/api/perfis/:nome", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return editarPerfil(ctx, paramNome.parse(req.params).nome, corpoEdicaoPerfil.parse(req.body), req.usuario);
+  });
+  app.delete("/api/perfis/:nome", async (req, res) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    await excluirPerfil(ctx, paramNome.parse(req.params).nome, req.usuario);
+    return res.status(204).send();
   });
   app.put("/api/usuarios/me/senha", async (req, res) => {
     const { senhaAtual, novaSenha } = corpoTrocaSenha.parse(req.body);

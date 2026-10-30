@@ -19,3 +19,17 @@ export const migracaoRetaguardaUsuarios: Migracao = {
     await sql.raw("ALTER TABLE usuarios ADD COLUMN ultimo_acesso TEXT").execute(db);
   },
 };
+
+/** Perfis personalizados: nome de exibição (`rotulo`) e marca dos três perfis padrão. */
+export const migracaoRetaguardaPerfis: Migracao = {
+  nome: "0620_retaguarda_perfis",
+  async up(db) {
+    await sql.raw("ALTER TABLE perfis ADD COLUMN rotulo TEXT NOT NULL DEFAULT ''").execute(db);
+    await sql.raw("ALTER TABLE perfis ADD COLUMN padrao INTEGER NOT NULL DEFAULT 0").execute(db);
+    const rotulos: Record<string, string> = { admin: "Administrador", recepcao: "Recepção", governanca: "Governança" };
+    for (const [nome, rotulo] of Object.entries(rotulos)) {
+      await db.updateTable("perfis").set({ rotulo, padrao: 1 }).where("nome", "=", nome).execute();
+    }
+    await sql.raw("UPDATE perfis SET rotulo = nome WHERE rotulo = ''").execute(db);
+  },
+};
