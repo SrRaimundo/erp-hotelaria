@@ -101,7 +101,7 @@ function Numero({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; aoM
   );
 }
 
-function SecaoDados({ config }: { config: ConfigPousada }) {
+export function SecaoDados({ config }: { config: ConfigPousada }) {
   const { v, mudar, salvo } = useEditavel({ razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso });
   const fusos = FUSOS.includes(v.fuso) ? FUSOS : [v.fuso, ...FUSOS];
   return (
@@ -121,7 +121,7 @@ function SecaoDados({ config }: { config: ConfigPousada }) {
   );
 }
 
-function SecaoHorarios({ config }: { config: ConfigPousada }) {
+export function SecaoHorarios({ config }: { config: ConfigPousada }) {
   const { v, mudar, salvo } = useEditavel({ horaCheckin: config.horaCheckin, horaCheckout: config.horaCheckout, viradaDia: config.viradaDia });
   const completo = v.horaCheckin !== "" && v.horaCheckout !== "" && v.viradaDia !== "";
   return (

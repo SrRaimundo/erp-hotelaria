@@ -9,6 +9,7 @@ beforeEach(() => instalarApiFalsa({}));
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  sessionStorage.clear();
   verificarRotasNaoPrevistas();
 });
 

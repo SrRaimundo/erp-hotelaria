@@ -9,4 +9,5 @@ export const TELAS_CONFIGURACOES = [
   { caminho: "perfis", rotulo: "Perfis", permissao: PERM_CONFIG },
   { caminho: "produtos", rotulo: "Produtos", permissao: PERM_CADASTROS },
   { caminho: "checklists", rotulo: "Checklists", permissao: PERM_CONFIG },
+  { caminho: "assistente", rotulo: "Primeira configuração", permissao: PERM_CONFIG },
 ] as const;

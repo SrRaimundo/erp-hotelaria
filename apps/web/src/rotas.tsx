@@ -4,6 +4,7 @@ import { ExigePermissao } from "./auth/ExigePermissao";
 import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
+import { Assistente } from "./telas/assistente/Assistente";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
@@ -38,6 +39,7 @@ export function AppRotas() {
             <Route path="usuarios" element={<ExigePermissao permissao="config.gerenciar"><TelaUsuarios /></ExigePermissao>} />
             <Route path="perfis" element={<ExigePermissao permissao="config.gerenciar"><TelaPerfis /></ExigePermissao>} />
             <Route path="produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaProdutos /></ExigePermissao>} />
+            <Route path="assistente" element={<ExigePermissao permissao="config.gerenciar"><Assistente /></ExigePermissao>} />
             <Route path="checklists" element={<ExigePermissao permissao="config.gerenciar"><TelaChecklists /></ExigePermissao>} />
           </Route>
         </Route>

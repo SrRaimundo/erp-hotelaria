@@ -64,3 +64,18 @@
 .checklists__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
 .checklists__novo { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px; width: 100%; }
 .checklists__novo .campo { flex: 1 1 260px; }
+
+.assistente { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.assistente h1 { font-size: 1.5rem; }
+.assistente__passos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.assistente__passo { padding: 6px 12px; border: 1px solid var(--borda); border-radius: var(--raio-controle); color: var(--texto-suave); }
+.assistente__passo[aria-current="step"] { color: inherit; font-weight: 600; border-color: currentColor; }
+.assistente__linha { display: flex; flex-direction: column; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; margin: 0; }
+.assistente__linha legend { font-weight: 600; padding: 0 4px; }
+.assistente__linha--conflito { border-color: var(--vermelho, currentColor); }
+.assistente__linha--criada { opacity: 0.7; }
+.assistente__linha select, .assistente__linha input, .assistente .campo select {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;
+}
+.assistente__acoes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.assistente__acoes-direita { display: flex; flex-wrap: wrap; gap: 8px; }
