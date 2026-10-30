@@ -1,7 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
 import { useConexao } from "./useConexao";
-import type { Categoria, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa, ItemGovernanca, Setor } from "./tipos";
+import type { Categoria, ConfigPousada, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa, ItemGovernanca, Setor } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
   return new QueryClient({
@@ -44,6 +44,9 @@ export function usePainel(ativo = true) {
 /** Horários de check-in/check-out para os subtítulos; se a consulta falhar, a tela simplesmente omite os horários. */
 export const useConfigHorarios = () =>
   useQuery({ queryKey: ["config"], queryFn: () => chamarApi<{ horaCheckin: string; horaCheckout: string }>("GET", "/api/config"), staleTime: 300_000 });
+
+/** Configuração completa da pousada (tela Pousada); compartilha a chave com os horários. */
+export const useConfig = () => useQuery({ queryKey: ["config"], queryFn: () => chamarApi<ConfigPousada>("GET", "/api/config") });
 
 export const useMapa = (p: ParamsMapa) =>
   useQuery({

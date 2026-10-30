@@ -2,17 +2,18 @@ import { NavLink } from "react-router";
 import { useSessao } from "../auth/SessaoProvider";
 import { Botao } from "../componentes/Botao";
 
-const ITENS = [
+const ITENS: { para: string; rotulo: string; permissao?: string; algumaDe?: string[] }[] = [
   { para: "/", rotulo: "Hoje", permissao: "reservas.gerenciar" },
   { para: "/mapa", rotulo: "Mapa", permissao: "reservas.gerenciar" },
   { para: "/reservas", rotulo: "Reservas", permissao: "reservas.gerenciar" },
   { para: "/caixa", rotulo: "Caixa", permissao: "caixa.operar" },
   { para: "/governanca", rotulo: "Governança", permissao: "quartos.situacao" },
+  { para: "/configuracoes", rotulo: "Configurações", algumaDe: ["config.gerenciar", "cadastros.gerenciar"] },
 ];
 
 export function MenuLateral({ atencao }: { atencao: number }) {
   const { usuario, pode, sair } = useSessao();
-  const visiveis = ITENS.filter((i) => pode(i.permissao));
+  const visiveis = ITENS.filter((i) => (i.algumaDe ? i.algumaDe.some(pode) : pode(i.permissao ?? "")));
   // Com um único destino (ex.: governança) o menu não tem o que oferecer: ficam só o nome e o Sair.
   const simples = visiveis.length <= 1;
   return (
