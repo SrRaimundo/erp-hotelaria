@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -8,7 +8,8 @@ import { ListaCadastro } from "../../src/telas/configuracoes/ListaCadastro";
 import { LayoutConfiguracoes, PrimeiraConfiguracao } from "../../src/telas/configuracoes/LayoutConfiguracoes";
 import { TelaPousada } from "../../src/telas/configuracoes/TelaPousada";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
-import { renderizar } from "../ajuda";
+import { rotaInicial } from "../../src/auth/SessaoProvider";
+import { renderizar, usuarioPadrao } from "../ajuda";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -79,6 +80,37 @@ describe("área Configurações", () => {
   });
 });
 
+describe("acesso só à Configurações", () => {
+  test("perfil só com cadastros.gerenciar: rota inicial, redirecionamento e link no menu", () => {
+    const usuario = { permissoes: ["cadastros.gerenciar"] };
+    renderizar(
+      <>
+        <MenuLateral atencao={0} />
+        <Routes>
+          <Route path="/" element={<ExigePermissao permissao="reservas.gerenciar"><p>hoje</p></ExigePermissao>} />
+          <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
+            <Route index element={<PrimeiraConfiguracao />} />
+            <Route path="categorias" element={<p>tela categorias</p>} />
+          </Route>
+        </Routes>
+      </>,
+      { rota: "/", usuario },
+    );
+    expect(screen.getByText("tela categorias")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Configurações" }).length).toBeGreaterThan(0);
+    expect(screen.queryByText("hoje")).not.toBeInTheDocument();
+  });
+
+  test("rotaInicial segue a ordem de precedência", () => {
+    const u = (permissoes: string[]) => ({ ...usuarioPadrao, permissoes });
+    expect(rotaInicial(u(["reservas.gerenciar", "config.gerenciar"]))).toBe("/");
+    expect(rotaInicial(u(["quartos.situacao"]))).toBe("/governanca");
+    expect(rotaInicial(u(["quartos.situacao", "config.gerenciar"]))).toBe("/configuracoes");
+    expect(rotaInicial(u(["config.gerenciar"]))).toBe("/configuracoes");
+    expect(rotaInicial(u(["cadastros.gerenciar"]))).toBe("/configuracoes");
+  });
+});
+
 describe("tela Pousada", () => {
   test("Pousada salva a seção Regras com o corpo esperado", async () => {
     const u = userEvent.setup();
@@ -133,6 +165,38 @@ describe("tela Pousada", () => {
       razaoSocial: "Nova Ltda", cnpj: CONFIG.cnpj, endereco: CONFIG.endereco, fuso: "America/Sao_Paulo",
     });
     await within(dados).findByText("Salvo.");
+  });
+
+  test("percentual decimal da taxa mostra mensagem e bloqueia o Salvar", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/config": CONFIG, "PUT /api/config": CONFIG });
+    renderizar(<TelaPousada />);
+    const regras = await screen.findByRole("region", { name: "Regras" });
+    const campo = within(regras).getByLabelText("Percentual (Late check-out)");
+    await u.clear(campo);
+    await u.type(campo, "12.5");
+    expect(within(regras).getByRole("alert")).toHaveTextContent("Use um percentual inteiro");
+    expect(within(regras).getByRole("button", { name: "Salvar" })).toBeDisabled();
+  });
+
+  test("dados novos do servidor entram na seção sem edições e não sobrescrevem a seção editada", async () => {
+    const u = userEvent.setup();
+    let atual = CONFIG;
+    instalarApiFalsa({ "GET /api/config": () => atual, "PUT /api/config": CONFIG });
+    const { cliente } = renderizar(<TelaPousada />);
+    const dados = await screen.findByRole("region", { name: "Dados" });
+    const horarios = screen.getByRole("region", { name: "Horários" });
+    await u.clear(within(dados).getByLabelText("Razão social"));
+    await u.type(within(dados).getByLabelText("Razão social"), "Minha edição");
+
+    atual = { ...CONFIG, razaoSocial: "Outro admin", horaCheckin: "16:00" };
+    await act(async () => {
+      await cliente.invalidateQueries({ queryKey: ["config"] });
+      // o React Query entrega o resultado em um timer: deixa a atualização acontecer dentro do act
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(within(horarios).getByLabelText("Check-in")).toHaveValue("16:00");
+    expect(within(dados).getByLabelText("Razão social")).toHaveValue("Minha edição");
   });
 
   test("mostra a mensagem do servidor junto do Salvar", async () => {

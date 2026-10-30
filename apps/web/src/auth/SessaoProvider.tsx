@@ -92,9 +92,14 @@ export function useSessao(): Sessao {
   return s;
 }
 
-/** Rota inicial após o login: perfis só de governança caem direto em /governanca. */
+/**
+ * Rota inicial após o login: governança-only vai a /governanca; sem reservas mas com configuração, a /configuracoes.
+ */
 export function rotaInicial(u: UsuarioSessao): string {
-  return u.permissoes.length === 1 && u.permissoes[0] === "quartos.situacao" ? "/governanca" : "/";
+  const tem = (p: string) => u.permissoes.includes(p);
+  if (u.permissoes.length === 1 && tem("quartos.situacao")) return "/governanca";
+  if (!tem("reservas.gerenciar") && (tem("config.gerenciar") || tem("cadastros.gerenciar"))) return "/configuracoes";
+  return "/";
 }
 
 /**

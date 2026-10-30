@@ -15,7 +15,8 @@ export function MenuLateral({ atencao }: { atencao: number }) {
   const { usuario, pode, sair } = useSessao();
   const visiveis = ITENS.filter((i) => (i.algumaDe ? i.algumaDe.some(pode) : pode(i.permissao ?? "")));
   // Com um único destino (ex.: governança) o menu não tem o que oferecer: ficam só o nome e o Sair.
-  const simples = visiveis.length <= 1;
+  // Exceção: se o único destino é Configurações, o link precisa continuar visível.
+  const simples = visiveis.length <= 1 && visiveis[0]?.para !== "/configuracoes";
   return (
     <aside className={simples ? "menu menu--simples" : "menu"}>
       <div className="menu__marca">Pousada</div>

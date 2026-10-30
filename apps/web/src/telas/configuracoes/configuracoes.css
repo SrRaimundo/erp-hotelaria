@@ -19,7 +19,7 @@
 .lista-cadastro__tabela th, .lista-cadastro__tabela td { text-align: left; padding: 8px; border-bottom: 1px solid var(--borda); }
 .lista-cadastro__tabela th { color: var(--texto-suave); font-size: 0.8125rem; }
 .lista-cadastro__linha--inativa td { opacity: 0.6; }
-.lista-cadastro__acoes { text-align: right !important; width: 1%; white-space: nowrap; }
+.lista-cadastro__tabela .lista-cadastro__acoes { text-align: right; width: 1%; white-space: nowrap; }
 .lista-cadastro__vazio { color: var(--texto-suave); }
 .lista-cadastro__oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 

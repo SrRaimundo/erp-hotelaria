@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useConfig } from "../../api/consultas";
 import { chamarApi } from "../../api/cliente";
@@ -20,15 +20,38 @@ const FUSOS = [
 /** Texto de um campo numérico -> número, ou null se vazio/inválido. */
 const lerNumero = (t: string): number | null => (t.trim() === "" || Number.isNaN(Number(t)) || Number(t) < 0 ? null : Number(t));
 
+/**
+ * Estado de uma seção. Enquanto não houver edição do usuário, acompanha os dados novos do servidor;
+ * depois de editar (sujo), preserva o que foi digitado até salvar.
+ */
+function useEditavel<T extends object>(inicial: T) {
+  const [v, setV] = useState(inicial);
+  const [sujo, setSujo] = useState(false);
+  const assinatura = JSON.stringify(inicial);
+  useEffect(() => {
+    if (!sujo) setV(inicial);
+  }, [assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
+  return {
+    v,
+    mudar: (p: Partial<T>) => {
+      setSujo(true);
+      setV((x) => ({ ...x, ...p }));
+    },
+    salvo: () => setSujo(false),
+  };
+}
+
 /** Cartão de uma seção: grava só os campos dela (o servidor mescla o restante). */
-function Secao({ titulo, corpo, children }: { titulo: string; corpo: () => Partial<ConfigPousada> | null; children: ReactNode }) {
+function Secao({ titulo, corpo, aoSalvo, children }: { titulo: string; corpo: Partial<ConfigPousada> | null; aoSalvo: () => void; children: ReactNode }) {
   const id = useId();
   const cliente = useQueryClient();
   const salvar = useMutation<unknown, Error, Partial<ConfigPousada>>({
     mutationFn: (c) => chamarApi("PUT", "/api/config", c),
-    onSuccess: () => cliente.invalidateQueries({ queryKey: ["config"] }),
+    onSuccess: async () => {
+      aoSalvo();
+      await cliente.invalidateQueries({ queryKey: ["config"] });
+    },
   });
-  const pronto = corpo();
   return (
     <section className="pousada__secao" aria-labelledby={id}>
       <h2 id={id}>{titulo}</h2>
@@ -37,14 +60,14 @@ function Secao({ titulo, corpo, children }: { titulo: string; corpo: () => Parti
         onChange={() => salvar.isSuccess && salvar.reset()}
         onSubmit={(e) => {
           e.preventDefault();
-          if (pronto) salvar.mutate(pronto);
+          if (corpo) salvar.mutate(corpo);
         }}
       >
         {children}
         <ErroAcao erro={salvar.error} />
         <div className="pousada__rodape">
           {salvar.isSuccess && <span className="pousada__ok" role="status">Salvo.</span>}
-          <Botao type="submit" disabled={!pronto || salvar.isPending}>Salvar</Botao>
+          <Botao type="submit" disabled={!corpo || salvar.isPending}>Salvar</Botao>
         </div>
       </form>
     </section>
@@ -79,19 +102,16 @@ function Numero({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; aoM
 }
 
 function SecaoDados({ config }: { config: ConfigPousada }) {
-  const [razaoSocial, setRazao] = useState(config.razaoSocial);
-  const [cnpj, setCnpj] = useState(config.cnpj);
-  const [endereco, setEndereco] = useState(config.endereco);
-  const [fuso, setFuso] = useState(config.fuso);
-  const fusos = FUSOS.includes(fuso) ? FUSOS : [fuso, ...FUSOS];
+  const { v, mudar, salvo } = useEditavel({ razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso });
+  const fusos = FUSOS.includes(v.fuso) ? FUSOS : [v.fuso, ...FUSOS];
   return (
-    <Secao titulo="Dados" corpo={() => ({ razaoSocial, cnpj, endereco, fuso })}>
-      <Texto rotulo="Razão social" valor={razaoSocial} aoMudar={setRazao} />
-      <Texto rotulo="CNPJ" valor={cnpj} aoMudar={setCnpj} />
-      <Texto rotulo="Endereço" valor={endereco} aoMudar={setEndereco} />
+    <Secao titulo="Dados" corpo={v} aoSalvo={salvo}>
+      <Texto rotulo="Razão social" valor={v.razaoSocial} aoMudar={(razaoSocial) => mudar({ razaoSocial })} />
+      <Texto rotulo="CNPJ" valor={v.cnpj} aoMudar={(cnpj) => mudar({ cnpj })} />
+      <Texto rotulo="Endereço" valor={v.endereco} aoMudar={(endereco) => mudar({ endereco })} />
       <label className="campo">
         Fuso horário
-        <select value={fuso} onChange={(e) => setFuso(e.target.value)}>
+        <select value={v.fuso} onChange={(e) => mudar({ fuso: e.target.value })}>
           {fusos.map((f) => (
             <option key={f} value={f}>{f}</option>
           ))}
@@ -102,22 +122,22 @@ function SecaoDados({ config }: { config: ConfigPousada }) {
 }
 
 function SecaoHorarios({ config }: { config: ConfigPousada }) {
-  const [horaCheckin, setIn] = useState(config.horaCheckin);
-  const [horaCheckout, setOut] = useState(config.horaCheckout);
-  const [viradaDia, setVirada] = useState(config.viradaDia);
-  const completo = horaCheckin !== "" && horaCheckout !== "" && viradaDia !== "";
+  const { v, mudar, salvo } = useEditavel({ horaCheckin: config.horaCheckin, horaCheckout: config.horaCheckout, viradaDia: config.viradaDia });
+  const completo = v.horaCheckin !== "" && v.horaCheckout !== "" && v.viradaDia !== "";
   return (
-    <Secao titulo="Horários" corpo={() => (completo ? { horaCheckin, horaCheckout, viradaDia } : null)}>
+    <Secao titulo="Horários" corpo={completo ? v : null} aoSalvo={salvo}>
       <div className="pousada__grade">
-        <Hora rotulo="Check-in" valor={horaCheckin} aoMudar={setIn} />
-        <Hora rotulo="Check-out" valor={horaCheckout} aoMudar={setOut} />
-        <Hora rotulo="Virada do dia hoteleiro" valor={viradaDia} aoMudar={setVirada} />
+        <Hora rotulo="Check-in" valor={v.horaCheckin} aoMudar={(horaCheckin) => mudar({ horaCheckin })} />
+        <Hora rotulo="Check-out" valor={v.horaCheckout} aoMudar={(horaCheckout) => mudar({ horaCheckout })} />
+        <Hora rotulo="Virada do dia hoteleiro" valor={v.viradaDia} aoMudar={(viradaDia) => mudar({ viradaDia })} />
       </div>
     </Secao>
   );
 }
 
-/** Taxa de early check-in / late check-out: valor fixo em reais ou percentual da diária. */
+const percentualInvalido = (r: TaxaEdicao) => r.tipo === "percentual_diaria" && r.valor !== null && !Number.isInteger(r.valor);
+
+/** Taxa de early check-in / late check-out: valor fixo em reais ou percentual (inteiro) da diária. */
 function CampoTaxa({ rotulo, regra, aoMudar }: { rotulo: string; regra: TaxaEdicao; aoMudar: (r: TaxaEdicao) => void }) {
   return (
     <fieldset className="pousada__grupo">
@@ -134,81 +154,83 @@ function CampoTaxa({ rotulo, regra, aoMudar }: { rotulo: string; regra: TaxaEdic
       ) : (
         <Numero rotulo={`Percentual (${rotulo})`} valor={regra.valor === null ? "" : String(regra.valor)} aoMudar={(t) => aoMudar({ ...regra, valor: lerNumero(t) })} />
       )}
+      {percentualInvalido(regra) && (
+        <p role="alert" className="erro-acao">Use um percentual inteiro, sem casas decimais.</p>
+      )}
     </fieldset>
   );
 }
 
 function SecaoRegras({ config }: { config: ConfigPousada }) {
-  const [exigir, setExigir] = useState(config.sinal.exigir);
-  const [tipoSinal, setTipoSinal] = useState(config.sinal.tipo);
-  const [percentual, setPercentual] = useState(String(config.sinal.percentual));
-  const [prazo, setPrazo] = useState(String(config.sinal.prazoHoras));
-  const [tolerancia, setTolerancia] = useState(String(config.sinal.toleranciaHoras));
-  const [early, setEarly] = useState<TaxaEdicao>(config.earlyCheckin);
-  const [late, setLate] = useState<TaxaEdicao>(config.lateCheckout);
-  const [idade, setIdade] = useState(String(config.idadeAdulto));
-  const [criancas, setCriancas] = useState(String(config.limiteCriancasGratis));
-  const [arredondamento, setArredondamento] = useState(config.arredondamento);
-  const [frigobar, setFrigobar] = useState(config.camareiraLancaFrigobar);
+  const { v, mudar, salvo } = useEditavel({
+    exigir: config.sinal.exigir,
+    tipoSinal: config.sinal.tipo,
+    percentual: String(config.sinal.percentual),
+    prazo: String(config.sinal.prazoHoras),
+    tolerancia: String(config.sinal.toleranciaHoras),
+    early: config.earlyCheckin as TaxaEdicao,
+    late: config.lateCheckout as TaxaEdicao,
+    idade: String(config.idadeAdulto),
+    criancas: String(config.limiteCriancasGratis),
+    arredondamento: config.arredondamento,
+    frigobar: config.camareiraLancaFrigobar,
+  });
 
-  const n = { percentual: lerNumero(percentual), prazo: lerNumero(prazo), tolerancia: lerNumero(tolerancia), idade: lerNumero(idade), criancas: lerNumero(criancas) };
-  const taxaOk = (r: TaxaEdicao): r is RegraTaxa => r.valor !== null && Number.isInteger(r.valor);
+  const n = { percentual: lerNumero(v.percentual), prazo: lerNumero(v.prazo), tolerancia: lerNumero(v.tolerancia), idade: lerNumero(v.idade), criancas: lerNumero(v.criancas) };
+  const taxaOk = (r: TaxaEdicao) => r.valor !== null && Number.isInteger(r.valor);
   const completo =
-    n.percentual !== null && n.prazo !== null && n.tolerancia !== null && n.idade !== null && n.criancas !== null && taxaOk(early) && taxaOk(late);
+    n.percentual !== null && n.prazo !== null && n.tolerancia !== null && n.idade !== null && n.criancas !== null && taxaOk(v.early) && taxaOk(v.late);
+
+  const corpo: Partial<ConfigPousada> | null = completo
+    ? {
+        sinal: { exigir: v.exigir, tipo: v.tipoSinal, percentual: n.percentual!, prazoHoras: n.prazo!, toleranciaHoras: n.tolerancia! },
+        earlyCheckin: v.early as RegraTaxa,
+        lateCheckout: v.late as RegraTaxa,
+        idadeAdulto: n.idade!,
+        limiteCriancasGratis: n.criancas!,
+        arredondamento: v.arredondamento,
+        camareiraLancaFrigobar: v.frigobar,
+      }
+    : null;
 
   return (
-    <Secao
-      titulo="Regras"
-      corpo={() =>
-        completo
-          ? {
-              sinal: { exigir, tipo: tipoSinal, percentual: n.percentual!, prazoHoras: n.prazo!, toleranciaHoras: n.tolerancia! },
-              earlyCheckin: early as RegraTaxa,
-              lateCheckout: late as RegraTaxa,
-              idadeAdulto: n.idade!,
-              limiteCriancasGratis: n.criancas!,
-              arredondamento,
-              camareiraLancaFrigobar: frigobar,
-            }
-          : null
-      }
-    >
+    <Secao titulo="Regras" corpo={corpo} aoSalvo={salvo}>
       <fieldset className="pousada__grupo">
         <legend>Sinal</legend>
         <label className="pousada__marcar">
-          <input type="checkbox" checked={exigir} onChange={(e) => setExigir(e.target.checked)} />
+          <input type="checkbox" checked={v.exigir} onChange={(e) => mudar({ exigir: e.target.checked })} />
           Exigir sinal
         </label>
         <div className="pousada__grade">
           <label className="campo">
             Cálculo do sinal
-            <select value={tipoSinal} onChange={(e) => setTipoSinal(e.target.value as typeof tipoSinal)}>
+            <select value={v.tipoSinal} onChange={(e) => mudar({ tipoSinal: e.target.value as typeof v.tipoSinal })}>
               <option value="percentual">Percentual do total</option>
               <option value="primeira_diaria">Primeira diária</option>
             </select>
           </label>
-          <Numero rotulo="Percentual do sinal (%)" valor={percentual} aoMudar={setPercentual} />
-          <Numero rotulo="Prazo do sinal (horas)" valor={prazo} aoMudar={setPrazo} />
-          <Numero rotulo="Tolerância do sinal (horas)" valor={tolerancia} aoMudar={setTolerancia} />
+          <Numero rotulo="Percentual do sinal (%)" valor={v.percentual} aoMudar={(percentual) => mudar({ percentual })} />
+          <Numero rotulo="Prazo do sinal (horas)" valor={v.prazo} aoMudar={(prazo) => mudar({ prazo })} />
+          <Numero rotulo="Tolerância do sinal (horas)" valor={v.tolerancia} aoMudar={(tolerancia) => mudar({ tolerancia })} />
         </div>
       </fieldset>
       <div className="pousada__grade">
-        <CampoTaxa rotulo="Early check-in" regra={early} aoMudar={setEarly} />
-        <CampoTaxa rotulo="Late check-out" regra={late} aoMudar={setLate} />
+        <CampoTaxa rotulo="Early check-in" regra={v.early} aoMudar={(early) => mudar({ early })} />
+        <CampoTaxa rotulo="Late check-out" regra={v.late} aoMudar={(late) => mudar({ late })} />
       </div>
       <div className="pousada__grade">
-        <Numero rotulo="Idade a partir da qual conta como adulto" valor={idade} aoMudar={setIdade} />
-        <Numero rotulo="Crianças grátis por quarto" valor={criancas} aoMudar={setCriancas} />
+        <Numero rotulo="Idade a partir da qual conta como adulto" valor={v.idade} aoMudar={(idade) => mudar({ idade })} />
+        <Numero rotulo="Crianças grátis por quarto" valor={v.criancas} aoMudar={(criancas) => mudar({ criancas })} />
         <label className="campo">
           Arredondamento
-          <select value={arredondamento} onChange={(e) => setArredondamento(e.target.value as typeof arredondamento)}>
+          <select value={v.arredondamento} onChange={(e) => mudar({ arredondamento: e.target.value as typeof v.arredondamento })}>
             <option value="nenhum">Nenhum</option>
             <option value="real">Real inteiro</option>
           </select>
         </label>
       </div>
       <label className="pousada__marcar">
-        <input type="checkbox" checked={frigobar} onChange={(e) => setFrigobar(e.target.checked)} />
+        <input type="checkbox" checked={v.frigobar} onChange={(e) => mudar({ frigobar: e.target.checked })} />
         Camareira lança frigobar
       </label>
     </Secao>
