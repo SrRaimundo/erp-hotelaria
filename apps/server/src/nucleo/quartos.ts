@@ -8,7 +8,7 @@ import { obterConfig } from "./pousada.js";
 import { ESTADOS_ATIVOS } from "../hospedagem/estados.js";
 
 export type SituacaoQuarto = "livre" | "ocupado" | "sujo" | "em_manutencao" | "bloqueado";
-export type Quarto = { id: string; numero: string; categoriaId: string; bloco: string | null; situacao: SituacaoQuarto };
+export type Quarto = { id: string; numero: string; categoriaId: string; bloco: string | null; situacao: SituacaoQuarto; ativo: boolean };
 
 const TRANSICOES: Record<SituacaoQuarto, SituacaoQuarto[]> = {
   livre: ["ocupado", "em_manutencao", "bloqueado"],
@@ -19,7 +19,7 @@ const TRANSICOES: Record<SituacaoQuarto, SituacaoQuarto[]> = {
 };
 
 function paraQuarto(l: any): Quarto {
-  return { id: l.id, numero: l.numero, categoriaId: l.categoria_id, bloco: l.bloco, situacao: l.situacao };
+  return { id: l.id, numero: l.numero, categoriaId: l.categoria_id, bloco: l.bloco, situacao: l.situacao, ativo: !!l.ativo };
 }
 
 export async function criarQuarto(
@@ -30,7 +30,7 @@ export async function criarQuarto(
   return emTransacao(ctx, async (tx) => {
     await exigirCategoria(tx, d.categoriaId);
     await exigirNumeroLivre(tx, d.numero);
-    const q: Quarto = { id: novoId(), numero: d.numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre" };
+    const q: Quarto = { id: novoId(), numero: d.numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre", ativo: true };
     await tx.db
       .insertInto("quartos")
       .values({ id: q.id, numero: q.numero, categoria_id: q.categoriaId, bloco: q.bloco, situacao: q.situacao })
@@ -145,7 +145,7 @@ export async function criarQuartosEmLote(
         { numeros: numeros.filter((n) => dup.has(n)) },
       );
     }
-    const criados: Quarto[] = numeros.map((numero) => ({ id: novoId(), numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre" }));
+    const criados: Quarto[] = numeros.map((numero) => ({ id: novoId(), numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre", ativo: true }));
     await tx.db
       .insertInto("quartos")
       .values(criados.map((q) => ({ id: q.id, numero: q.numero, categoria_id: q.categoriaId, bloco: q.bloco, situacao: q.situacao })))

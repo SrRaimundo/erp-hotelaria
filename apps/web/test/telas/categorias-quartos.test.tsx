@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { TelaCategoriasQuartos } from "../../src/telas/configuracoes/TelaCategoriasQuartos";
@@ -8,20 +8,17 @@ import { renderizar } from "../ajuda";
 afterEach(() => vi.unstubAllGlobals());
 
 const USUARIO = { permissoes: ["cadastros.gerenciar", "tarifas.gerenciar"] };
-const STD = { id: "c1", nome: "Standard", maxAdultos: 2, maxCriancas: 1, comodidades: ["Ar-condicionado", "TV"] };
-const LUXO = { id: "c2", nome: "Luxo", maxAdultos: 3, maxCriancas: 2, comodidades: [] };
-const Q101 = { id: "q1", numero: "101", categoriaId: "c1", bloco: "A", situacao: "livre" };
-const Q201 = { id: "q2", numero: "201", categoriaId: "c2", bloco: null, situacao: "livre" };
+const STD = { id: "c1", nome: "Standard", maxAdultos: 2, maxCriancas: 1, comodidades: ["Ar-condicionado", "TV"], ativo: true };
+const LUXO = { id: "c2", nome: "Luxo", maxAdultos: 3, maxCriancas: 2, comodidades: [], ativo: true };
+const Q101 = { id: "q1", numero: "101", categoriaId: "c1", bloco: "A", situacao: "livre", ativo: true };
+const Q201 = { id: "q2", numero: "201", categoriaId: "c2", bloco: null, situacao: "livre", ativo: true };
 const BASE_STD = { categoriaId: "c1", porAdultos: { 1: 20000, 2: 25000, 3: 30000 }, adultoExtra: 5000, piso: 15000, teto: null };
 
 /** Rotas de leitura; `?incluirInativos` devolve a lista completa. */
 function leituras(extra: Record<string, unknown> = {}) {
   return {
     "GET /api/categorias": [STD, LUXO],
-    "GET /api/quartos": (_c: unknown, url: URL) => {
-      const cat = url.searchParams.get("categoriaId");
-      return [Q101, Q201].filter((q) => !cat || q.categoriaId === cat);
-    },
+    "GET /api/quartos": [Q101, Q201],
     "GET /api/tarifas/tabelas-base": [BASE_STD],
     ...extra,
   };
@@ -38,7 +35,7 @@ describe("tela Categorias e quartos", () => {
     await u.selectOptions(screen.getByLabelText("Filtrar por categoria"), "c2");
     await vi.waitFor(() => expect(within(quartos).queryByText("101")).not.toBeInTheDocument());
     expect(within(quartos).getByText("201")).toBeInTheDocument();
-    expect(chamadas.some((c) => c.caminho === "/api/quartos?categoriaId=c2")).toBe(true);
+    expect(chamadas.filter((c) => c.metodo === "GET" && c.caminho.startsWith("/api/quartos"))).toHaveLength(1);
   });
 
   test("editar categoria salva categoria e preço base", async () => {
@@ -123,10 +120,10 @@ describe("tela Categorias e quartos", () => {
 
   test("editar quarto: só categorias ativas como opção; salva com o corpo esperado", async () => {
     const u = userEvent.setup();
-    const INATIVA = { id: "c3", nome: "Antiga", maxAdultos: 1, maxCriancas: 0, comodidades: [] };
+    const INATIVA = { id: "c3", nome: "Antiga", maxAdultos: 1, maxCriancas: 0, comodidades: [], ativo: false };
     instalarApiFalsa(
       leituras({
-        "GET /api/categorias": (_c: unknown, url: URL) => (url.searchParams.get("incluirInativos") ? [STD, LUXO, INATIVA] : [STD, LUXO]),
+        "GET /api/categorias": [STD, LUXO, INATIVA],
         "PUT /api/quartos/q1": Q101,
       }),
     );
@@ -190,7 +187,7 @@ describe("tela Categorias e quartos", () => {
     const u = userEvent.setup();
     instalarApiFalsa(
       leituras({
-        "GET /api/quartos": (_c: unknown, url: URL) => (url.searchParams.get("incluirInativos") ? [Q101, Q201] : [Q201]),
+        "GET /api/quartos": [{ ...Q101, ativo: false }, Q201],
         "POST /api/quartos/q1/reativar": { ok: true },
       }),
     );
@@ -220,6 +217,7 @@ describe("tela Categorias e quartos", () => {
     renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
     await u.click(await screen.findByRole("button", { name: "Criar vários quartos" }));
     const painel = await screen.findByRole("dialog", { name: "Criar vários quartos" });
+    expect(within(painel).getByRole("button", { name: "Criar quartos" })).toBeDisabled();
     await u.selectOptions(within(painel).getByLabelText("Categoria"), "c1");
     await u.type(within(painel).getByLabelText("De"), "101");
     await u.type(within(painel).getByLabelText("Até"), "104");
@@ -236,5 +234,90 @@ describe("tela Categorias e quartos", () => {
     await u.type(within(painel).getByLabelText("Até"), "106");
     await u.click(within(painel).getByRole("button", { name: "Criar quartos" }));
     await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("sem tarifas.gerenciar o painel da categoria não mostra preços nem os carrega e salva só a categoria", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/categorias": [STD], "GET /api/quartos": [], "PUT /api/categorias/c1": STD });
+    renderizar(<TelaCategoriasQuartos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Categorias" });
+    await u.click(await within(lista).findByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Categorias/ });
+    expect(within(painel).getByLabelText("Nome")).toHaveValue("Standard");
+    expect(within(painel).queryByText("Preço base da diária")).not.toBeInTheDocument();
+    expect(within(painel).queryByLabelText("Diária para 2 adultos")).not.toBeInTheDocument();
+    expect(within(painel).queryByRole("alert")).not.toBeInTheDocument();
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(chamadas.some((c) => c.caminho.includes("tabelas-base"))).toBe(false);
+    expect(chamadas.filter((c) => c.metodo === "PUT")).toHaveLength(1);
+  });
+
+  test("categoria: dicas explicam por que Salvar está desligado", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leituras());
+    renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    const lista = await screen.findByRole("region", { name: "Categorias" });
+    await u.click(within(lista).getByRole("button", { name: "+ Novo" }));
+    const painel = await screen.findByRole("dialog", { name: /Categorias/ });
+    await u.type(await within(painel).findByLabelText("Máximo de adultos"), "0");
+    expect(within(painel).getByText(/Informe o nome da categoria/)).toBeInTheDocument();
+    expect(within(painel).getByText(/Máximo de adultos: informe um número inteiro/)).toBeInTheDocument();
+    expect(within(painel).getByText(/Máximo de crianças: informe/)).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
+  });
+
+  test("lote: dicas para de > até e para mais de 200 quartos", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leituras());
+    renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    await u.click(await screen.findByRole("button", { name: "Criar vários quartos" }));
+    const painel = await screen.findByRole("dialog", { name: "Criar vários quartos" });
+    await u.selectOptions(within(painel).getByLabelText("Categoria"), "c1");
+    await u.type(within(painel).getByLabelText("De"), "110");
+    await u.type(within(painel).getByLabelText("Até"), "105");
+    expect(within(painel).getByText("O número final deve ser maior ou igual ao inicial.")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Criar quartos" })).toBeDisabled();
+    await u.clear(within(painel).getByLabelText("De"));
+    await u.type(within(painel).getByLabelText("De"), "1");
+    await u.clear(within(painel).getByLabelText("Até"));
+    await u.type(within(painel).getByLabelText("Até"), "201");
+    expect(within(painel).getByText("No máximo 200 quartos por vez.")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Criar quartos" })).toBeDisabled();
+    await u.clear(within(painel).getByLabelText("Até"));
+    await u.type(within(painel).getByLabelText("Até"), "200");
+    expect(within(painel).getByRole("button", { name: "Criar quartos" })).toBeEnabled();
+  });
+
+  test("filtro volta a todas quando a categoria deixa de estar ativa", async () => {
+    const u = userEvent.setup();
+    let luxoAtiva = true;
+    instalarApiFalsa(leituras({ "GET /api/categorias": () => [STD, { ...LUXO, ativo: luxoAtiva }] }));
+    const { cliente } = renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    const quartos = await screen.findByRole("region", { name: "Quartos" });
+    await u.selectOptions(await screen.findByLabelText("Filtrar por categoria"), "c2");
+    await vi.waitFor(() => expect(within(quartos).queryByText("101")).not.toBeInTheDocument());
+    luxoAtiva = false;
+    await act(async () => {
+      await cliente.invalidateQueries({ queryKey: ["categorias"] });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.getByLabelText("Filtrar por categoria")).toHaveValue("");
+    expect(within(quartos).getByText("101")).toBeInTheDocument();
+  });
+
+  test("códigos de reserva são conferidos por valor exato na mensagem (10 não está em 101)", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(
+      leituras({
+        "POST /api/quartos/q1/desativar": { __status: 409, codigo: "QUARTO_COM_RESERVAS", mensagem: "O quarto 101 tem reservas.", detalhes: { codigos: ["10"] } },
+      }),
+    );
+    renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    const lista = await screen.findByRole("region", { name: "Quartos" });
+    await u.click((await within(lista).findAllByRole("button", { name: "Editar" }))[0]!);
+    const painel = await screen.findByRole("dialog", { name: /Quartos/ });
+    await u.click(within(painel).getByRole("button", { name: "Desativar" }));
+    expect(await within(painel).findByRole("alert")).toHaveTextContent("Reservas: 10");
   });
 });

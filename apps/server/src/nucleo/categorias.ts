@@ -4,7 +4,7 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 
-export type Categoria = { id: string; nome: string; maxAdultos: number; maxCriancas: number; comodidades: string[] };
+export type Categoria = { id: string; nome: string; maxAdultos: number; maxCriancas: number; comodidades: string[]; ativo: boolean };
 
 export async function criarCategoria(
   ctx: Contexto,
@@ -12,7 +12,7 @@ export async function criarCategoria(
   ator: string,
 ): Promise<Categoria> {
   return emTransacao(ctx, async (tx) => {
-    const cat: Categoria = { id: novoId(), nome: d.nome, maxAdultos: d.maxAdultos, maxCriancas: d.maxCriancas, comodidades: d.comodidades };
+    const cat: Categoria = { id: novoId(), nome: d.nome, maxAdultos: d.maxAdultos, maxCriancas: d.maxCriancas, comodidades: d.comodidades, ativo: true };
     await tx.db
       .insertInto("categorias")
       .values({
@@ -37,7 +37,7 @@ export async function listarCategorias(ctx: Contexto, filtro?: { incluirInativos
 }
 
 function paraCategoria(l: any): Categoria {
-  return { id: l.id, nome: l.nome, maxAdultos: l.max_adultos, maxCriancas: l.max_criancas, comodidades: JSON.parse(l.comodidades) };
+  return { id: l.id, nome: l.nome, maxAdultos: l.max_adultos, maxCriancas: l.max_criancas, comodidades: JSON.parse(l.comodidades), ativo: !!l.ativo };
 }
 
 async function categoriaOuErro(tx: Contexto, id: string) {
@@ -54,7 +54,7 @@ export async function editarCategoria(
 ): Promise<Categoria> {
   return emTransacao(ctx, async (tx) => {
     const antes = paraCategoria(await categoriaOuErro(tx, id));
-    const depois: Categoria = { id, nome: d.nome, maxAdultos: d.maxAdultos, maxCriancas: d.maxCriancas, comodidades: d.comodidades };
+    const depois: Categoria = { id, nome: d.nome, maxAdultos: d.maxAdultos, maxCriancas: d.maxCriancas, comodidades: d.comodidades, ativo: antes.ativo };
     await tx.db
       .updateTable("categorias")
       .set({ nome: depois.nome, max_adultos: depois.maxAdultos, max_criancas: depois.maxCriancas, comodidades: JSON.stringify(depois.comodidades) })

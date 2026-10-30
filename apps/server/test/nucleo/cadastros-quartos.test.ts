@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { criarContextoTeste } from "../ajuda.js";
-import { criarCategoria, listarCategorias } from "../../src/nucleo/categorias.js";
+import { criarCategoria, definirCategoriaAtiva, listarCategorias } from "../../src/nucleo/categorias.js";
 import { obterConfig, salvarConfig } from "../../src/nucleo/pousada.js";
-import { criarQuarto, listarQuartos, mudarSituacaoQuarto, obterQuarto } from "../../src/nucleo/quartos.js";
+import { criarProduto, definirProdutoAtivo, listarProdutos } from "../../src/nucleo/produtos.js";
+import { criarQuarto, definirQuartoAtivo, listarQuartos, mudarSituacaoQuarto, obterQuarto } from "../../src/nucleo/quartos.js";
 import { emTransacao } from "../../src/shared/contexto.js";
 import { ErroDominio } from "../../src/shared/erros.js";
 
@@ -40,6 +41,22 @@ describe("pousada, categorias e quartos", () => {
     expect(await listarCategorias(ctx)).toEqual([cat]);
     const ev = await ctx.db.selectFrom("outbox").select("tipo").execute();
     expect(ev.map((e) => e.tipo)).toContain("nucleo.CategoriaCriada");
+  });
+
+  test("listas de categorias, quartos e produtos trazem o campo ativo", async () => {
+    const { ctx, cat, q } = await cenario();
+    const cat2 = await criarCategoria(ctx, { nome: "Luxo", maxAdultos: 2, maxCriancas: 0, comodidades: [] }, "u1");
+    await definirCategoriaAtiva(ctx, cat2.id, false, "u1");
+    await definirQuartoAtivo(ctx, q.id, false, "u1");
+    const p = await criarProduto(ctx, { codigo: "AGUA", nome: "Água", precoCentavos: 500, unidade: "un", grupo: "bebidas", tipo: "produto" }, "u1");
+    expect(p.ativo).toBe(true);
+    await definirProdutoAtivo(ctx, p.id, false, "u1");
+    expect((await listarCategorias(ctx)).map((c) => [c.id, c.ativo])).toEqual([[cat.id, true]]);
+    expect((await listarCategorias(ctx, { incluirInativos: true })).map((c) => [c.nome, c.ativo])).toEqual([["Luxo", false], ["Standard", true]]);
+    expect(await listarQuartos(ctx)).toEqual([]);
+    expect((await listarQuartos(ctx, { incluirInativos: true })).map((x) => x.ativo)).toEqual([false]);
+    expect((await listarProdutos(ctx, undefined, { incluirInativos: true })).find((x) => x.id === p.id)?.ativo).toBe(false);
+    expect((await listarProdutos(ctx)).find((x) => x.id === p.id)).toBeUndefined();
   });
 
   test("número de quarto duplicado é rejeitado", async () => {

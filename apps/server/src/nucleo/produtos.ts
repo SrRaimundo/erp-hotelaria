@@ -14,6 +14,7 @@ export type Produto = {
   grupo: string;
   tipo: "produto" | "servico";
   setores: Setor[];
+  ativo: boolean;
 };
 
 function paraProduto(l: any, setores: Setor[]): Produto {
@@ -26,10 +27,11 @@ function paraProduto(l: any, setores: Setor[]): Produto {
     grupo: l.grupo,
     tipo: l.tipo,
     setores,
+    ativo: !!l.ativo,
   };
 }
 
-export async function criarProduto(ctx: Contexto, d: Omit<Produto, "id" | "setores"> & { setores?: Setor[] }, ator: string): Promise<Produto> {
+export async function criarProduto(ctx: Contexto, d: Omit<Produto, "id" | "setores" | "ativo"> & { setores?: Setor[] }, ator: string): Promise<Produto> {
   if (!Number.isInteger(d.precoCentavos) || d.precoCentavos < 0) {
     throw new ErroDominio("PRECO_INVALIDO", "Preço inválido. Informe o valor em centavos, sem casas decimais.");
   }
@@ -39,7 +41,7 @@ export async function criarProduto(ctx: Contexto, d: Omit<Produto, "id" | "setor
     const setores = [...new Set(d.setores?.length ? d.setores : ["recepcao" as Setor])];
     const invalido = setores.find((s) => !SETORES.includes(s));
     if (invalido) throw new ErroDominio("SETOR_INVALIDO", `Setor inválido: ${invalido}.`);
-    const p: Produto = { id: novoId(), ...d, setores: SETORES.filter((s) => setores.includes(s)).sort() };
+    const p: Produto = { id: novoId(), ...d, ativo: true, setores: SETORES.filter((s) => setores.includes(s)).sort() };
     await tx.db
       .insertInto("produtos")
       .values({
