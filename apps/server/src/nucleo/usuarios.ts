@@ -134,20 +134,23 @@ export type SimulacaoAdministrador = {
 export async function exigirAdministradorRestante(tx: Contexto, simulacao: SimulacaoAdministrador): Promise<void> {
   const ativos = await tx.db.selectFrom("usuarios").select(["id", "perfil"]).where("ativo", "=", 1).execute();
   const perms = await tx.db.selectFrom("perfil_permissoes").select(["perfil", "permissao"]).where("permissao", "=", "config.gerenciar").execute();
-  const comPermissao = new Set(perms.map((p) => p.perfil));
+  const antes = new Set(perms.map((p) => p.perfil));
+  const depois = new Set(antes);
   if (simulacao.permissoesDoPerfil) {
     const { perfil, permissoes } = simulacao.permissoesDoPerfil;
-    if (permissoes.includes("config.gerenciar")) comPermissao.add(perfil);
-    else comPermissao.delete(perfil);
+    if (permissoes.includes("config.gerenciar")) depois.add(perfil);
+    else depois.delete(perfil);
   }
-  const restam = ativos.filter((u) => {
+  const totalAntes = ativos.filter((u) => antes.has(u.perfil)).length;
+  const totalDepois = ativos.filter((u) => {
     if (u.id === simulacao.usuarioId) {
       if (simulacao.inativar) return false;
-      return comPermissao.has(simulacao.novoPerfil ?? u.perfil);
+      return depois.has(simulacao.novoPerfil ?? u.perfil);
     }
-    return comPermissao.has(u.perfil);
-  });
-  if (restam.length === 0) {
+    return depois.has(u.perfil);
+  }).length;
+  // Só bloqueia quando a mudança de fato tira o último administrador; mudança alheia não é barrada.
+  if (totalDepois === 0 && totalDepois < totalAntes) {
     throw new ErroDominio("ULTIMO_ADMINISTRADOR", "Deve restar ao menos um administrador ativo, com permissão de configurar a pousada.");
   }
 }

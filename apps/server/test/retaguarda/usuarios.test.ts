@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
-import { entrar, sessaoPorToken } from "../../src/nucleo/sessoes.js";
-import { criarUsuario, definirUsuarioAtivo, editarUsuario, listarUsuarios, redefinirSenha } from "../../src/nucleo/usuarios.js";
+import { carregarUsuarioSessao, entrar, sessaoPorToken } from "../../src/nucleo/sessoes.js";
+import { criarUsuario, definirUsuarioAtivo, editarUsuario, exigirAdministradorRestante, listarUsuarios, redefinirSenha } from "../../src/nucleo/usuarios.js";
 import type { UsuarioSessao } from "../../src/nucleo/permissoes.js";
-import { carregarUsuarioSessao } from "../../src/nucleo/sessoes.js";
 import { ErroDominio } from "../../src/shared/erros.js";
-import { criarContextoTeste } from "../ajuda.js";
+import { emTransacao } from "../../src/shared/contexto.js";
+import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 let ctx: Awaited<ReturnType<typeof criarContextoTeste>>;
 let admin: UsuarioSessao;
@@ -115,5 +115,48 @@ describe("usuários", () => {
     expect(await ctx.db.selectFrom("auditoria").select("id").where("acao", "=", "usuario.editar").execute()).toHaveLength(0);
     await editarUsuario(ctx, ana, { nome: "Ana B", perfil: "governanca" }, admin);
     expect(await ctx.db.selectFrom("auditoria").select("id").where("acao", "=", "usuario.editar").execute()).toHaveLength(1);
+  });
+});
+
+describe("permissões das rotas de usuários (R4)", () => {
+  test("governança e perfil só com cadastros.gerenciar recebem 403 em criar, listar e editar", async () => {
+    const app = criarApp(ctx);
+    await ctx.db.insertInto("perfis").values({ nome: "cadastrista", limite_desconto: 0 }).execute();
+    await ctx.db.insertInto("perfil_permissoes").values({ perfil: "cadastrista", permissao: "cadastros.gerenciar" }).execute();
+    await criarUsuario(ctx, { nome: "Cad", login: "cad", senha: "senha-cad", perfil: "cadastrista" }, "usuario-admin");
+    const cad = { authorization: `Bearer ${(await entrar(ctx, "cad", "senha-cad")).token}` };
+    const gov = await entrarComo(ctx, "governanca");
+    const novo = { nome: "Zé", login: "ze", senha: "s", perfil: "recepcao" };
+    for (const h of [cad, gov]) {
+      expect((await app.inject({ method: "POST", url: "/api/usuarios", headers: h, payload: novo })).statusCode).toBe(403);
+      expect((await app.inject({ method: "GET", url: "/api/usuarios", headers: h })).statusCode).toBe(403);
+      expect((await app.inject({ method: "PUT", url: `/api/usuarios/${ana}`, headers: h, payload: { nome: "x", perfil: "recepcao" } })).statusCode).toBe(403);
+    }
+    const adm = { authorization: `Bearer ${(await entrar(ctx, "admin", "admin")).token}` };
+    expect((await app.inject({ method: "POST", url: "/api/usuarios", headers: adm, payload: novo })).statusCode).toBe(201);
+  });
+});
+
+describe("exigirAdministradorRestante", () => {
+  const checar = (s: Parameters<typeof exigirAdministradorRestante>[1]) => emTransacao(ctx, (tx) => exigirAdministradorRestante(tx, s));
+
+  test("edição de permissões do único perfil administrador que tira config.gerenciar → ULTIMO_ADMINISTRADOR", async () => {
+    const e = await erro(checar({ permissoesDoPerfil: { perfil: "admin", permissoes: ["reservas.gerenciar"] } }));
+    expect(e.codigo).toBe("ULTIMO_ADMINISTRADOR");
+    // manter a permissão, ou editar outro perfil, não bloqueia
+    await checar({ permissoesDoPerfil: { perfil: "admin", permissoes: ["config.gerenciar"] } });
+    await checar({ permissoesDoPerfil: { perfil: "recepcao", permissoes: [] } });
+  });
+
+  test("mudança de perfil é aceita quando há dois administradores ativos", async () => {
+    const b = await criarUsuario(ctx, { nome: "Beto", login: "beto", senha: "senha-beto", perfil: "admin" }, "usuario-admin");
+    const r = await editarUsuario(ctx, b.id, { nome: "Beto", perfil: "recepcao" }, admin);
+    expect(r.perfil).toBe("recepcao");
+  });
+
+  test("mudança de usuário não administrador não é barrada, mesmo sem administradores ativos", async () => {
+    await ctx.db.updateTable("usuarios").set({ ativo: 0 }).where("id", "=", "usuario-admin").execute();
+    await checar({ usuarioId: ana, inativar: true });
+    await checar({ usuarioId: ana, novoPerfil: "governanca" });
   });
 });
