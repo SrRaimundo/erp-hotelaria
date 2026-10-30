@@ -12,6 +12,8 @@ type Sessao = {
   sair(): Promise<void>;
   trocarSenha(atual: string, nova: string): Promise<void>;
   pode(permissao: string): boolean;
+  /** Relê o usuário da sessão no servidor (permissões e limite de desconto atuais do perfil). */
+  atualizar(): Promise<void>;
 };
 
 const Contexto = createContext<Sessao | null>(null);
@@ -79,9 +81,25 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [usuario],
   );
 
+  // Sessão expirada (401) já encerra pelo evento disparado no cliente; qualquer outra falha mantém o usuário guardado.
+  const atualizar = useCallback(async () => {
+    try {
+      const novo = await chamarApi<UsuarioSessao>("GET", "/api/sessoes/atual");
+      guardar(novo);
+      setUsuario((atual) => (atual && JSON.stringify(atual) === JSON.stringify(novo) ? atual : novo));
+    } catch {
+      // sem conexão ou erro do servidor: segue com o que já está guardado
+    }
+  }, []);
+
+  const logado = usuario !== null;
+  useEffect(() => {
+    if (logado) void atualizar();
+  }, [logado, atualizar]);
+
   const valor = useMemo<Sessao>(
-    () => ({ usuario, entrar, sair, trocarSenha, pode: (p) => usuario?.permissoes.includes(p) ?? false }),
-    [usuario, entrar, sair, trocarSenha],
+    () => ({ usuario, entrar, sair, trocarSenha, atualizar, pode: (p) => usuario?.permissoes.includes(p) ?? false }),
+    [usuario, entrar, sair, trocarSenha, atualizar],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }

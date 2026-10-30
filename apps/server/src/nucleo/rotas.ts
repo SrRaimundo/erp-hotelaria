@@ -111,6 +111,8 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     const { login, senha } = corpoLogin.parse(req.body);
     return res.status(201).send(await entrar(ctx, login, senha));
   });
+  // Usuário da sessão relido do banco a cada requisição (permissões e limite do perfil de agora).
+  app.get("/api/sessoes/atual", async (req) => req.usuario);
   app.delete("/api/sessoes", async (req, res) => {
     await sair(ctx, req.token);
     return res.status(204).send();

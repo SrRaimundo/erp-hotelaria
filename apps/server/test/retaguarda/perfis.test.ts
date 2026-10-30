@@ -148,4 +148,21 @@ describe("perfis", () => {
     expect((await app.inject({ method: "DELETE", url: "/api/perfis/mensageiro", headers: adm })).statusCode).toBe(204);
     expect((await app.inject({ method: "DELETE", url: "/api/perfis/admin", headers: adm })).json().codigo).toBe("PERFIL_PADRAO");
   });
+
+  test("API: GET /api/sessoes/atual devolve o usuário com as permissões atuais do perfil", async () => {
+    const app = criarApp(ctx);
+    const { token, usuario } = await entrar(ctx, "admin", "admin");
+    const headers = { authorization: `Bearer ${token}` };
+    const antes = await app.inject({ method: "GET", url: "/api/sessoes/atual", headers });
+    expect(antes.statusCode).toBe(200);
+    expect(antes.json()).toEqual(usuario);
+    await criarPerfil(ctx, { rotulo: "Mensageiro", copiarDe: "recepcao" }, admin);
+    await criarUsuario(ctx, { nome: "Ana", login: "ana", senha: "senha-ana", perfil: "mensageiro" }, "usuario-admin");
+    const ana = { authorization: `Bearer ${(await entrar(ctx, "ana", "senha-ana")).token}` };
+    await editarPerfil(ctx, "mensageiro", { limiteDesconto: 9, permissoes: ["caixa.operar"] }, admin);
+    const depois = (await app.inject({ method: "GET", url: "/api/sessoes/atual", headers: ana })).json();
+    expect(depois.permissoes).toEqual(["caixa.operar"]);
+    expect(depois.limiteDesconto).toBe(9);
+    expect((await app.inject({ method: "GET", url: "/api/sessoes/atual" })).statusCode).toBe(401);
+  });
 });

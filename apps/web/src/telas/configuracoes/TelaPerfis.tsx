@@ -1,27 +1,19 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { chamarApi } from "../../api/cliente";
+import { useSessao } from "../../auth/SessaoProvider";
 import type { Perfil } from "../../api/tipos";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
+import { Dicas } from "./Dicas";
 import { ListaCadastro } from "./ListaCadastro";
+import { Janela } from "../../componentes/Janela";
 import "./configuracoes.css";
 
 type Permissao = { permissao: string; descricao: string };
 
 /** Perfis aparecem também na lista de usuários (rótulo e escolha), então ambas recarregam. */
 const invalidar = (cliente: QueryClient) => Promise.all(["perfis", "usuarios"].map((k) => cliente.invalidateQueries({ queryKey: [k] })));
-
-function Dicas({ motivos }: { motivos: string[] }) {
-  if (motivos.length === 0) return null;
-  return (
-    <ul className="cq__aviso cq__dicas">
-      {motivos.map((m) => (
-        <li key={m}>{m}</li>
-      ))}
-    </ul>
-  );
-}
 
 function PainelNovoPerfil({ perfis, fechar }: { perfis: Perfil[]; fechar: () => void }) {
   const cliente = useQueryClient();
@@ -74,6 +66,7 @@ function PainelNovoPerfil({ perfis, fechar }: { perfis: Perfil[]; fechar: () => 
 /** Excluir: só para personalizado sem usuários; nos demais o botão fica desligado e o motivo aparece ao lado. */
 function AcaoExcluir({ perfil, fechar }: { perfil: Perfil; fechar: () => void }) {
   const cliente = useQueryClient();
+  const [confirmando, setConfirmando] = useState(false);
   const excluir = useMutation<unknown, Error>({
     mutationFn: () => chamarApi("DELETE", `/api/perfis/${perfil.nome}`),
     onSuccess: async () => {
@@ -89,16 +82,26 @@ function AcaoExcluir({ perfil, fechar }: { perfil: Perfil; fechar: () => void })
   return (
     <div className="cq__ativo">
       {motivo && <p className="cq__aviso">{motivo}</p>}
-      <ErroAcao erro={excluir.error} />
-      <Botao variante="contorno" disabled={motivo !== null || excluir.isPending} onClick={() => excluir.mutate()}>
+      {!confirmando && <ErroAcao erro={excluir.error} />}
+      <Botao variante="contorno" disabled={motivo !== null || excluir.isPending} onClick={() => setConfirmando(true)}>
         Excluir
       </Botao>
+      <Janela aberta={confirmando} aoFechar={() => setConfirmando(false)} titulo={`Excluir perfil ${perfil.rotulo}?`}>
+        <p className="cq__aviso">O perfil será removido de vez. Isso não pode ser desfeito.</p>
+        <ErroAcao erro={excluir.error} />
+        <div className="formulario__acoes">
+          <Botao variante="contorno" onClick={() => setConfirmando(false)}>Cancelar</Botao>
+          <Botao disabled={excluir.isPending} onClick={() => excluir.mutate()}>Confirmar exclusão</Botao>
+        </div>
+      </Janela>
     </div>
   );
 }
 
 function PainelPerfil({ perfil, fechar }: { perfil: Perfil; fechar: () => void }) {
   const cliente = useQueryClient();
+  const { atualizar } = useSessao();
+  const dicaAdmin = useId();
   const permissoesQ = useQuery({ queryKey: ["permissoes"], queryFn: () => chamarApi<Permissao[]>("GET", "/api/permissoes") });
   const [rotulo, setRotulo] = useState(perfil.rotulo);
   const [limite, setLimite] = useState(String(perfil.limiteDesconto));
@@ -130,6 +133,7 @@ function PainelPerfil({ perfil, fechar }: { perfil: Perfil; fechar: () => void }
       }),
     onSuccess: async () => {
       await invalidar(cliente);
+      await atualizar(); // se o perfil editado é o do próprio usuário, menu e permissões já refletem a mudança
       fechar();
     },
   });
@@ -160,10 +164,10 @@ function PainelPerfil({ perfil, fechar }: { perfil: Perfil; fechar: () => void }
             return (
               <div key={p.permissao}>
                 <label className="pousada__marcar">
-                  <input type="checkbox" checked={marcadas.has(p.permissao)} disabled={protegida} onChange={(e) => alternar(p.permissao, e.target.checked)} />
+                  <input type="checkbox" checked={marcadas.has(p.permissao)} disabled={protegida} aria-describedby={protegida ? dicaAdmin : undefined} onChange={(e) => alternar(p.permissao, e.target.checked)} />
                   {p.descricao}
                 </label>
-                {protegida && <p className="cq__aviso">O perfil Administrador precisa manter esta permissão.</p>}
+                {protegida && <p id={dicaAdmin} className="cq__aviso">O perfil Administrador precisa manter esta permissão.</p>}
               </div>
             );
           })}

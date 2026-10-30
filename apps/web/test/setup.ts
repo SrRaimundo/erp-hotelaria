@@ -1,7 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
-import { verificarRotasNaoPrevistas } from "./api-falsa";
+import { afterEach, beforeEach } from "vitest";
+import { instalarApiFalsa, verificarRotasNaoPrevistas } from "./api-falsa";
+
+// Rede falsa por padrão (só a releitura da sessão é atendida), para a rede real nunca ser tocada nem alterar o estado de conexão.
+beforeEach(() => instalarApiFalsa({}));
 
 afterEach(() => {
   cleanup();

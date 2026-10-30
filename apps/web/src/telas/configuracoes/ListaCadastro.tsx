@@ -5,7 +5,7 @@ import { Gaveta } from "../../componentes/Gaveta";
 
 export type Coluna<T> = { titulo: string; celula: (item: T) => ReactNode };
 
-type Props<T extends object> = {
+type Props<T> = {
   titulo: string;
   itens: T[];
   colunas: Coluna<T>[];
@@ -16,6 +16,8 @@ type Props<T extends object> = {
   /** Sem `aoMostrarInativos` o filtro de desativados não aparece (cadastros que não se desativam). */
   mostrarInativos?: boolean;
   aoMostrarInativos?: (mostrar: boolean) => void;
+  /** Marca a linha como desativada (e mostra a etiqueta); sem ela nenhuma linha é desativada. */
+  inativo?: (item: T) => boolean;
   /** Texto do botão de criação (padrão "+ Novo"). */
   rotuloNovo?: string;
   /** `item` é null ao criar; `fechar` fecha o painel (chamar depois de salvar). */
@@ -23,8 +25,8 @@ type Props<T extends object> = {
 };
 
 /** Padrão das telas de cadastro: tabela, "+ Novo", filtro de desativados e edição na Gaveta. */
-export function ListaCadastro<T extends object>({
-  titulo, itens, colunas, chave, aoNovo, aoEditar, mostrarInativos = false, aoMostrarInativos, rotuloNovo = "+ Novo", renderPainel,
+export function ListaCadastro<T>({
+  titulo, itens, colunas, chave, aoNovo, aoEditar, mostrarInativos = false, aoMostrarInativos, rotuloNovo = "+ Novo", inativo, renderPainel,
 }: Props<T>) {
   // `aberto` guarda o item em edição; `{ item: null }` é o painel de criação.
   const [aberto, setAberto] = useState<{ item: T | null } | null>(null);
@@ -60,14 +62,13 @@ export function ListaCadastro<T extends object>({
           </thead>
           <tbody>
             {itens.map((item) => {
-              const ativo = (item as { ativo?: boolean | number }).ativo;
-              const inativo = ativo === false || ativo === 0;
+              const desativado = inativo?.(item) ?? false;
               return (
-                <tr key={chave(item)} className={inativo ? "lista-cadastro__linha--inativa" : undefined}>
+                <tr key={chave(item)} className={desativado ? "lista-cadastro__linha--inativa" : undefined}>
                   {colunas.map((c, i) => (
                     <td key={c.titulo}>
                       {c.celula(item)}
-                      {i === 0 && inativo && <> <Etiqueta>desativado</Etiqueta></>}
+                      {i === 0 && desativado && <> <Etiqueta>desativado</Etiqueta></>}
                     </td>
                   ))}
                   <td className="lista-cadastro__acoes">

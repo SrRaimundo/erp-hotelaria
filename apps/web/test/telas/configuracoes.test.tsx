@@ -226,6 +226,7 @@ describe("ListaCadastro", () => {
         itens={itens}
         colunas={[{ titulo: "Nome", celula: (i) => i.nome }]}
         chave={(i) => i.id}
+        inativo={(i) => !i.ativo}
         aoNovo={aoNovo}
         aoEditar={aoEditar}
         mostrarInativos={false}

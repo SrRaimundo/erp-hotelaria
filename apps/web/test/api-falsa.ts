@@ -24,8 +24,12 @@ export function instalarApiFalsa(rotas: Record<string, Rota>): void {
     const url = new URL(String(entrada), "http://localhost");
     const caminho = url.pathname + url.search;
     const corpo = typeof init?.body === "string" && init.body ? JSON.parse(init.body) : undefined;
-    chamadas.push({ metodo, caminho, corpo });
     const chave = `${metodo} ${url.pathname}`;
+    // Releitura da sessão no início do app: por padrão devolve o usuário guardado, sem contar como chamada do teste.
+    if (chave === "GET /api/sessoes/atual" && !(chave in rotas)) {
+      return new Response(localStorage.getItem("erp.usuario") ?? "null", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    chamadas.push({ metodo, caminho, corpo });
     if (!(chave in rotas)) {
       // Não lança: o cliente transformaria a exceção em SEM_CONEXAO e esconderia o motivo.
       rotasNaoPrevistas.push(`${metodo} ${caminho}`);

@@ -1,6 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { useSessao } from "../../src/auth/SessaoProvider";
 import { TelaPerfis } from "../../src/telas/configuracoes/TelaPerfis";
 import { TelaUsuarios } from "../../src/telas/configuracoes/TelaUsuarios";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
@@ -63,6 +64,7 @@ describe("tela Usuários", () => {
     // não fica guardada no cache de consultas
     expect(JSON.stringify(cliente.getQueryCache().getAll().map((q) => q.state.data))).not.toContain("Ab3dEf7h");
     await u.click(within(janela).getByRole("button", { name: "Fechar" }));
+    await vi.waitFor(() => expect(cliente.getMutationCache().getAll()).toHaveLength(0));
     expect(screen.queryByText("Ab3dEf7h")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Senha temporária" })).not.toBeInTheDocument();
   });
@@ -118,6 +120,32 @@ describe("tela Usuários", () => {
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "PUT")).toBeDefined());
     expect(chamadas.find((c) => c.metodo === "PUT")).toMatchObject({ caminho: "/api/usuarios/u2", corpo: { nome: "João Silva", perfil: "gerente" } });
+  });
+});
+
+describe("tela Usuários (reativar)", () => {
+  test("Reativar um usuário desativado", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leiturasUsuarios({ "POST /api/usuarios/u3/reativar": { __status: 204 } }));
+    renderizar(<TelaUsuarios />, { usuario: USUARIO });
+    await u.click(await screen.findByLabelText("Mostrar desativados"));
+    const linha = (await screen.findByText("Pedro Antigo")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Editar/ });
+    await u.click(within(painel).getByRole("button", { name: "Reativar" }));
+    await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "POST" && c.caminho === "/api/usuarios/u3/reativar")).toBeDefined());
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("editar o próprio nome relê a sessão", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leiturasUsuarios({ "PUT /api/usuarios/u1": MARIA, "GET /api/sessoes/atual": { id: "u1", nome: "Maria Nova", perfil: "admin", permissoes: ["config.gerenciar"], trocarSenha: false, limiteDesconto: 100 } }));
+    renderizar(<TelaUsuarios />, { usuario: USUARIO });
+    const { painel } = await abrirEdicao("Maria Admin");
+    await u.clear(within(painel).getByLabelText("Nome"));
+    await u.type(within(painel).getByLabelText("Nome"), "Maria Nova");
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(JSON.parse(localStorage.getItem("erp.usuario")!).nome).toBe("Maria Nova"));
   });
 });
 
@@ -212,7 +240,77 @@ describe("tela Perfis", () => {
     await u.click(within(screen.getByText("Gerente").closest("tr")!).getByRole("button", { name: "Editar" }));
     painel = await screen.findByRole("dialog", { name: /Editar/ });
     await u.click(within(painel).getByRole("button", { name: "Excluir" }));
+    const confirmacao = await screen.findByRole("dialog", { name: "Excluir perfil Gerente?" });
+    expect(chamadas.find((c) => c.metodo === "DELETE")).toBeUndefined();
+    await u.click(within(confirmacao).getByRole("button", { name: "Confirmar exclusão" }));
     await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "DELETE" && c.caminho === "/api/perfis/gerente")).toBeDefined());
     await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("PERFIL_ADMIN_PROTEGIDO aparece junto do salvar", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(
+      leiturasPerfis({ "PUT /api/perfis/admin": { __status: 422, codigo: "PERFIL_ADMIN_PROTEGIDO", mensagem: "O perfil Administrador precisa manter a permissão de configurar a pousada." } }),
+    );
+    renderizar(<TelaPerfis />, { usuario: USUARIO });
+    const linha = (await screen.findByText("Administrador")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Editar/ });
+    await u.click(await within(painel).findByRole("checkbox", { name: /Criar, alterar e cancelar reservas/ }));
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    const alerta = await within(painel).findByRole("alert");
+    expect(alerta).toHaveTextContent("O perfil Administrador precisa manter");
+    expect(alerta.closest("form")).toBe(within(painel).getByRole("button", { name: "Salvar" }).closest("form"));
+  });
+
+  test.each(["101", "1.5", "", "-3"])("limite de desconto inválido (%j) desliga o salvar e diz o motivo", async (valor) => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leiturasPerfis());
+    renderizar(<TelaPerfis />, { usuario: USUARIO });
+    const linha = (await screen.findByText("Gerente")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Editar/ });
+    const campo = await within(painel).findByLabelText("Limite de desconto (%)");
+    await u.clear(campo);
+    if (valor) await u.type(campo, valor);
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
+    expect(within(painel).getByText("Limite de desconto: informe um número inteiro de 0 a 100.")).toBeInTheDocument();
+  });
+
+  test("a dica do Administrador está ligada à permissão protegida", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(leiturasPerfis());
+    renderizar(<TelaPerfis />, { usuario: USUARIO });
+    const linha = (await screen.findByText("Administrador")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Editar" }));
+    const config = await screen.findByRole("checkbox", { name: /Configurar a pousada/ });
+    expect(config).toHaveAccessibleDescription("O perfil Administrador precisa manter esta permissão.");
+  });
+
+  test("editar o próprio perfil atualiza as permissões da sessão sem novo login", async () => {
+    const u = userEvent.setup();
+    const novo = { id: "u1", nome: "Maria", perfil: "recepcao", permissoes: ["hospedagem.checkin"], trocarSenha: false, limiteDesconto: 10 };
+    instalarApiFalsa(leiturasPerfis({ "PUT /api/perfis/recepcao": RECEPCAO, "GET /api/sessoes/atual": novo }));
+    function Sonda() {
+      const { pode } = useSessao();
+      return <p>{pode("reservas.gerenciar") ? "com reservas" : "sem reservas"}</p>;
+    }
+    renderizar(
+      <>
+        <Sonda />
+        <TelaPerfis />
+      </>,
+      { usuario: { id: "u1", perfil: "recepcao", permissoes: ["config.gerenciar", "reservas.gerenciar"] } },
+    );
+    // a releitura do início do app já traz as permissões atuais
+    expect(await screen.findByText("sem reservas")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("erp.usuario")!).permissoes).toEqual(["hospedagem.checkin"]);
+    const linha = (await screen.findByText("Recepção")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Editar/ });
+    await within(painel).findByRole("checkbox", { name: "Fazer check-in" });
+    const antes = chamadas.filter((c) => c.caminho === "/api/sessoes/atual").length;
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(chamadas.filter((c) => c.caminho === "/api/sessoes/atual").length).toBe(antes + 1));
   });
 });

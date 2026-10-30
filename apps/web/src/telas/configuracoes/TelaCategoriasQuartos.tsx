@@ -352,6 +352,7 @@ export function TelaCategoriasQuartos() {
         titulo="Categorias"
         itens={categoriasLista}
         chave={(c) => c.id}
+        inativo={(c) => !c.ativo}
         mostrarInativos={inativasCategorias}
         aoMostrarInativos={setInativasCategorias}
         colunas={[
@@ -391,6 +392,7 @@ export function TelaCategoriasQuartos() {
         titulo="Quartos"
         itens={quartosLista}
         chave={(q) => q.id}
+        inativo={(q) => !q.ativo}
         mostrarInativos={inativosQuartos}
         aoMostrarInativos={setInativosQuartos}
         colunas={[

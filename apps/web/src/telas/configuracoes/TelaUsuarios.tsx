@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi } from "../../api/cliente";
 import type { Perfil } from "../../api/tipos";
@@ -6,6 +6,7 @@ import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { Janela } from "../../componentes/Janela";
 import { useSessao } from "../../auth/SessaoProvider";
+import { Dicas } from "./Dicas";
 import { ListaCadastro } from "./ListaCadastro";
 import "./configuracoes.css";
 
@@ -22,17 +23,6 @@ type UsuarioLista = {
 
 const formatarAcesso = (iso: string | null): string =>
   iso === null ? "nunca" : new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-
-function Dicas({ motivos }: { motivos: string[] }) {
-  if (motivos.length === 0) return null;
-  return (
-    <ul className="cq__aviso cq__dicas">
-      {motivos.map((m) => (
-        <li key={m}>{m}</li>
-      ))}
-    </ul>
-  );
-}
 
 /** Botão Desativar/Reativar com a mensagem do servidor ao lado; fecha o painel quando dá certo. */
 function AcaoAtivo({ id, ativo, aoConcluir }: { id: string; ativo: boolean; aoConcluir: () => void }) {
@@ -60,6 +50,7 @@ function AcaoRedefinirSenha({ id }: { id: string }) {
   const redefinir = useMutation<{ senhaTemporaria: string }, Error>({
     mutationFn: () => chamarApi<{ senhaTemporaria: string }>("POST", `/api/usuarios/${id}/redefinir-senha`),
     onSuccess: (r) => setSenha(r.senhaTemporaria),
+    gcTime: 0, // a senha não fica na memória das mutações depois de usada
   });
   const fechar = () => {
     setSenha(null);
@@ -80,10 +71,11 @@ function AcaoRedefinirSenha({ id }: { id: string }) {
   );
 }
 
-function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; perfis: Perfil[] | undefined; fechar: () => void }) {
+function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; perfis: Perfil[]; fechar: () => void }) {
   const cliente = useQueryClient();
-  const { usuario: logado } = useSessao();
+  const { usuario: logado, atualizar } = useSessao();
   const ehEu = item !== null && item.id === logado?.id;
+  const dicaPerfil = useId();
   const [nome, setNome] = useState(item?.nome ?? "");
   const [login, setLogin] = useState("");
   const [perfil, setPerfil] = useState(item?.perfil ?? "");
@@ -104,6 +96,7 @@ function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; pe
         : chamarApi("POST", "/api/usuarios", { nome: nome.trim(), login: login.trim(), senha, perfil }),
     onSuccess: async () => {
       await cliente.invalidateQueries({ queryKey: ["usuarios"] });
+      if (ehEu) await atualizar();
       fechar();
     },
   });
@@ -131,14 +124,14 @@ function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; pe
         )}
         <label className="campo">
           Perfil
-          <select value={perfil} disabled={ehEu || perfis === undefined} onChange={(e) => setPerfil(e.target.value)}>
+          <select value={perfil} disabled={ehEu} aria-describedby={ehEu ? dicaPerfil : undefined} onChange={(e) => setPerfil(e.target.value)}>
             {!item && <option value="" disabled>Escolha…</option>}
-            {(perfis ?? []).map((p) => (
+            {perfis.map((p) => (
               <option key={p.nome} value={p.nome}>{p.rotulo}</option>
             ))}
           </select>
         </label>
-        {ehEu && <p className="cq__aviso">Você não pode mudar o seu próprio perfil.</p>}
+        {ehEu && <p id={dicaPerfil} className="cq__aviso">Você não pode mudar o seu próprio perfil.</p>}
         {!item && (
           <label className="campo">
             Senha inicial
@@ -180,7 +173,8 @@ export function TelaUsuarios() {
           { titulo: "Situação", celula: (u) => (u.ativo ? "Ativo" : "Desativado") },
           { titulo: "Último acesso", celula: (u) => formatarAcesso(u.ultimoAcesso) },
         ]}
-        renderPainel={(p) => <PainelUsuario item={p.item} perfis={perfisQ.data} fechar={p.fechar} />}
+        inativo={(u) => !u.ativo}
+        renderPainel={(p) => (perfisQ.data ? <PainelUsuario item={p.item} perfis={perfisQ.data} fechar={p.fechar} /> : <p>Carregando…</p>)}
       />
     </div>
   );
