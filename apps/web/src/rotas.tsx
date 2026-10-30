@@ -8,6 +8,7 @@ import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
 import { EmConstrucao } from "./telas/configuracoes/EmConstrucao";
+import { TelaCategoriasQuartos } from "./telas/configuracoes/TelaCategoriasQuartos";
 import { LayoutConfiguracoes, PrimeiraConfiguracao } from "./telas/configuracoes/LayoutConfiguracoes";
 import { TelaPousada } from "./telas/configuracoes/TelaPousada";
 import { TelaMapa } from "./telas/mapa/TelaMapa";
@@ -31,7 +32,7 @@ export function AppRotas() {
             <Route index element={<PrimeiraConfiguracao />} />
             <Route path="pousada" element={<ExigePermissao permissao="config.gerenciar"><TelaPousada /></ExigePermissao>} />
             {/* Marcadores: as tarefas 7 a 9 trocam cada um pela tela real. */}
-            <Route path="categorias" element={<ExigePermissao permissao="cadastros.gerenciar"><EmConstrucao titulo="Categorias e quartos" /></ExigePermissao>} />
+            <Route path="categorias" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaCategoriasQuartos /></ExigePermissao>} />
             <Route path="usuarios" element={<ExigePermissao permissao="config.gerenciar"><EmConstrucao titulo="Usuários" /></ExigePermissao>} />
             <Route path="perfis" element={<ExigePermissao permissao="config.gerenciar"><EmConstrucao titulo="Perfis" /></ExigePermissao>} />
             <Route path="produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><EmConstrucao titulo="Produtos" /></ExigePermissao>} />

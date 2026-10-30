@@ -36,3 +36,14 @@
 }
 .pousada__rodape { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 .pousada__ok { color: var(--verde); font-size: 0.9375rem; }
+
+.cq { display: flex; flex-direction: column; gap: 24px; }
+.cq__barra { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.cq__filtro { min-width: 220px; }
+.cq__filtro select, .cq .campo select {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;
+}
+.cq__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.cq__ativo { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 1px solid var(--borda); padding-top: 12px; margin-top: 8px; }
+.cq__aviso { color: var(--texto-suave); font-size: 0.9375rem; }
+.cq__extra { display: block; }

@@ -17,4 +17,4 @@ export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknow
 export type { PreviaCheckout } from "@server/hospedagem/checkout";
 export type { Reserva } from "@server/hospedagem/reservas";
 export type { ConfigPousada } from "@server/nucleo/pousada";
-export type { Canal } from "@server/tarifas/regras";
+export type { Canal, TabelaBaseCategoria } from "@server/tarifas/regras";
