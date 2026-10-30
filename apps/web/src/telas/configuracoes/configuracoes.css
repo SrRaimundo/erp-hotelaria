@@ -47,3 +47,5 @@
 .cq__ativo { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 1px solid var(--borda); padding-top: 12px; margin-top: 8px; }
 .cq__aviso { color: var(--texto-suave); font-size: 0.9375rem; }
 .cq__extra { display: block; }
+.ur__senha { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; letter-spacing: 0.08em; user-select: all; margin-bottom: 8px; }
+.cq__dicas { padding-left: 18px; }

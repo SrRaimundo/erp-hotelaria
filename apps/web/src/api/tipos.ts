@@ -18,3 +18,4 @@ export type { PreviaCheckout } from "@server/hospedagem/checkout";
 export type { Reserva } from "@server/hospedagem/reservas";
 export type { ConfigPousada } from "@server/nucleo/pousada";
 export type { Canal, TabelaBaseCategoria } from "@server/tarifas/regras";
+export type { Perfil } from "@server/nucleo/perfis";
