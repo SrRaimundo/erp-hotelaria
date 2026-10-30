@@ -110,6 +110,7 @@ export async function mapaOcupacao(ctx: Contexto, p: { inicio: Data; fim: Data; 
     .selectFrom("quartos as q")
     .innerJoin("categorias as c", "c.id", "q.categoria_id")
     .select(["q.id", "q.numero", "c.nome as categoria", "q.situacao"])
+    .where("q.ativo", "=", 1)
     .orderBy("q.numero");
   if (p.categoriaId) qq = qq.where("q.categoria_id", "=", p.categoriaId);
 
@@ -154,7 +155,7 @@ async function contarReservas(ctx: Contexto, coluna: "chegada" | "saida", d: Dat
 }
 
 async function governancaDoPainel(ctx: Contexto): Promise<Painel["governanca"]> {
-  const quartos = await ctx.db.selectFrom("quartos").select(["id", "numero", "situacao"]).where("situacao", "in", ["sujo", "em_manutencao", "bloqueado"]).execute();
+  const quartos = await ctx.db.selectFrom("quartos").select(["id", "numero", "situacao"]).where("ativo", "=", 1).where("situacao", "in", ["sujo", "em_manutencao", "bloqueado"]).execute();
   quartos.sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true }));
   const itens: Painel["governanca"] = [];
   for (const q of quartos) {
@@ -180,7 +181,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     .execute();
   const linhasSaidas = await reservasComTitular(ctx).select([...campos, "r.conta_id"]).where("r.estado", "=", "hospedada").where("r.saida", "=", dia).execute();
   const hospedadas = await ctx.db.selectFrom("reservas").select(["adultos", "criancas", "quarto_id"]).where("estado", "=", "hospedada").execute();
-  const sujos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("situacao", "=", "sujo").orderBy("numero").execute();
+  const sujos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("ativo", "=", 1).where("situacao", "=", "sujo").orderBy("numero").execute();
   const sinais = await reservasComTitular(ctx)
     .clearOrderBy()
     .select([...campos, "r.valor_sinal", "r.prazo_sinal", "h.telefone"])
@@ -197,7 +198,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
   const arrumados = await arrumacoesDeHoje(ctx);
   const ocupadosSemArrumacao = hospedadas.filter((h) => h.quarto_id && !arrumados.has(h.quarto_id)).length;
 
-  const situacoes = await ctx.db.selectFrom("quartos").select("situacao").execute();
+  const situacoes = await ctx.db.selectFrom("quartos").select("situacao").where("ativo", "=", 1).execute();
   const total = situacoes.filter((q) => q.situacao !== "em_manutencao" && q.situacao !== "bloqueado").length;
   const { ocupados, percentual } = await ocupacaoDoDia(ctx, dia, total);
 
@@ -355,7 +356,7 @@ export async function buscaUniversal(ctx: Contexto, q: string): Promise<Resultad
   const r: ResultadoBusca[] = [];
 
   if (/^\d{1,4}$/.test(termo)) {
-    const quartos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("numero", "=", termo).orderBy("id").execute();
+    const quartos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("ativo", "=", 1).where("numero", "=", termo).orderBy("id").execute();
     for (const x of quartos) r.push({ tipo: "quarto", id: x.id, rotulo: `Quarto ${x.numero}`, acoes: ["ver_quarto"] });
     const reservas = await reservasComTitular(ctx).select(camposBusca).where("r.codigo", "=", Number(termo)).execute();
     for (const x of reservas) r.push(resultadoReserva(x));

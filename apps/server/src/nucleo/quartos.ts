@@ -3,6 +3,9 @@ import { registrarEvento } from "../infra/outbox.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
+import { diaHoteleiro } from "../shared/tempo.js";
+import { obterConfig } from "./pousada.js";
+import { ESTADOS_ATIVOS } from "../hospedagem/estados.js";
 
 export type SituacaoQuarto = "livre" | "ocupado" | "sujo" | "em_manutencao" | "bloqueado";
 export type Quarto = { id: string; numero: string; categoriaId: string; bloco: string | null; situacao: SituacaoQuarto };
@@ -25,10 +28,8 @@ export async function criarQuarto(
   ator: string,
 ): Promise<Quarto> {
   return emTransacao(ctx, async (tx) => {
-    const cat = await tx.db.selectFrom("categorias").select("id").where("id", "=", d.categoriaId).executeTakeFirst();
-    if (!cat) throw new ErroDominio("CATEGORIA_NAO_ENCONTRADA", "Categoria não encontrada. Escolha uma categoria cadastrada.");
-    const dup = await tx.db.selectFrom("quartos").select("id").where("numero", "=", d.numero).executeTakeFirst();
-    if (dup) throw new ErroDominio("NUMERO_QUARTO_DUPLICADO", `Já existe um quarto com o número ${d.numero}. Use outro número.`);
+    await exigirCategoria(tx, d.categoriaId);
+    await exigirNumeroLivre(tx, d.numero);
     const q: Quarto = { id: novoId(), numero: d.numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre" };
     await tx.db
       .insertInto("quartos")
@@ -40,10 +41,113 @@ export async function criarQuarto(
   });
 }
 
-export async function listarQuartos(ctx: Contexto, filtro?: { categoriaId?: string }): Promise<Quarto[]> {
+const MAX_LOTE = 200;
+
+async function exigirCategoria(tx: Contexto, id: string): Promise<void> {
+  const cat = await tx.db.selectFrom("categorias").select("id").where("id", "=", id).executeTakeFirst();
+  if (!cat) throw new ErroDominio("CATEGORIA_NAO_ENCONTRADA", "Categoria não encontrada. Escolha uma categoria cadastrada.");
+}
+
+/** Número livre = nenhum outro quarto (ativo ou inativo) o usa; o banco também garante a unicidade. */
+async function exigirNumeroLivre(tx: Contexto, numero: string, ignorarId?: string): Promise<void> {
+  let q = tx.db.selectFrom("quartos").select("id").where("numero", "=", numero);
+  if (ignorarId) q = q.where("id", "!=", ignorarId);
+  if (await q.executeTakeFirst()) throw new ErroDominio("NUMERO_QUARTO_DUPLICADO", `Já existe um quarto com o número ${numero}. Use outro número.`, { numeros: [numero] });
+}
+
+export async function listarQuartos(ctx: Contexto, filtro?: { categoriaId?: string; incluirInativos?: boolean }): Promise<Quarto[]> {
   let q = ctx.db.selectFrom("quartos").selectAll();
   if (filtro?.categoriaId) q = q.where("categoria_id", "=", filtro.categoriaId);
+  if (!filtro?.incluirInativos) q = q.where("ativo", "=", 1);
   return (await q.orderBy("numero").execute()).map(paraQuarto);
+}
+
+export async function editarQuarto(
+  ctx: Contexto,
+  id: string,
+  d: { numero: string; categoriaId: string; bloco?: string | null },
+  ator: string,
+): Promise<Quarto> {
+  return emTransacao(ctx, async (tx) => {
+    const antes = await obterQuarto(tx, id);
+    await exigirCategoria(tx, d.categoriaId);
+    await exigirNumeroLivre(tx, d.numero, id);
+    const depois: Quarto = { ...antes, numero: d.numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null };
+    await tx.db.updateTable("quartos").set({ numero: depois.numero, categoria_id: depois.categoriaId, bloco: depois.bloco }).where("id", "=", id).execute();
+    await auditar(tx, { ator, acao: "quarto.editar", alvoTipo: "quarto", alvoId: id, dados: { antes, depois } });
+    await registrarEvento(tx, "nucleo.QuartoEditado", { quartoId: id });
+    return depois;
+  });
+}
+
+/**
+ * Desativar: bloqueado se o quarto está ocupado ou tem reserva ativa com saída a partir do dia hoteleiro
+ * (QUARTO_COM_RESERVAS, detalhes.codigos). Reativar: o número não pode estar em uso por outro quarto ativo.
+ */
+export async function definirQuartoAtivo(ctx: Contexto, id: string, ativo: boolean, ator: string): Promise<void> {
+  await emTransacao(ctx, async (tx) => {
+    const quarto = await obterQuarto(tx, id);
+    if (!ativo) {
+      const config = await obterConfig(tx);
+      const dia = diaHoteleiro(tx.relogio.agora(), config.fuso, config.viradaDia);
+      const reservas = await tx.db
+        .selectFrom("reservas")
+        .select("codigo")
+        .where("quarto_id", "=", id)
+        .where("estado", "in", ESTADOS_ATIVOS)
+        .where("saida", ">=", dia)
+        .orderBy("codigo")
+        .execute();
+      if (reservas.length > 0 || quarto.situacao === "ocupado") {
+        throw new ErroDominio(
+          "QUARTO_COM_RESERVAS",
+          `O quarto ${quarto.numero} está ocupado ou tem reservas ativas. Mude as reservas de quarto antes de desativá-lo.`,
+          { codigos: reservas.map((r) => r.codigo) },
+        );
+      }
+    } else {
+      const outro = await tx.db.selectFrom("quartos").select("id").where("numero", "=", quarto.numero).where("ativo", "=", 1).where("id", "!=", id).executeTakeFirst();
+      if (outro) throw new ErroDominio("NUMERO_QUARTO_DUPLICADO", `Já existe um quarto ativo com o número ${quarto.numero}. Renumere um deles.`, { numeros: [quarto.numero] });
+    }
+    await tx.db.updateTable("quartos").set({ ativo: ativo ? 1 : 0 }).where("id", "=", id).execute();
+    await auditar(tx, { ator, acao: ativo ? "quarto.reativar" : "quarto.desativar", alvoTipo: "quarto", alvoId: id });
+    await registrarEvento(tx, ativo ? "nucleo.QuartoReativado" : "nucleo.QuartoDesativado", { quartoId: id });
+  });
+}
+
+/** Cria os quartos de..ate (números como texto). Qualquer número já existente (ativo ou inativo) cancela o lote inteiro. */
+export async function criarQuartosEmLote(
+  ctx: Contexto,
+  d: { categoriaId: string; de: number; ate: number; bloco?: string },
+  ator: string,
+): Promise<Quarto[]> {
+  if (!Number.isInteger(d.de) || !Number.isInteger(d.ate) || d.de < 0 || d.ate < d.de) {
+    throw new ErroDominio("LOTE_INVALIDO", "Intervalo inválido. Informe números inteiros, com o final maior ou igual ao início.");
+  }
+  if (d.ate - d.de + 1 > MAX_LOTE) {
+    throw new ErroDominio("LOTE_INVALIDO", `Cada lote pode criar no máximo ${MAX_LOTE} quartos.`, { maximo: MAX_LOTE });
+  }
+  return emTransacao(ctx, async (tx) => {
+    await exigirCategoria(tx, d.categoriaId);
+    const numeros = Array.from({ length: d.ate - d.de + 1 }, (_, i) => String(d.de + i));
+    const existentes = await tx.db.selectFrom("quartos").select("numero").where("numero", "in", numeros).execute();
+    if (existentes.length > 0) {
+      const dup = new Set(existentes.map((e) => e.numero));
+      throw new ErroDominio(
+        "NUMERO_QUARTO_DUPLICADO",
+        `Já existem quartos com os números ${numeros.filter((n) => dup.has(n)).join(", ")}. Nenhum quarto foi criado.`,
+        { numeros: numeros.filter((n) => dup.has(n)) },
+      );
+    }
+    const criados: Quarto[] = numeros.map((numero) => ({ id: novoId(), numero, categoriaId: d.categoriaId, bloco: d.bloco ?? null, situacao: "livre" }));
+    await tx.db
+      .insertInto("quartos")
+      .values(criados.map((q) => ({ id: q.id, numero: q.numero, categoria_id: q.categoriaId, bloco: q.bloco, situacao: q.situacao })))
+      .execute();
+    await auditar(tx, { ator, acao: "quarto.lote", alvoTipo: "categoria", alvoId: d.categoriaId, dados: { de: d.de, ate: d.ate, bloco: d.bloco ?? null, quartos: criados.map((q) => q.id) } });
+    for (const q of criados) await registrarEvento(tx, "nucleo.QuartoCriado", { quartoId: q.id });
+    return criados;
+  });
 }
 
 export async function obterQuarto(ctx: Contexto, id: string): Promise<Quarto> {

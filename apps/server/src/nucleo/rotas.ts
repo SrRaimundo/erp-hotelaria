@@ -1,16 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { data } from "../http/validacao.js";
-import type { Contexto } from "../shared/contexto.js";
+import { emTransacao, type Contexto } from "../shared/contexto.js";
 import { abrirCaixa, fecharCaixa, resumoCaixa } from "./caixa.js";
-import { criarCategoria, listarCategorias } from "./categorias.js";
+import { criarCategoria, definirCategoriaAtiva, editarCategoria, listarCategorias } from "./categorias.js";
 import { listarFormas } from "./formas-pagamento.js";
 import { buscarHospedes, obterHospede, salvarHospede } from "./hospedes.js";
 import { exigirPermissao } from "./permissoes.js";
 import { obterConfig, salvarConfig, type ConfigPousada } from "./pousada.js";
 import { SETORES, type Setor } from "../governanca/setores.js";
-import { criarProduto, listarProdutos } from "./produtos.js";
-import { criarQuarto, listarQuartos } from "./quartos.js";
+import { criarProduto, definirProdutoAtivo, editarProduto, listarProdutos } from "./produtos.js";
+import { criarQuarto, criarQuartosEmLote, definirQuartoAtivo, editarQuarto, listarQuartos } from "./quartos.js";
 import { entrar, sair } from "./sessoes.js";
 import { criarUsuario, TAM_MIN_SENHA, trocarSenha } from "./usuarios.js";
 
@@ -54,6 +54,10 @@ const corpoCategoria = z.object({
   comodidades: z.array(z.string()).default([]),
 });
 const corpoQuarto = z.object({ numero: texto, categoriaId: texto, bloco: z.string().optional() });
+const corpoEdicaoQuarto = z.object({ numero: texto, categoriaId: texto, bloco: z.string().nullish() });
+const corpoLote = z.object({ categoriaId: texto, de: z.number().int().min(0), ate: z.number().int().min(0), bloco: z.string().optional() });
+const paramId = z.object({ id: z.string().min(1) });
+const flagInativos = z.enum(["1", "true"]).optional();
 const corpoHospede = z.object({
   id: z.string().optional(),
   nome: texto,
@@ -77,7 +81,14 @@ const corpoProduto = z.object({
   tipo: z.enum(["produto", "servico"]),
   setores: z.array(z.enum(SETORES as [Setor, ...Setor[]])).min(1, "Informe ao menos um setor").optional(),
 });
-const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional() });
+const corpoEdicaoProduto = z.object({
+  nome: texto,
+  precoCentavos: centavos,
+  unidade: texto,
+  tipo: z.enum(["produto", "servico"]),
+  setores: z.array(z.enum(SETORES as [Setor, ...Setor[]])).min(1, "Informe ao menos um setor"),
+});
+const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional(), incluirInativos: flagInativos });
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
 const corpoAbrirCaixa = z.object({ valorInicial: centavos });
 const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
@@ -103,15 +114,55 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     return salvarConfig(ctx, corpoConfig.parse(req.body) as Partial<ConfigPousada>, req.usuario.id);
   });
 
-  app.get("/api/categorias", async () => listarCategorias(ctx));
+  /** `?incluirInativos=1` exige cadastros.gerenciar. */
+  const incluirInativos = (req: { usuario: Parameters<typeof exigirPermissao>[0] }, flag: string | undefined): boolean => {
+    if (!flag) return false;
+    exigirPermissao(req.usuario, "cadastros.gerenciar");
+    return true;
+  };
+
+  app.get("/api/categorias", async (req) => {
+    const q = z.object({ incluirInativos: flagInativos }).parse(req.query);
+    return listarCategorias(ctx, { incluirInativos: incluirInativos(req, q.incluirInativos) });
+  });
+  app.put("/api/categorias/:id", async (req) => {
+    exigirPermissao(req.usuario, "cadastros.gerenciar");
+    return editarCategoria(ctx, paramId.parse(req.params).id, corpoCategoria.parse(req.body), req.usuario.id);
+  });
+  for (const [acao, ativa] of [["desativar", false], ["reativar", true]] as const) {
+    app.post(`/api/categorias/:id/${acao}`, async (req, res) => {
+      exigirPermissao(req.usuario, "cadastros.gerenciar");
+      await definirCategoriaAtiva(ctx, paramId.parse(req.params).id, ativa, req.usuario.id);
+      return res.status(200).send({ ok: true });
+    });
+    app.post(`/api/quartos/:id/${acao}`, async (req, res) => {
+      exigirPermissao(req.usuario, "cadastros.gerenciar");
+      await definirQuartoAtivo(ctx, paramId.parse(req.params).id, ativa, req.usuario.id);
+      return res.status(200).send({ ok: true });
+    });
+    app.post(`/api/produtos/:id/${acao}`, async (req, res) => {
+      exigirPermissao(req.usuario, "cadastros.gerenciar");
+      await definirProdutoAtivo(ctx, paramId.parse(req.params).id, ativa, req.usuario.id);
+      return res.status(200).send({ ok: true });
+    });
+  }
   app.post("/api/categorias", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
     return res.status(201).send(await criarCategoria(ctx, corpoCategoria.parse(req.body), req.usuario.id));
   });
 
   app.get("/api/quartos", async (req) => {
-    const { categoriaId } = z.object({ categoriaId: z.string().optional() }).parse(req.query);
-    return listarQuartos(ctx, categoriaId ? { categoriaId } : undefined);
+    const q = z.object({ categoriaId: z.string().optional(), incluirInativos: flagInativos }).parse(req.query);
+    return listarQuartos(ctx, { ...(q.categoriaId ? { categoriaId: q.categoriaId } : {}), incluirInativos: incluirInativos(req, q.incluirInativos) });
+  });
+  app.put("/api/quartos/:id", async (req) => {
+    exigirPermissao(req.usuario, "cadastros.gerenciar");
+    return editarQuarto(ctx, paramId.parse(req.params).id, corpoEdicaoQuarto.parse(req.body), req.usuario.id);
+  });
+  app.post("/api/quartos/lote", async (req, res) => {
+    exigirPermissao(req.usuario, "cadastros.gerenciar");
+    const corpo = corpoLote.parse(req.body);
+    return res.status(201).send(await emTransacao(ctx, (tx) => criarQuartosEmLote(tx, corpo, req.usuario.id)));
   });
   app.post("/api/quartos", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
@@ -132,7 +183,14 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     return res.status(201).send(await salvarHospede(ctx, corpoHospede.parse(req.body), req.usuario.id));
   });
 
-  app.get("/api/produtos", async (req) => listarProdutos(ctx, queryProdutos.parse(req.query).setor));
+  app.get("/api/produtos", async (req) => {
+    const q = queryProdutos.parse(req.query);
+    return listarProdutos(ctx, q.setor, { incluirInativos: incluirInativos(req, q.incluirInativos) });
+  });
+  app.put("/api/produtos/:id", async (req) => {
+    exigirPermissao(req.usuario, "cadastros.gerenciar");
+    return editarProduto(ctx, paramId.parse(req.params).id, corpoEdicaoProduto.parse(req.body), req.usuario.id);
+  });
   app.post("/api/produtos", async (req, res) => {
     exigirPermissao(req.usuario, "cadastros.gerenciar");
     return res.status(201).send(await criarProduto(ctx, corpoProduto.parse(req.body), req.usuario.id));

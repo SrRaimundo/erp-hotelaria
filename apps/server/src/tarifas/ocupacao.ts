@@ -16,6 +16,7 @@ export async function ocupacaoCategoria(
     .selectFrom("quartos")
     .select((eb) => eb.fn.countAll<number>().as("n"))
     .where("categoria_id", "=", categoriaId)
+    .where("ativo", "=", 1)
     .where("situacao", "not in", ["em_manutencao", "bloqueado"])
     .executeTakeFirstOrThrow();
   if (quartos.n === 0) return 100;

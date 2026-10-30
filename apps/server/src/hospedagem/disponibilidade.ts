@@ -15,8 +15,9 @@ export async function verificarDisponibilidade(
   p: { categoriaId: string; quartoId?: string; chegada: Data; saida: Data; ignorarReservaId?: string },
 ): Promise<void> {
   if (p.quartoId) {
-    const quarto = await tx.db.selectFrom("quartos").select(["numero", "situacao"]).where("id", "=", p.quartoId).executeTakeFirst();
+    const quarto = await tx.db.selectFrom("quartos").select(["numero", "situacao", "ativo"]).where("id", "=", p.quartoId).executeTakeFirst();
     if (!quarto) throw new ErroDominio("QUARTO_NAO_ENCONTRADO", "Quarto não encontrado.");
+    if (!quarto.ativo) throw new ErroDominio("QUARTO_INDISPONIVEL", `O quarto ${quarto.numero} está desativado. Escolha outro quarto.`);
     if (INDISPONIVEIS.includes(quarto.situacao)) {
       throw new ErroDominio("QUARTO_INDISPONIVEL", `O quarto ${quarto.numero} está fora de uso (${quarto.situacao.replace("_", " ")}). Escolha outro quarto.`);
     }
@@ -37,6 +38,7 @@ export async function verificarDisponibilidade(
     .selectFrom("quartos")
     .select((eb) => eb.fn.countAll<number>().as("n"))
     .where("categoria_id", "=", p.categoriaId)
+    .where("ativo", "=", 1)
     .where("situacao", "not in", INDISPONIVEIS)
     .executeTakeFirstOrThrow();
   let q = tx.db
