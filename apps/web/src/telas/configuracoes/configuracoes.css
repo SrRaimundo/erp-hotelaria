@@ -72,7 +72,7 @@
 .assistente__passo[aria-current="step"] { color: inherit; font-weight: 600; border-color: currentColor; }
 .assistente__linha { display: flex; flex-direction: column; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; margin: 0; }
 .assistente__linha legend { font-weight: 600; padding: 0 4px; }
-.assistente__linha--conflito { border-color: var(--vermelho, currentColor); }
+.assistente__linha--conflito { border-color: var(--terracota); }
 .assistente__linha--criada { opacity: 0.7; }
 .assistente__linha select, .assistente__linha input, .assistente .campo select {
   border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;

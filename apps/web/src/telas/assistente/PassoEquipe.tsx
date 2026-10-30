@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi } from "../../api/cliente";
 import type { Perfil } from "../../api/tipos";
@@ -6,6 +5,7 @@ import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { Dicas } from "../configuracoes/Dicas";
 
+export type EstadoEquipe = { linhas: Linha[]; proxima: number };
 type Linha = { chave: number; nome: string; login: string; perfil: string; senha: string; criado: boolean; erro: string | null };
 
 const nova = (chave: number, perfil: string): Linha => ({ chave, nome: "", login: "", perfil, senha: "", criado: false, erro: null });
@@ -20,11 +20,15 @@ function problemas(l: Linha, rotulo: string): string[] {
   ];
 }
 
-function EquipeLinhas({ perfis, aoAvancar, aoVoltar }: { perfis: Perfil[]; aoAvancar: () => void; aoVoltar: () => void }) {
+type Props = { equipe: EstadoEquipe | null; aoMudar: (f: (e: EstadoEquipe | null) => EstadoEquipe) => void; aoAvancar: () => void; aoVoltar: () => void };
+
+function EquipeLinhas({ perfis, equipe, aoMudar, aoAvancar, aoVoltar }: Props & { perfis: Perfil[] }) {
   const cliente = useQueryClient();
   const padrao = perfis.find((p) => p.nome === "recepcao")?.nome ?? perfis[0]?.nome ?? "";
-  const [linhas, setLinhas] = useState<Linha[]>([nova(1, padrao)]);
-  const [proxima, setProxima] = useState(2);
+  // O estado das linhas vive no Assistente: Voltar/Avançar não perde o que foi digitado nem as linhas já criadas.
+  const { linhas, proxima } = equipe ?? { linhas: [nova(1, padrao)], proxima: 2 };
+  const atualizar = (f: (e: EstadoEquipe) => EstadoEquipe) => aoMudar((e) => f(e ?? { linhas: [nova(1, padrao)], proxima: 2 }));
+  const setLinhas = (f: (ls: Linha[]) => Linha[]) => atualizar((e) => ({ ...e, linhas: f(e.linhas) }));
   const mudar = (chave: number, p: Partial<Linha>) => setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, ...p } : l)));
 
   const pendentes = linhas.filter((l) => !l.criado && !vazia(l));
@@ -111,8 +115,7 @@ function EquipeLinhas({ perfis, aoAvancar, aoVoltar }: { perfis: Perfil[]; aoAva
           <Botao
             variante="contorno"
             onClick={() => {
-              setLinhas((ls) => [...ls, nova(proxima, padrao)]);
-              setProxima((n) => n + 1);
+              atualizar((e) => ({ linhas: [...e.linhas, nova(e.proxima, padrao)], proxima: e.proxima + 1 }));
             }}
           >
             + Outro
@@ -133,10 +136,10 @@ function EquipeLinhas({ perfis, aoAvancar, aoVoltar }: { perfis: Perfil[]; aoAva
 }
 
 /** Passo 3: usuários da equipe (opcional). */
-export function PassoEquipe({ aoAvancar, aoVoltar }: { aoAvancar: () => void; aoVoltar: () => void }) {
+export function PassoEquipe(props: Props) {
   const perfis = useQuery({ queryKey: ["perfis"], queryFn: () => chamarApi<Perfil[]>("GET", "/api/perfis") });
   return perfis.data ? (
-    <EquipeLinhas perfis={perfis.data} aoAvancar={aoAvancar} aoVoltar={aoVoltar} />
+    <EquipeLinhas perfis={perfis.data} {...props} />
   ) : (
     <>{perfis.isError ? <ErroAcao erro={perfis.error} /> : <p>Carregando…</p>}</>
   );

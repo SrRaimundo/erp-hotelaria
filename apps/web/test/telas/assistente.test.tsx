@@ -130,6 +130,7 @@ describe("assistente de primeira configuração", () => {
     const alerta = await screen.findByRole("alert");
     expect(alerta).toHaveTextContent("Os números 102, 103 estão em mais de uma categoria. Nada foi criado.");
     expect(alerta).toHaveTextContent("Números em conflito: 102, 103");
+    expect(screen.getByRole("group", { name: "Categoria 1" })).toHaveClass("assistente__linha--conflito");
     expect(screen.getByRole("heading", { name: "Categorias e quartos" })).toBeInTheDocument();
   });
 
@@ -245,5 +246,98 @@ describe("assistente de primeira configuração", () => {
     expect(within(screen.getByRole("navigation", { name: "Configurações" })).getByRole("link", { name: "Primeira configuração" })).toBeInTheDocument();
     await u.click(screen.getByRole("button", { name: "Sair do assistente" }));
     await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+  });
+});
+
+describe("assistente: ajustes da revisão", () => {
+  test("categoria duplicada aparece junto do campo de nome", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": PAINEL,
+      "GET /api/assistente": VAZIO,
+      "POST /api/assistente/quartos": { __status: 422, codigo: "CATEGORIA_DUPLICADA", mensagem: 'Já existe uma categoria chamada "Standard".', detalhes: { nome: "Standard" } },
+    });
+    const u = userEvent.setup();
+    telaApp("/configuracoes/assistente");
+    await screen.findByRole("heading", { name: "Categorias e quartos" });
+    await preencherCategoria(u, screen.getByRole("group", { name: "Categoria 1" }), { nome: "standard", de: "101", ate: "102" });
+    await u.click(screen.getByRole("button", { name: "Criar categorias e quartos" }));
+    const grupo = screen.getByRole("group", { name: "Categoria 1" });
+    expect(await within(grupo).findByRole("alert")).toHaveTextContent('Já existe uma categoria chamada "Standard".');
+    expect(within(grupo).getByLabelText("Nome da categoria")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  test("Voltar e Avançar preservam as linhas da equipe, inclusive as já criadas", async () => {
+    instalarApiFalsa({
+      "GET /api/painel": PAINEL,
+      "GET /api/assistente": COM_QUARTOS,
+      "GET /api/perfis": PERFIS,
+      "GET /api/usuarios": [],
+      "POST /api/usuarios": { __status: 201, id: "x" },
+    });
+    const u = userEvent.setup();
+    telaApp("/configuracoes/assistente");
+    await screen.findByRole("heading", { name: "Equipe" });
+    const g1 = screen.getByRole("group", { name: "Usuário 1" });
+    await u.type(within(g1).getByLabelText("Nome"), "João");
+    await u.type(within(g1).getByLabelText("Login"), "joao");
+    await u.type(within(g1).getByLabelText("Senha inicial"), "senha123");
+    await u.click(screen.getByRole("button", { name: "+ Outro" }));
+    await u.type(within(screen.getByRole("group", { name: "Usuário 2" })).getByLabelText("Nome"), "Ana");
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    await screen.findByRole("heading", { name: "Categorias e quartos" });
+    await u.click(screen.getByRole("button", { name: "Avançar" }));
+    const volta1 = await screen.findByRole("group", { name: "Usuário 1" });
+    expect(within(volta1).getByLabelText("Nome")).toHaveValue("João");
+    expect(within(screen.getByRole("group", { name: "Usuário 2" })).getByLabelText("Nome")).toHaveValue("Ana");
+    // linha criada continua travada depois de ir e voltar
+    await u.clear(within(screen.getByRole("group", { name: "Usuário 2" })).getByLabelText("Nome"));
+    await u.click(screen.getByRole("button", { name: "Salvar e avançar" }));
+    await screen.findByRole("heading", { name: "Pronto" });
+    await u.click(screen.getByRole("button", { name: "Voltar" }));
+    const criada = await screen.findByRole("group", { name: "Usuário 1" });
+    expect(within(criada).getByText("Criado")).toBeInTheDocument();
+    expect(within(criada).getByLabelText("Nome")).toBeDisabled();
+  });
+
+  test("/configuracoes leva ao assistente enquanto não há quartos, e a Pousada depois", async () => {
+    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/assistente": VAZIO, "GET /api/config": CONFIG });
+    const { unmount } = telaApp("/configuracoes");
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/configuracoes/assistente"));
+    await screen.findByRole("heading", { name: "Primeira configuração" });
+    unmount();
+    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/assistente": COM_QUARTOS, "GET /api/config": CONFIG });
+    telaApp("/configuracoes");
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/configuracoes/pousada"));
+    await screen.findByRole("heading", { name: "Pousada" });
+  });
+
+  test("/configuracoes sem config.gerenciar não consulta o assistente", async () => {
+    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/categorias": [], "GET /api/quartos": [], "GET /api/tarifas/tabelas-base": [] });
+    telaApp("/configuracoes", { usuario: { permissoes: ["cadastros.gerenciar", "reservas.gerenciar"] } });
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/configuracoes/categorias"));
+    expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
+  });
+
+  test("troca de senha sem config.gerenciar não consulta nem redireciona", async () => {
+    instalarApiFalsa({ "PUT /api/usuarios/me/senha": { __status: 204 }, "GET /api/painel": PAINEL, "GET /api/config": CONFIG });
+    const u = userEvent.setup();
+    telaApp("/trocar-senha", { usuario: { ...ADMIN, permissoes: ["reservas.gerenciar"], trocarSenha: true } });
+    await trocarSenha(u);
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+    expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
+  });
+
+  test("falha ao consultar o assistente na troca de senha segue o destino normal", async () => {
+    instalarApiFalsa({
+      "PUT /api/usuarios/me/senha": { __status: 204 },
+      "GET /api/assistente": { __status: 500, codigo: "ERRO", mensagem: "Falhou." },
+      "GET /api/painel": PAINEL,
+      "GET /api/config": CONFIG,
+    });
+    const u = userEvent.setup();
+    telaApp("/trocar-senha", { usuario: { ...ADMIN, trocarSenha: true } });
+    await trocarSenha(u);
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+    expect(sessionStorage.getItem("erp.assistente-oferecido")).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ type Linha = {
 };
 
 const nova = (chave: number): Linha => ({ chave, nome: "", maxAdultos: "2", maxCriancas: "0", p1: null, p2: null, p3: null, extra: null, de: "", ate: "", bloco: "" });
+const chaveNome = (n: string) => n.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 const inteiro = (t: string): number | null => (/^\d+$/.test(t.trim()) ? Number(t) : null);
 
 /** Problemas de uma linha, ditos ao usuário (o botão fica desligado enquanto houver algum). */
@@ -37,13 +38,14 @@ function problemas(l: Linha, rotulo: string): string[] {
   ];
 }
 
-function CamposLinha({ l, mudar }: { l: Linha; mudar: (p: Partial<Linha>) => void }) {
+function CamposLinha({ l, mudar, erroNome }: { l: Linha; mudar: (p: Partial<Linha>) => void; erroNome?: string }) {
   return (
     <>
       <label className="campo">
         Nome da categoria
-        <input value={l.nome} onChange={(e) => mudar({ nome: e.target.value })} />
+        <input value={l.nome} aria-invalid={erroNome ? true : undefined} onChange={(e) => mudar({ nome: e.target.value })} />
       </label>
+      {erroNome && <p role="alert" className="erro-acao">{erroNome}</p>}
       <div className="cq__grade">
         <label className="campo">
           Máximo de adultos
@@ -134,6 +136,8 @@ export function PassoQuartos({ estado, aoAvancar, aoVoltar }: { estado: EstadoAs
     enviar.error instanceof ErroApi && enviar.error.codigo === "NUMERO_QUARTO_DUPLICADO"
       ? ((enviar.error.detalhes as { numeros?: string[] } | undefined)?.numeros ?? [])
       : [];
+  const nomeRepetido =
+    enviar.error instanceof ErroApi && enviar.error.codigo === "CATEGORIA_DUPLICADA" ? chaveNome(String((enviar.error.detalhes as { nome?: string } | undefined)?.nome ?? "")) : null;
   const emConflito = (l: Linha) => numeros.some((n) => Number(n) >= Number(l.de) && Number(n) <= Number(l.ate));
 
   return (
@@ -149,7 +153,7 @@ export function PassoQuartos({ estado, aoAvancar, aoVoltar }: { estado: EstadoAs
         {linhas.map((l, i) => (
           <fieldset key={l.chave} className={`assistente__linha${enviar.error && emConflito(l) ? " assistente__linha--conflito" : ""}`} aria-label={`Categoria ${i + 1}`}>
             <legend>Categoria {i + 1}</legend>
-            <CamposLinha l={l} mudar={(p) => mudar(l.chave, p)} />
+            <CamposLinha l={l} mudar={(p) => mudar(l.chave, p)} erroNome={nomeRepetido !== null && chaveNome(l.nome) === nomeRepetido ? enviar.error?.message : undefined} />
             {linhas.length > 1 && (
               <Botao variante="contorno" tamanho="pequeno" onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}>
                 Remover categoria {i + 1}
