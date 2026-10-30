@@ -12,7 +12,7 @@ import { SETORES, type Setor } from "../governanca/setores.js";
 import { criarProduto, definirProdutoAtivo, editarProduto, listarProdutos } from "./produtos.js";
 import { criarQuarto, criarQuartosEmLote, definirQuartoAtivo, editarQuarto, listarQuartos } from "./quartos.js";
 import { entrar, sair } from "./sessoes.js";
-import { criarUsuario, TAM_MIN_SENHA, trocarSenha } from "./usuarios.js";
+import { criarUsuario, definirUsuarioAtivo, editarUsuario, listarUsuarios, redefinirSenha, TAM_MIN_SENHA, trocarSenha } from "./usuarios.js";
 
 const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM");
 const centavos = z.number().int().min(0);
@@ -90,6 +90,7 @@ const corpoEdicaoProduto = z.object({
 });
 const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional(), incluirInativos: flagInativos });
 const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
+const corpoEdicaoUsuario = z.object({ nome: texto, perfil: texto });
 const corpoAbrirCaixa = z.object({ valorInicial: centavos });
 const corpoFecharCaixa = z.object({ contados: z.record(z.string(), centavos).default({}) });
 const corpoTrocaSenha = z
@@ -203,6 +204,25 @@ export function registrarRotasBase(app: FastifyInstance, ctx: Contexto): void {
     return res.status(201).send(await criarUsuario(ctx, corpoUsuario.parse(req.body), req.usuario.id));
   });
 
+  app.get("/api/usuarios", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return listarUsuarios(ctx);
+  });
+  app.put("/api/usuarios/:id", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return editarUsuario(ctx, paramId.parse(req.params).id, corpoEdicaoUsuario.parse(req.body), req.usuario);
+  });
+  for (const [acao, ativo] of [["desativar", false], ["reativar", true]] as const) {
+    app.post(`/api/usuarios/:id/${acao}`, async (req, res) => {
+      exigirPermissao(req.usuario, "config.gerenciar");
+      await definirUsuarioAtivo(ctx, paramId.parse(req.params).id, ativo, req.usuario);
+      return res.status(204).send();
+    });
+  }
+  app.post("/api/usuarios/:id/redefinir-senha", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return redefinirSenha(ctx, paramId.parse(req.params).id, req.usuario);
+  });
   app.put("/api/usuarios/me/senha", async (req, res) => {
     const { senhaAtual, novaSenha } = corpoTrocaSenha.parse(req.body);
     await trocarSenha(ctx, req.usuario.id, senhaAtual, novaSenha);
