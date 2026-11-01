@@ -4,6 +4,9 @@ import { Dinheiro } from "../../apps/server/src/shared/dinheiro.js";
 import type { Local } from "../../apps/server/src/financeiro/modelos/local.js";
 import type { Cliente, Fornecedor, ContaBancaria, Moeda } from "../../apps/server/src/financeiro/modelos/cadastros.js";
 import type { Lançamento } from "../../apps/server/src/financeiro/modelos/lançamento.js";
+import type { Faturamento } from "../../apps/server/src/financeiro/modelos/faturamento.js";
+import type { ContaReceber } from "../../apps/server/src/financeiro/modelos/conta-receber.js";
+import type { Movimento, Saldo } from "../../apps/server/src/financeiro/modelos/movimento.js";
 
 describe("Financeiro - Modelos", () => {
   describe("Local", () => {
@@ -512,6 +515,150 @@ describe("Financeiro - Modelos", () => {
         },
       };
       expect(lancamento.hora).toBe("14:30:00");
+    });
+  });
+
+  describe("Faturamento", () => {
+    const base = (): Faturamento => ({
+      id: gerarUUID(),
+      local_id: gerarUUID(),
+      cliente_id: gerarUUID(),
+      referencia_id: gerarUUID(),
+      referencia_tipo: "checkout",
+      valor_original: Dinheiro.de(100000),
+      valor_liquido: Dinheiro.de(95000),
+      data_vencimento: new Date("2026-12-10"),
+      forma_cobranca: "boleto",
+      numero_documento: "FAT-00001",
+      status: "aberto",
+      lançamentos_id: [],
+    });
+
+    test("construir com todos os campos", () => {
+      const fat = base();
+      expect(fat.status).toBe("aberto");
+      expect(fat.valor_liquido.centavos).toBe(95000);
+      expect(fat.referencia_tipo).toBe("checkout");
+    });
+
+    test("lançamentos_id vazio e preenchido", () => {
+      const fat = base();
+      expect(fat.lançamentos_id).toHaveLength(0);
+      fat.lançamentos_id.push(gerarUUID(), gerarUUID());
+      expect(fat.lançamentos_id).toHaveLength(2);
+    });
+
+    test("formas de cobrança e status", () => {
+      for (const forma of ["boleto", "pix", "deposito"] as const) {
+        expect({ ...base(), forma_cobranca: forma }.forma_cobranca).toBe(forma);
+      }
+      for (const status of ["aberto", "parcialmente_pago", "pago", "cancelado"] as const) {
+        expect({ ...base(), status }.status).toBe(status);
+      }
+    });
+  });
+
+  describe("ContaReceber", () => {
+    const base = (): ContaReceber => ({
+      id: gerarUUID(),
+      local_id: gerarUUID(),
+      cliente_id: gerarUUID(),
+      numero_documento: "FAT-00001",
+      valor_original: Dinheiro.de(100000),
+      valor_recebido: Dinheiro.de(30000),
+      data_emissao: new Date("2026-11-01"),
+      data_vencimento: new Date("2026-12-10"),
+      forma_pagamento: "boleto",
+      status: "parcialmente_recebido",
+      lançamentos_id: [],
+    });
+
+    test("valor_pendente é calculado", () => {
+      const r = base();
+      const pendente = r.valor_original.menos(r.valor_recebido);
+      expect(pendente.centavos).toBe(70000);
+      expect(r.valor_pendente).toBeUndefined();
+    });
+
+    test("campos opcionais", () => {
+      const r = base();
+      expect(r.tipo_documento).toBeUndefined();
+      expect(r.data_recebimento).toBeUndefined();
+      expect(r.conta_destino_id).toBeUndefined();
+      const contaId = gerarUUID();
+      const completo: ContaReceber = {
+        ...r,
+        tipo_documento: "fatura",
+        data_recebimento: new Date("2026-12-01"),
+        conta_destino_id: contaId,
+        valor_pendente: Dinheiro.zero(),
+        status: "recebido",
+      };
+      expect(completo.tipo_documento).toBe("fatura");
+      expect(completo.data_recebimento).toBeInstanceOf(Date);
+      expect(completo.conta_destino_id).toBe(contaId);
+      expect(completo.valor_pendente?.centavos).toBe(0);
+    });
+
+    test("lançamentos_id vazio e preenchido", () => {
+      const r = { ...base(), lançamentos_id: [gerarUUID()] };
+      expect(r.lançamentos_id).toHaveLength(1);
+      expect(base().lançamentos_id).toEqual([]);
+    });
+
+    test("formas de pagamento e status", () => {
+      for (const f of ["boleto", "pix", "deposito", "dinheiro", "transferencia"] as const) {
+        expect({ ...base(), forma_pagamento: f }.forma_pagamento).toBe(f);
+      }
+      for (const s of ["pendente", "parcialmente_recebido", "recebido", "cancelado"] as const) {
+        expect({ ...base(), status: s }.status).toBe(s);
+      }
+    });
+  });
+
+  describe("Movimento", () => {
+    const base = (): Movimento => ({
+      id: gerarUUID(),
+      local_id: gerarUUID(),
+      conta_id: gerarUUID(),
+      lancamento_id: gerarUUID(),
+      tipo: "credito",
+      valor: Dinheiro.de(10000),
+      saldo_anterior: Dinheiro.de(50000),
+      saldo_posterior: Dinheiro.de(60000),
+      data: new Date("2026-11-01"),
+      criado_em: new Date("2026-11-01T10:00:00Z"),
+    });
+
+    test("saldo_posterior de crédito = anterior + valor", () => {
+      const m = base();
+      expect(m.saldo_anterior.mais(m.valor).centavos).toBe(m.saldo_posterior.centavos);
+    });
+
+    test("saldo_posterior de débito = anterior - valor", () => {
+      const m: Movimento = { ...base(), tipo: "debito", saldo_posterior: Dinheiro.de(40000) };
+      expect(m.saldo_anterior.menos(m.valor).centavos).toBe(m.saldo_posterior.centavos);
+    });
+
+    test("todos os tipos", () => {
+      for (const t of ["credito", "debito", "transferencia_out", "transferencia_in"] as const) {
+        expect({ ...base(), tipo: t }.tipo).toBe(t);
+      }
+    });
+  });
+
+  describe("Saldo", () => {
+    test("construir com e sem criado_em", () => {
+      const s: Saldo = {
+        id: gerarUUID(),
+        conta_id: gerarUUID(),
+        data: new Date("2026-11-01"),
+        saldo: Dinheiro.de(60000),
+      };
+      expect(s.saldo.centavos).toBe(60000);
+      expect(s.criado_em).toBeUndefined();
+      const c: Saldo = { ...s, criado_em: new Date() };
+      expect(c.criado_em).toBeInstanceOf(Date);
     });
   });
 });
