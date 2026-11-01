@@ -19,7 +19,7 @@ export function MenuLateral({ atencao }: { atencao: number }) {
   const simples = visiveis.length <= 1 && visiveis[0]?.para !== "/configuracoes";
   return (
     <aside className={simples ? "menu menu--simples" : "menu"}>
-      <div className="menu__marca">Pousada</div>
+      <div className="menu__marca">ALICE</div>
       {!simples && (
       <nav aria-label="Menu principal" className="menu__itens">
         {visiveis.map((i) => (
