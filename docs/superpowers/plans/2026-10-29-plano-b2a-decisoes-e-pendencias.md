@@ -15,7 +15,7 @@
 
 ## Pendências aceitas
 - M4: chamados de quarto inativo seguem na lista.
-- M5: desativar o último quarto de uma categoria não olha reservas sem quarto atribuído. Aguarda decisão do dono.
+- M5 (resolvido): desativar o último quarto ativo de uma categoria com reservas sem quarto é bloqueado (`QUARTO_COM_RESERVAS`), por decisão do dono.
 - M6: `itensExibidos` vem do cliente; sem ganho de privilégio.
 - M8: `trocar_senha` é exigido só pela web, não pela API.
 - M12: produtos internos editáveis por chamada direta à API.

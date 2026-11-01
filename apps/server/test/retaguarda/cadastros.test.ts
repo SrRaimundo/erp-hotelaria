@@ -137,6 +137,13 @@ describe("quartos", () => {
     expect((await erro(definirQuartoAtivo(ctx, q101, true, "u1"))).codigo).toBe("CATEGORIA_INATIVA");
   });
 
+  test("último quarto ativo da categoria com reserva sem quarto → QUARTO_COM_RESERVAS; com outro quarto ativo, desativa", async () => {
+    const r = await criarReserva(ctx, dados, recepcao);
+    await definirQuartoAtivo(ctx, q101, false, "u1");
+    const e = await erro(definirQuartoAtivo(ctx, q102, false, "u1"));
+    expect([e.codigo, (e.detalhes as any).codigos]).toEqual(["QUARTO_COM_RESERVAS", [r.codigo]]);
+  });
+
   test("editar categoria de quarto com reserva ativa → QUARTO_COM_RESERVAS; sem reserva, troca", async () => {
     const outra = (await criarCategoria(ctx, { nome: "Luxo", maxAdultos: 2, maxCriancas: 0, comodidades: [] }, "u1")).id;
     const r = await criarReserva(ctx, { ...dados, quartoId: q101 }, recepcao);

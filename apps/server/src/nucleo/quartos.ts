@@ -80,6 +80,30 @@ async function exigirSemReservas(tx: Contexto, quarto: Quarto): Promise<void> {
   }
 }
 
+/** Último quarto ativo da categoria não sai enquanto houver reserva ativa da categoria ainda sem quarto atribuído. */
+async function exigirCategoriaAtendida(tx: Contexto, quarto: Quarto): Promise<void> {
+  const outro = await tx.db.selectFrom("quartos").select("id").where("categoria_id", "=", quarto.categoriaId).where("ativo", "=", 1).where("id", "!=", quarto.id).executeTakeFirst();
+  if (outro) return;
+  const config = await obterConfig(tx);
+  const dia = diaHoteleiro(tx.relogio.agora(), config.fuso, config.viradaDia);
+  const reservas = await tx.db
+    .selectFrom("reservas")
+    .select("codigo")
+    .where("categoria_id", "=", quarto.categoriaId)
+    .where("quarto_id", "is", null)
+    .where("estado", "in", ESTADOS_ATIVOS)
+    .where("saida", ">=", dia)
+    .orderBy("codigo")
+    .execute();
+  if (reservas.length > 0) {
+    throw new ErroDominio(
+      "QUARTO_COM_RESERVAS",
+      `O quarto ${quarto.numero} é o último ativo da categoria e há reservas sem quarto atribuído. Mude a categoria dessas reservas antes de desativá-lo.`,
+      { codigos: reservas.map((r) => r.codigo) },
+    );
+  }
+}
+
 /** Número livre = nenhum outro quarto (ativo ou inativo) o usa; o banco também garante a unicidade. */
 async function exigirNumeroLivre(tx: Contexto, numero: string, ignorarId?: string): Promise<void> {
   let q = tx.db.selectFrom("quartos").select("id").where("numero", "=", numero);
@@ -124,7 +148,10 @@ export async function editarQuarto(
 export async function definirQuartoAtivo(ctx: Contexto, id: string, ativo: boolean, ator: string): Promise<void> {
   await emTransacao(ctx, async (tx) => {
     const quarto = await obterQuarto(tx, id);
-    if (!ativo) await exigirSemReservas(tx, quarto);
+    if (!ativo) {
+      await exigirSemReservas(tx, quarto);
+      await exigirCategoriaAtendida(tx, quarto);
+    }
     else await exigirCategoria(tx, quarto.categoriaId);
     await tx.db.updateTable("quartos").set({ ativo: ativo ? 1 : 0 }).where("id", "=", id).execute();
     await auditar(tx, { ator, acao: ativo ? "quarto.reativar" : "quarto.desativar", alvoTipo: "quarto", alvoId: id });
