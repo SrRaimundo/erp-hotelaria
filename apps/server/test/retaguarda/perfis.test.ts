@@ -48,8 +48,11 @@ describe("perfis", () => {
     expect(a.limiteDesconto).toBe(5);
     const rec = (await listarPerfis(ctx)).find((p) => p.nome === "recepcao")!;
     expect(a.permissoes).toEqual(rec.permissoes);
+    // o identificador não muda ao renomear; um novo perfil com o rótulo antigo ganha sufixo
+    await editarPerfil(ctx, "mensageiro", { rotulo: "Carregador" }, admin);
     const b = await criarPerfil(ctx, { rotulo: "Mensageiro", copiarDe: "recepcao" }, admin);
     expect(b.nome).toBe("mensageiro-2");
+    await editarPerfil(ctx, "mensageiro-2", { rotulo: "Mala" }, admin);
     const c = await criarPerfil(ctx, { rotulo: "Mensageiro", copiarDe: "governanca" }, admin);
     expect(c.nome).toBe("mensageiro-3");
     expect((await criarPerfil(ctx, { rotulo: "Auxiliar de Manutenção", copiarDe: "admin" }, admin)).nome).toBe("auxiliar-de-manutencao");
@@ -164,5 +167,22 @@ describe("perfis", () => {
     expect(depois.permissoes).toEqual(["caixa.operar"]);
     expect(depois.limiteDesconto).toBe(9);
     expect((await app.inject({ method: "GET", url: "/api/sessoes/atual" })).statusCode).toBe(401);
+  });
+});
+
+describe("rótulo duplicado", () => {
+  test("criar com rótulo igual (sem caixa, acento ou espaços extras) → PERFIL_DUPLICADO", async () => {
+    await criarPerfil(ctx, { rotulo: "Mensageiro", copiarDe: "recepcao" }, admin);
+    for (const r of ["mensageiro", "  MENSAGEIRO ", "Recepcao", "recepção"]) {
+      expect((await erro(criarPerfil(ctx, { rotulo: r, copiarDe: "recepcao" }, admin))).codigo).toBe("PERFIL_DUPLICADO");
+    }
+    expect(await auditorias("perfil.criar")).toBe(1);
+  });
+
+  test("editar para rótulo de outro perfil → PERFIL_DUPLICADO; manter o próprio (mesmo com outra caixa) vale", async () => {
+    await criarPerfil(ctx, { rotulo: "Mensageiro", copiarDe: "recepcao" }, admin);
+    expect((await erro(editarPerfil(ctx, "mensageiro", { rotulo: "governança" }, admin))).codigo).toBe("PERFIL_DUPLICADO");
+    const e = await editarPerfil(ctx, "mensageiro", { rotulo: "MENSAGEIRO" }, admin);
+    expect(e.rotulo).toBe("MENSAGEIRO");
   });
 });

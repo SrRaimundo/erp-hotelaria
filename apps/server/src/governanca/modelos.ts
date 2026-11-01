@@ -27,7 +27,7 @@ async function itensDoModelo(ctx: Contexto, tipo: "saida" | "diaria"): Promise<I
     .execute();
   return ls
     .map((l): ItemChecklist => ({ id: l.id, etapa: l.etapa, texto: l.texto, ordem: l.ordem }))
-    .sort((a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa) || a.ordem - b.ordem);
+    .sort((a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa) || a.ordem - b.ordem || a.id.localeCompare(b.id));
 }
 
 export async function obterModelos(ctx: Contexto): Promise<Modelos> {
@@ -67,7 +67,7 @@ export async function listarItensAdmin(ctx: Contexto, tipo: Tipo): Promise<ItemA
     .select(["i.id", "i.etapa", "i.texto", "i.ordem", "i.ativo"])
     .where("m.tipo", "=", tipo)
     .execute();
-  return ls.map(comoItem).sort((a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa) || a.ordem - b.ordem);
+  return ls.map(comoItem).sort((a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa) || a.ordem - b.ordem || a.id.localeCompare(b.id));
 }
 
 async function itemOuErro(tx: Contexto, id: string) {
@@ -114,7 +114,7 @@ export async function editarItem(ctx: Contexto, id: string, d: { texto?: string;
 export async function moverItem(ctx: Contexto, id: string, direcao: "acima" | "abaixo", ator: string): Promise<void> {
   await emTransacao(ctx, async (tx) => {
     const item = await itemOuErro(tx, id);
-    const irmaos = await tx.db.selectFrom("checklist_itens").select(["id", "ordem"]).where("modelo_id", "=", item.modelo_id).where("etapa", "=", item.etapa).orderBy("ordem").execute();
+    const irmaos = await tx.db.selectFrom("checklist_itens").select(["id", "ordem"]).where("modelo_id", "=", item.modelo_id).where("etapa", "=", item.etapa).orderBy("ordem").orderBy("id").execute();
     const pos = irmaos.findIndex((i) => i.id === id);
     const vizinho = irmaos[direcao === "acima" ? pos - 1 : pos + 1];
     if (!vizinho) return;

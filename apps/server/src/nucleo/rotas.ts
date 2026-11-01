@@ -90,7 +90,7 @@ const corpoEdicaoProduto = z.object({
   setores: z.array(z.enum(SETORES as [Setor, ...Setor[]])).min(1, "Informe ao menos um setor"),
 });
 const queryProdutos = z.object({ setor: z.enum(SETORES as [Setor, ...Setor[]]).optional(), incluirInativos: flagInativos });
-const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(1, "Campo obrigatório"), perfil: texto });
+const corpoUsuario = z.object({ nome: texto, login: texto, senha: z.string().min(TAM_MIN_SENHA, `Use pelo menos ${TAM_MIN_SENHA} caracteres`), perfil: texto });
 const corpoEdicaoUsuario = z.object({ nome: texto, perfil: texto });
 const corpoPerfil = z.object({ rotulo: texto, copiarDe: texto });
 const corpoEdicaoPerfil = z.object({

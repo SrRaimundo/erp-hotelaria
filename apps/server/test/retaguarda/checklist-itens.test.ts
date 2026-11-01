@@ -97,6 +97,14 @@ describe("itens de checklist (administração)", () => {
     expect(await auditorias("checklist_item.reativar")).toBe(1);
   });
 
+  test("itens com a mesma ordem saem em ordem estável (por id)", async () => {
+    const l = (await listarItensAdmin(ctx, "saida")).filter((i) => i.etapa === "limpeza");
+    const [a, b] = l;
+    await ctx.db.updateTable("checklist_itens").set({ ordem: 99 }).where("id", "in", [a.id, b.id]).execute();
+    const depois = (await listarItensAdmin(ctx, "saida")).filter((i) => i.ordem === 99).map((i) => i.id);
+    expect(depois).toEqual([a.id, b.id].sort());
+  });
+
   test("valida texto, etapa, tipo e item inexistente", async () => {
     for (const texto of ["", "   ", "x".repeat(121)]) {
       expect((await erro(criarItem(ctx, { tipo: "saida", etapa: "limpeza", texto }, "usuario-admin"))).codigo).toBe("TEXTO_INVALIDO");

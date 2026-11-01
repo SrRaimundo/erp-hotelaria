@@ -206,6 +206,7 @@ function gerarSenhaTemporaria(): string {
 
 /** Gera senha temporária (mostrada uma única vez), exige troca no próximo acesso e encerra as sessões do usuário. */
 export async function redefinirSenha(ctx: Contexto, id: string, autor: UsuarioSessao): Promise<{ senhaTemporaria: string }> {
+  if (id === autor.id) throw new ErroDominio("OPERACAO_SOBRE_SI", "Você não pode redefinir a sua própria senha por aqui. Use Trocar senha.");
   const senhaTemporaria = gerarSenhaTemporaria();
   const { hash, salt } = await hashSenha(senhaTemporaria);
   await emTransacao(ctx, async (tx) => {

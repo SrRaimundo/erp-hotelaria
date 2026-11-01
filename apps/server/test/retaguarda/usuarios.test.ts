@@ -126,7 +126,7 @@ describe("permissões das rotas de usuários (R4)", () => {
     await criarUsuario(ctx, { nome: "Cad", login: "cad", senha: "senha-cad", perfil: "cadastrista" }, "usuario-admin");
     const cad = { authorization: `Bearer ${(await entrar(ctx, "cad", "senha-cad")).token}` };
     const gov = await entrarComo(ctx, "governanca");
-    const novo = { nome: "Zé", login: "ze", senha: "s", perfil: "recepcao" };
+    const novo = { nome: "Zé", login: "ze", senha: "senha-ze", perfil: "recepcao" };
     for (const h of [cad, gov]) {
       expect((await app.inject({ method: "POST", url: "/api/usuarios", headers: h, payload: novo })).statusCode).toBe(403);
       expect((await app.inject({ method: "GET", url: "/api/usuarios", headers: h })).statusCode).toBe(403);
@@ -158,5 +158,47 @@ describe("exigirAdministradorRestante", () => {
     await ctx.db.updateTable("usuarios").set({ ativo: 0 }).where("id", "=", "usuario-admin").execute();
     await checar({ usuarioId: ana, inativar: true });
     await checar({ usuarioId: ana, novoPerfil: "governanca" });
+  });
+});
+
+describe("redefinir a própria senha e senha inicial", () => {
+  test("R9: redefinir a própria senha → OPERACAO_SOBRE_SI, sem mudar a senha nem as sessões", async () => {
+    const { token } = await entrar(ctx, "admin", "admin");
+    expect((await erro(redefinirSenha(ctx, admin.id, admin))).codigo).toBe("OPERACAO_SOBRE_SI");
+    expect(await sessaoPorToken(ctx, token)).toBeDefined();
+    expect((await entrar(ctx, "admin", "admin")).usuario.id).toBe(admin.id);
+    const app = criarApp(ctx);
+    const r = await app.inject({ method: "POST", url: `/api/usuarios/${admin.id}/redefinir-senha`, headers: { authorization: `Bearer ${token}` } });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().codigo).toBe("OPERACAO_SOBRE_SI");
+    expect(await ctx.db.selectFrom("auditoria").select("id").where("acao", "=", "usuario.redefinir_senha").execute()).toHaveLength(0);
+  });
+
+  test("M9: senha inicial com menos de 6 caracteres é recusada (400); com 6 vale", async () => {
+    const app = criarApp(ctx);
+    const adm = await entrarComo(ctx, "admin");
+    const base = { nome: "Zé", login: "ze", perfil: "recepcao" };
+    expect((await app.inject({ method: "POST", url: "/api/usuarios", headers: adm, payload: { ...base, senha: "12345" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/usuarios", headers: adm, payload: { ...base, senha: "123456" } })).statusCode).toBe(201);
+  });
+});
+
+describe("permissão revogada vale na requisição seguinte", () => {
+  test("perfil sem usuários ativos (só inativos) segue com usuários; revogar permissão → 403 na próxima requisição", async () => {
+    const app = criarApp(ctx);
+    await ctx.db.insertInto("perfis").values({ nome: "caixa2", rotulo: "Caixa 2", limite_desconto: 0 }).execute();
+    await ctx.db.insertInto("perfil_permissoes").values({ perfil: "caixa2", permissao: "cadastros.gerenciar" }).execute();
+    const u = await criarUsuario(ctx, { nome: "Cai", login: "cai", senha: "senha-cai", perfil: "caixa2" }, "usuario-admin");
+    const h = { authorization: `Bearer ${(await entrar(ctx, "cai", "senha-cai")).token}` };
+    expect((await app.inject({ method: "GET", url: "/api/categorias?incluirInativos=1", headers: h })).statusCode).toBe(200);
+    const adm = await entrarComo(ctx, "admin");
+    const ed = await app.inject({ method: "PUT", url: "/api/perfis/caixa2", headers: adm, payload: { permissoes: ["reservas.gerenciar"] } });
+    expect(ed.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/categorias?incluirInativos=1", headers: h })).statusCode).toBe(403);
+    // desativado, o usuário continua contando: o perfil não pode ser excluído
+    await definirUsuarioAtivo(ctx, u.id, false, admin);
+    const ex = await app.inject({ method: "DELETE", url: "/api/perfis/caixa2", headers: adm });
+    expect(ex.statusCode).toBe(422);
+    expect(ex.json().codigo).toBe("PERFIL_COM_USUARIOS");
   });
 });

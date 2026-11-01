@@ -3,7 +3,7 @@ import { criarContextoTeste } from "../ajuda.js";
 import { criarCategoria, definirCategoriaAtiva, listarCategorias } from "../../src/nucleo/categorias.js";
 import { obterConfig, salvarConfig } from "../../src/nucleo/pousada.js";
 import { criarProduto, definirProdutoAtivo, listarProdutos } from "../../src/nucleo/produtos.js";
-import { criarQuarto, definirQuartoAtivo, listarQuartos, mudarSituacaoQuarto, obterQuarto } from "../../src/nucleo/quartos.js";
+import { criarQuarto, criarQuartosEmLote, definirQuartoAtivo, editarQuarto, listarQuartos, mudarSituacaoQuarto, obterQuarto } from "../../src/nucleo/quartos.js";
 import { emTransacao } from "../../src/shared/contexto.js";
 import { ErroDominio } from "../../src/shared/erros.js";
 
@@ -109,5 +109,22 @@ describe("pousada, categorias e quartos", () => {
     for (const n of ["em_manutencao", "sujo", "em_manutencao", "livre", "bloqueado", "livre"] as const) await mudar(ctx, q.id, n);
     const erro = await mudar(ctx, q.id, "sujo").catch((e) => e);
     expect(erro.codigo).toBe("TRANSICAO_QUARTO_INVALIDA");
+  });
+});
+
+describe("bloco do quarto", () => {
+  test("é aparado; vazio vira ausente; passa de 40 caracteres → BLOCO_INVALIDO", async () => {
+    const { ctx, cat } = await cenario();
+    expect((await criarQuarto(ctx, { numero: "20", categoriaId: cat.id, bloco: "  A  " }, "u1")).bloco).toBe("A");
+    expect((await criarQuarto(ctx, { numero: "21", categoriaId: cat.id, bloco: "   " }, "u1")).bloco).toBeNull();
+    const longo = "x".repeat(41);
+    const falha = async (p: Promise<unknown>) => p.then(() => null, (e: ErroDominio) => e.codigo);
+    expect(await falha(criarQuarto(ctx, { numero: "22", categoriaId: cat.id, bloco: longo }, "u1"))).toBe("BLOCO_INVALIDO");
+    expect(await falha(criarQuartosEmLote(ctx, { categoriaId: cat.id, de: 30, ate: 31, bloco: longo }, "u1"))).toBe("BLOCO_INVALIDO");
+    const q = await criarQuarto(ctx, { numero: "23", categoriaId: cat.id }, "u1");
+    expect(await falha(editarQuarto(ctx, q.id, { numero: "23", categoriaId: cat.id, bloco: longo }, "u1"))).toBe("BLOCO_INVALIDO");
+    expect((await editarQuarto(ctx, q.id, { numero: "23", categoriaId: cat.id, bloco: " B " }, "u1")).bloco).toBe("B");
+    const lote = await criarQuartosEmLote(ctx, { categoriaId: cat.id, de: 40, ate: 41, bloco: " C " }, "u1");
+    expect(lote.map((x) => x.bloco)).toEqual(["C", "C"]);
   });
 });

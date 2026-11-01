@@ -52,9 +52,19 @@ async function perfilOuErro(tx: Contexto, nome: string): Promise<Perfil> {
   return p;
 }
 
+/** Dois perfis não podem ter o mesmo rótulo (ignora caixa, acentos, espaços e pontuação). */
+async function exigirRotuloLivre(tx: Contexto, rotulo: string, exceto?: string): Promise<void> {
+  const outros = await tx.db.selectFrom("perfis").select(["nome", "rotulo"]).execute();
+  const chave = slug(rotulo);
+  if (outros.some((p) => p.nome !== exceto && slug(p.rotulo) === chave)) {
+    throw new ErroDominio("PERFIL_DUPLICADO", `Já existe um perfil chamado "${rotulo.trim()}".`, { rotulo: rotulo.trim() });
+  }
+}
+
 export async function criarPerfil(ctx: Contexto, d: { rotulo: string; copiarDe: string }, autor: UsuarioSessao): Promise<Perfil> {
   return emTransacao(ctx, async (tx) => {
     const origem = await perfilOuErro(tx, d.copiarDe);
+    await exigirRotuloLivre(tx, d.rotulo);
     const base = slug(d.rotulo);
     let nome = base;
     for (let n = 2; await tx.db.selectFrom("perfis").select("nome").where("nome", "=", nome).executeTakeFirst(); n++) nome = `${base}-${n}`;
@@ -74,6 +84,7 @@ export async function editarPerfil(
 ): Promise<Perfil> {
   return emTransacao(ctx, async (tx) => {
     const atual = await perfilOuErro(tx, nome);
+    if (d.rotulo !== undefined) await exigirRotuloLivre(tx, d.rotulo, nome);
     let permissoes: string[] | undefined;
     if (d.permissoes) {
       const invalidas = d.permissoes.filter((p) => !(PERMISSOES as readonly string[]).includes(p));
