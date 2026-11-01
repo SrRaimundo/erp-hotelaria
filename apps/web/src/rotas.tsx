@@ -4,9 +4,17 @@ import { ExigePermissao } from "./auth/ExigePermissao";
 import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
+import { Assistente } from "./telas/assistente/Assistente";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
+import { TelaChecklists } from "./telas/configuracoes/TelaChecklists";
+import { TelaCategoriasQuartos } from "./telas/configuracoes/TelaCategoriasQuartos";
+import { LayoutConfiguracoes, PrimeiraConfiguracao } from "./telas/configuracoes/LayoutConfiguracoes";
+import { TelaProdutos } from "./telas/configuracoes/TelaProdutos";
+import { TelaPerfis } from "./telas/configuracoes/TelaPerfis";
+import { TelaPousada } from "./telas/configuracoes/TelaPousada";
+import { TelaUsuarios } from "./telas/configuracoes/TelaUsuarios";
 import { TelaMapa } from "./telas/mapa/TelaMapa";
 import { TelaNovaReserva } from "./telas/nova-reserva/TelaNovaReserva";
 import { TelaReservas } from "./telas/reservas/TelaReservas";
@@ -24,6 +32,16 @@ export function AppRotas() {
           <Route path="/reservas/nova" element={<ExigePermissao permissao="reservas.gerenciar"><TelaNovaReserva /></ExigePermissao>} />
           <Route path="/caixa" element={<ExigePermissao permissao="caixa.operar"><TelaCaixa /></ExigePermissao>} />
           <Route path="/governanca" element={<ExigePermissao permissao="quartos.situacao"><TelaGovernanca /></ExigePermissao>} />
+          <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
+            <Route index element={<PrimeiraConfiguracao />} />
+            <Route path="pousada" element={<ExigePermissao permissao="config.gerenciar"><TelaPousada /></ExigePermissao>} />
+            <Route path="categorias" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaCategoriasQuartos /></ExigePermissao>} />
+            <Route path="usuarios" element={<ExigePermissao permissao="config.gerenciar"><TelaUsuarios /></ExigePermissao>} />
+            <Route path="perfis" element={<ExigePermissao permissao="config.gerenciar"><TelaPerfis /></ExigePermissao>} />
+            <Route path="produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><TelaProdutos /></ExigePermissao>} />
+            <Route path="assistente" element={<ExigePermissao permissao="config.gerenciar"><Assistente /></ExigePermissao>} />
+            <Route path="checklists" element={<ExigePermissao permissao="config.gerenciar"><TelaChecklists /></ExigePermissao>} />
+          </Route>
         </Route>
       </Route>
     </Routes>

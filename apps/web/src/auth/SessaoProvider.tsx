@@ -1,10 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { chamarApi, CHAVE_TOKEN, definirToken, EVENTO_SESSAO_EXPIRADA } from "../api/cliente";
 import type { UsuarioSessao } from "../api/tipos";
 
 export const CHAVE_USUARIO = "erp.usuario";
+/** Marca (por aba) que houve um login e a oferta do assistente ainda não foi decidida. */
+export const CHAVE_VERIFICAR_ASSISTENTE = "erp.verificar-assistente";
+/** Intervalo mínimo entre releituras da sessão disparadas pelo foco da janela. */
+export const INTERVALO_FOCO_MS = 60_000;
 
 type Sessao = {
   usuario: UsuarioSessao | null;
@@ -12,6 +16,8 @@ type Sessao = {
   sair(): Promise<void>;
   trocarSenha(atual: string, nova: string): Promise<void>;
   pode(permissao: string): boolean;
+  /** Relê o usuário da sessão no servidor (permissões e limite de desconto atuais do perfil). */
+  atualizar(): Promise<void>;
 };
 
 const Contexto = createContext<Sessao | null>(null);
@@ -33,6 +39,11 @@ function guardar(usuario: UsuarioSessao): void {
 function limparArmazenamento(): void {
   definirToken(null);
   localStorage.removeItem(CHAVE_USUARIO);
+  try {
+    sessionStorage.removeItem(CHAVE_VERIFICAR_ASSISTENTE);
+  } catch {
+    // armazenamento de sessão indisponível: nada a limpar
+  }
 }
 
 export function SessaoProvider({ children }: { children: ReactNode }) {
@@ -55,6 +66,11 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     const r = await chamarApi<{ token: string; usuario: UsuarioSessao }>("POST", "/api/sessoes", { login, senha });
     definirToken(r.token);
     guardar(r.usuario);
+    try {
+      sessionStorage.setItem(CHAVE_VERIFICAR_ASSISTENTE, "1");
+    } catch {
+      // sem armazenamento de sessão: o assistente deixa de ser oferecido, só isso
+    }
     setUsuario(r.usuario);
   }, []);
 
@@ -79,9 +95,43 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [usuario],
   );
 
+  // Sessão expirada (401) já encerra pelo evento disparado no cliente; qualquer outra falha mantém o usuário guardado.
+  const atualizar = useCallback(async () => {
+    const token = localStorage.getItem(CHAVE_TOKEN);
+    if (!token) return;
+    try {
+      const novo = await chamarApi<UsuarioSessao>("GET", "/api/sessoes/atual");
+      // Resposta que chega depois de sair (ou de outro login) não pode regravar o usuário.
+      if (localStorage.getItem(CHAVE_TOKEN) !== token) return;
+      guardar(novo);
+      setUsuario((atual) => (atual && JSON.stringify(atual) === JSON.stringify(novo) ? atual : novo));
+    } catch {
+      // sem conexão ou erro do servidor: segue com o que já está guardado
+    }
+  }, []);
+
+  const logado = usuario !== null;
+  useEffect(() => {
+    if (logado) void atualizar();
+  }, [logado, atualizar]);
+
+  // Ao voltar para a janela, relê as permissões (no máximo uma vez por minuto).
+  const ultimaLeitura = useRef(Date.now());
+  useEffect(() => {
+    if (!logado) return;
+    ultimaLeitura.current = Date.now();
+    const aoFocar = () => {
+      if (Date.now() - ultimaLeitura.current < INTERVALO_FOCO_MS) return;
+      ultimaLeitura.current = Date.now();
+      void atualizar();
+    };
+    window.addEventListener("focus", aoFocar);
+    return () => window.removeEventListener("focus", aoFocar);
+  }, [logado, atualizar]);
+
   const valor = useMemo<Sessao>(
-    () => ({ usuario, entrar, sair, trocarSenha, pode: (p) => usuario?.permissoes.includes(p) ?? false }),
-    [usuario, entrar, sair, trocarSenha],
+    () => ({ usuario, entrar, sair, trocarSenha, atualizar, pode: (p) => usuario?.permissoes.includes(p) ?? false }),
+    [usuario, entrar, sair, trocarSenha, atualizar],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }
@@ -92,9 +142,14 @@ export function useSessao(): Sessao {
   return s;
 }
 
-/** Rota inicial após o login: perfis só de governança caem direto em /governanca. */
+/**
+ * Rota inicial após o login: governança-only vai a /governanca; sem reservas mas com configuração, a /configuracoes.
+ */
 export function rotaInicial(u: UsuarioSessao): string {
-  return u.permissoes.length === 1 && u.permissoes[0] === "quartos.situacao" ? "/governanca" : "/";
+  const tem = (p: string) => u.permissoes.includes(p);
+  if (u.permissoes.length === 1 && tem("quartos.situacao")) return "/governanca";
+  if (!tem("reservas.gerenciar") && (tem("config.gerenciar") || tem("cadastros.gerenciar"))) return "/configuracoes";
+  return "/";
 }
 
 /**

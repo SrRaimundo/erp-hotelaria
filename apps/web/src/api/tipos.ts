@@ -10,6 +10,7 @@ export type { Categoria } from "@server/nucleo/categorias";
 export type { Hospede } from "@server/nucleo/hospedes";
 export type { FormaPagamento } from "@server/nucleo/formas-pagamento";
 export type { Produto } from "@server/nucleo/produtos";
+export type { ItemAdmin, Etapa } from "@server/governanca/modelos";
 export type { Setor } from "@server/governanca/setores";
 export type { ResumoCaixa } from "@server/nucleo/caixa";
 
@@ -17,4 +18,5 @@ export type ErroApiDados = { codigo: string; mensagem: string; detalhes?: unknow
 export type { PreviaCheckout } from "@server/hospedagem/checkout";
 export type { Reserva } from "@server/hospedagem/reservas";
 export type { ConfigPousada } from "@server/nucleo/pousada";
-export type { Canal } from "@server/tarifas/regras";
+export type { Canal, TabelaBaseCategoria } from "@server/tarifas/regras";
+export type { Perfil } from "@server/nucleo/perfis";

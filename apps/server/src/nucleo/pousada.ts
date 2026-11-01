@@ -25,6 +25,8 @@ export type ConfigPousada = {
   idadeAdulto: number;
   limiteCriancasGratis: number;
   camareiraLancaFrigobar: boolean;
+  /** Assistente de primeira configuração: o passo da equipe foi pulado. */
+  assistenteEquipePulado: boolean;
 };
 
 export const CONFIG_PADRAO: ConfigPousada = {
@@ -42,6 +44,7 @@ export const CONFIG_PADRAO: ConfigPousada = {
   idadeAdulto: 12,
   limiteCriancasGratis: 1,
   camareiraLancaFrigobar: false,
+  assistenteEquipePulado: false,
 };
 
 function mesclar(base: ConfigPousada, parcial: Partial<ConfigPousada>): ConfigPousada {

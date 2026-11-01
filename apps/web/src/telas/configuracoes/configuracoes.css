@@ -1,0 +1,81 @@
+.configuracoes { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.configuracoes__submenu { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 16px; }
+.configuracoes__item { color: var(--texto); text-decoration: none; border-radius: var(--raio-controle); padding: 9px 12px; }
+.configuracoes__item:hover { background: var(--superficie); }
+.configuracoes__item.active { background: var(--superficie); border: 1px solid var(--borda); font-weight: 600; padding: 8px 11px; }
+.configuracoes__conteudo { min-width: 0; }
+@media (max-width: 899px) {
+  .configuracoes { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .configuracoes__submenu { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .configuracoes__item { white-space: nowrap; border: 1px solid var(--borda); }
+}
+
+.lista-cadastro { display: flex; flex-direction: column; gap: 12px; }
+.lista-cadastro__topo { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.lista-cadastro__topo h1 { font-size: 1.5rem; margin-right: auto; }
+.lista-cadastro__filtro { display: flex; align-items: center; gap: 6px; color: var(--texto-suave); font-size: 0.9375rem; }
+.lista-cadastro__rolagem { overflow-x: auto; }
+.lista-cadastro__tabela { width: 100%; border-collapse: collapse; }
+.lista-cadastro__tabela th, .lista-cadastro__tabela td { text-align: left; padding: 8px; border-bottom: 1px solid var(--borda); }
+.lista-cadastro__tabela th { color: var(--texto-suave); font-size: 0.8125rem; }
+.lista-cadastro__linha--inativa td { opacity: 0.6; }
+.lista-cadastro__tabela .lista-cadastro__acoes { text-align: right; width: 1%; white-space: nowrap; }
+.lista-cadastro__vazio { color: var(--texto-suave); }
+.lista-cadastro__oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.pousada { display: flex; flex-direction: column; gap: 16px; max-width: 760px; }
+.pousada h1 { font-size: 1.5rem; }
+.pousada__secao { display: flex; flex-direction: column; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; }
+.pousada__secao h2 { font-size: 1.0625rem; }
+.pousada__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.pousada__grupo { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.pousada__grupo legend { font-weight: 600; margin-bottom: 6px; }
+.pousada__marcar { display: flex; align-items: center; gap: 8px; }
+.pousada select, .pousada input[type="time"], .pousada input[type="number"] {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;
+}
+.pousada__rodape { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.pousada__ok { color: var(--verde); font-size: 0.9375rem; }
+
+.cq { display: flex; flex-direction: column; gap: 24px; }
+.cq__barra { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.cq__filtro { min-width: 220px; }
+.cq__filtro select, .cq .campo select {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;
+}
+.cq__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.cq__ativo { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 1px solid var(--borda); padding-top: 12px; margin-top: 8px; }
+.cq__aviso { color: var(--texto-suave); font-size: 0.9375rem; }
+.cq__extra { display: block; }
+.ur__senha { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; letter-spacing: 0.08em; user-select: all; margin-bottom: 8px; }
+.cq__dicas { padding-left: 18px; }
+
+.checklists { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
+.checklists h1 { font-size: 1.5rem; }
+.checklists__abas { display: flex; gap: 8px; }
+.checklists__painel { display: flex; flex-direction: column; gap: 16px; }
+.checklists__etapa { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; }
+.checklists__etapa h2 { font-size: 1.0625rem; }
+.checklists__lista { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.checklists__item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.checklists__item--edicao { align-items: flex-end; justify-content: flex-start; }
+.checklists__item--edicao .campo { flex: 1 1 260px; }
+.checklists__item--inativo .checklists__texto { color: var(--texto-suave); }
+.checklists__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.checklists__novo { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px; width: 100%; }
+.checklists__novo .campo { flex: 1 1 260px; }
+
+.assistente { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.assistente h1 { font-size: 1.5rem; }
+.assistente__passos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.assistente__passo { padding: 6px 12px; border: 1px solid var(--borda); border-radius: var(--raio-controle); color: var(--texto-suave); }
+.assistente__passo[aria-current="step"] { color: inherit; font-weight: 600; border-color: currentColor; }
+.assistente__linha { display: flex; flex-direction: column; gap: 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; margin: 0; }
+.assistente__linha legend { font-weight: 600; padding: 0 4px; }
+.assistente__linha--conflito { border-color: var(--terracota); }
+.assistente__linha--criada { opacity: 0.7; }
+.assistente__linha select, .assistente__linha input, .assistente .campo select {
+  border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px;
+}
+.assistente__acoes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.assistente__acoes-direita { display: flex; flex-wrap: wrap; gap: 8px; }

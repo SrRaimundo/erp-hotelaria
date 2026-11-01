@@ -9,6 +9,7 @@ export async function carregarUsuarioSessao(ctx: Contexto, usuarioId: string): P
     .innerJoin("perfis", "perfis.nome", "usuarios.perfil")
     .select(["usuarios.id", "usuarios.nome", "usuarios.perfil", "usuarios.trocar_senha", "perfis.limite_desconto"])
     .where("usuarios.id", "=", usuarioId)
+    .where("usuarios.ativo", "=", 1)
     .executeTakeFirst();
   if (!u) return undefined;
   const perms = await ctx.db.selectFrom("perfil_permissoes").select("permissao").where("perfil", "=", u.perfil).orderBy("permissao").execute();
@@ -25,7 +26,9 @@ export async function carregarUsuarioSessao(ctx: Contexto, usuarioId: string): P
 export async function entrar(ctx: Contexto, login: string, senha: string): Promise<{ token: string; usuario: UsuarioSessao }> {
   const usuarioId = await verificarCredenciais(ctx, login, senha);
   const token = randomBytes(32).toString("hex");
-  await ctx.db.insertInto("sessoes").values({ token, usuario_id: usuarioId, criada_em: ctx.relogio.agora().toISOString() }).execute();
+  const agora = ctx.relogio.agora().toISOString();
+  await ctx.db.insertInto("sessoes").values({ token, usuario_id: usuarioId, criada_em: agora }).execute();
+  await ctx.db.updateTable("usuarios").set({ ultimo_acesso: agora }).where("id", "=", usuarioId).execute();
   const usuario = (await carregarUsuarioSessao(ctx, usuarioId))!;
   return { token, usuario };
 }

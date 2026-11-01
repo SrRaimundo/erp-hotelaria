@@ -54,18 +54,19 @@ function titulo(e: IdEtapa, tipo: Tipo): string {
   }
 }
 
-function estadoInicial(quartoId: string, tipo: Tipo, situacaoAtual: string, reservaId: string | null, situacaoDesde: string | null): { estado: EstadoChecklist; descartado: boolean } {
+function estadoInicial(quartoId: string, tipo: Tipo, situacaoAtual: string, reservaId: string | null, situacaoDesde: string | null): { estado: EstadoChecklist; descartado: boolean; novo: boolean } {
   const r = lerRascunho(quartoId, tipo);
   // O rascunho só vale para a mesma estadia (arrumação) ou o mesmo período sujo (saída).
   const mesmoContexto = r !== null && r.situacaoQuarto === situacaoAtual && (r.reservaId ?? null) === reservaId && (r.situacaoDesde ?? null) === situacaoDesde;
   if (r && mesmoContexto) {
     const { salvoEm: _, ...estado } = r;
-    return { estado, descartado: false };
+    return { estado, descartado: false, novo: false };
   }
   if (r) apagarRascunho(quartoId, tipo);
   return {
     estado: { situacaoQuarto: situacaoAtual, reservaId, situacaoDesde, execucaoId: novoIdLocal(), iniciadoEm: new Date().toISOString(), etapa: "limpeza", respostas: {}, frigobar: {} },
     descartado: r !== null,
+    novo: true,
   };
 }
 
@@ -99,7 +100,19 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, reservaId = null, 
   }, [quarto.id, tipo, estado, respondeuAlgo]);
 
   const modelos = modelosQ.data;
-  const itens = useMemo(() => (modelos ? modelos[tipo] : []), [modelos, tipo]);
+  // Checklist novo: guarda os ids exibidos assim que o modelo chega. Rascunho antigo (sem o campo) não captura nada,
+  // porque o modelo de hoje pode não ser o que a pessoa viu; nesse caso o servidor usa o comportamento anterior.
+  const capturar = inicio.novo && estado.itensExibidos === undefined && modelos !== undefined;
+  useEffect(() => {
+    if (capturar && modelos) setEstado((s) => (s.itensExibidos ? s : { ...s, itensExibidos: modelos[tipo].map((i) => i.id) }));
+  }, [capturar, modelos, tipo]);
+  const exibidos = estado.itensExibidos;
+  const itens = useMemo(() => {
+    const todos = modelos ? modelos[tipo] : [];
+    if (!exibidos) return todos;
+    const visiveis = new Set(exibidos);
+    return todos.filter((i) => visiveis.has(i.id));
+  }, [modelos, tipo, exibidos]);
   const impedimento = impedimentoDe(itens, estado.respostas, defeitosAbertos);
   // "Liberado" que deixou de valer não fica escondido no rascunho nem é enviado.
   const liberadoInvalido = estado.resultado === "liberado" && impedimento !== undefined;
@@ -279,6 +292,7 @@ export function FluxoChecklist({ quarto, tipo, situacaoAtual, reservaId = null, 
       execucaoId: estado.execucaoId,
       tipo,
       iniciadoEm: estado.iniciadoEm,
+      ...(estado.itensExibidos ? { itensExibidos: estado.itensExibidos } : {}),
       respostas: itens.map((i) => {
         const r = respostas[i.id] ?? {};
         const obs = r.observacao?.trim();

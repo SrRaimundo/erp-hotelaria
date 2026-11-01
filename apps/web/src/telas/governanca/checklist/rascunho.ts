@@ -20,6 +20,8 @@ export type EstadoChecklist = {
   /** Identifica este checklist no servidor: reenviar o mesmo Concluir não grava duas vezes. */
   execucaoId: string;
   iniciadoEm: string;
+  /** Ids dos itens exibidos quando o checklist foi aberto; o servidor só exige esses. Rascunhos antigos não têm o campo. */
+  itensExibidos?: string[];
   etapa: string;
   respostas: Record<string, Resposta>;
   frigobar: Record<string, number>;

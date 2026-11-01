@@ -45,6 +45,7 @@ export function CadastroRapidoHospede({ inicial, aoSalvar, aoCancelar }: Props) 
 
   async function enviar(ev: FormEvent) {
     ev.preventDefault();
+    ev.stopPropagation(); // o submit não deve subir (via portal) até o formulário que contém o seletor
     setErros({});
     setGeral(null);
     const corpo: Record<string, unknown> = {

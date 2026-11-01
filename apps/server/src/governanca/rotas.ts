@@ -6,7 +6,7 @@ import { emTransacao } from "../shared/contexto.js";
 import { abrirChamado, avisarControleFaltando, cancelarAvisoControle, cancelarChamado, listarChamados, resolverChamado } from "./chamados.js";
 import { concluirChecklist } from "./checklists.js";
 import { lancarFrigobar } from "./frigobar.js";
-import { obterModelos } from "./modelos.js";
+import { criarItem, editarItem, listarItensAdmin, moverItem, obterModelos } from "./modelos.js";
 
 export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): void {
   app.get("/api/checklists/modelos", async (req) => {
@@ -73,6 +73,7 @@ export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): v
     tipo: z.enum(["saida", "diaria"]),
     iniciadoEm: z.string().min(1, "Campo obrigatório"),
     respostas: z.array(corpoResposta),
+    itensExibidos: z.array(textoId).max(500).optional(),
     frigobar: z.array(z.object({ produtoId: textoId, quantidade })).optional(),
     resultado: z.enum(["liberado", "bloqueado"]).optional(),
     motivo: observacao.optional(),
@@ -88,5 +89,28 @@ export function registrarRotasGovernanca(app: FastifyInstance, ctx: Contexto): v
     exigirPermissao(req.usuario, "conta.lancar");
     const { id } = idParam.parse(req.params);
     return lancarFrigobar(ctx, id, corpoFrigobar.parse(req.body), req.usuario);
+  });
+
+  const tipoChecklist = z.enum(["saida", "diaria"]);
+  const textoItem = z.string().trim().min(1, "Informe o texto do item").max(120, "No máximo 120 caracteres");
+  app.get("/api/checklists/itens", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    return listarItensAdmin(ctx, z.object({ tipo: tipoChecklist }).parse(req.query).tipo);
+  });
+  app.post("/api/checklists/itens", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    const corpo = z.object({ tipo: tipoChecklist, etapa: z.enum(["limpeza", "enxoval", "equipamento", "controles"]), texto: textoItem }).parse(req.body);
+    return criarItem(ctx, corpo, req.usuario.id);
+  });
+  app.put("/api/checklists/itens/:id", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    const corpo = z.object({ texto: textoItem.optional(), ativo: z.boolean().optional() }).parse(req.body);
+    return editarItem(ctx, idParam.parse(req.params).id, corpo, req.usuario.id);
+  });
+  app.post("/api/checklists/itens/:id/mover", async (req) => {
+    exigirPermissao(req.usuario, "config.gerenciar");
+    const { direcao } = z.object({ direcao: z.enum(["acima", "abaixo"]) }).parse(req.body);
+    await moverItem(ctx, idParam.parse(req.params).id, direcao, req.usuario.id);
+    return { ok: true };
   });
 }

@@ -3,6 +3,7 @@ import type { Contexto } from "../shared/contexto.js";
 import { registrarRotasBase } from "../nucleo/rotas.js";
 import { registrarRotasGovernanca } from "../governanca/rotas.js";
 import { registrarRotasHospedagem } from "../hospedagem/rotas.js";
+import { registrarRotasRetaguarda } from "../retaguarda/rotas.js";
 import { registrarRotasTarifas } from "../tarifas/rotas.js";
 import { registrarAutenticacao } from "./autenticacao.js";
 import { tratarErro } from "./erros-http.js";
@@ -16,6 +17,7 @@ export function criarApp(ctx: Contexto, opcoes: { webDir?: string } = {}): Fasti
   registrarRotasTarifas(app, ctx);
   registrarRotasHospedagem(app, ctx);
   registrarRotasGovernanca(app, ctx);
+  registrarRotasRetaguarda(app, ctx);
   if (opcoes.webDir) registrarEstaticos(app, opcoes.webDir);
   return app;
 }

@@ -11,8 +11,9 @@ export async function produtosDoFrigobar(tx: Contexto, itens: ItemFrigobar[]): P
   const mapa = new Map<string, ProdutoFrigobar>();
   for (const { produtoId } of itens) {
     if (mapa.has(produtoId)) continue;
-    const p = await tx.db.selectFrom("produtos").select(["id", "nome", "preco_centavos"]).where("id", "=", produtoId).executeTakeFirst();
+    const p = await tx.db.selectFrom("produtos").select(["id", "nome", "preco_centavos", "ativo"]).where("id", "=", produtoId).executeTakeFirst();
     if (!p) throw new ErroDominio("PRODUTO_NAO_ENCONTRADO", "Produto não encontrado.", { produtoId });
+    if (!p.ativo) throw new ErroDominio("PRODUTO_INATIVO", `${p.nome} está desativado e não pode ser lançado.`, { produtoId });
     const setor = await tx.db.selectFrom("produto_setores").select("produto_id").where("produto_id", "=", produtoId).where("setor", "=", "frigobar").executeTakeFirst();
     if (!setor) throw new ErroDominio("PRODUTO_NAO_FRIGOBAR", `${p.nome} não é um produto de frigobar.`, { produtoId });
     mapa.set(produtoId, { id: p.id, nome: p.nome, preco: p.preco_centavos });

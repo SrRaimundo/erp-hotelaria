@@ -16,6 +16,21 @@ export const PERMISSOES = [
 
 export type Permissao = (typeof PERMISSOES)[number];
 
+/** Descrições em português de cada permissão (spec §5.4), mostradas na edição de perfis. */
+export const DESCRICOES_PERMISSOES: Record<Permissao, string> = {
+  "reservas.gerenciar": "Criar, alterar e cancelar reservas; ver hóspedes, mapa e painel",
+  "hospedagem.checkin": "Fazer check-in",
+  "hospedagem.checkout": "Fazer check-out",
+  "conta.lancar": "Lançar extras, frigobar e estornos na conta do hóspede",
+  "caixa.operar": "Abrir e fechar caixa e receber pagamentos",
+  "quartos.situacao": "Preencher checklists de governança",
+  "quartos.manutencao": "Resolver chamados, bloquear, liberar e pôr quartos em manutenção",
+  "cadastros.gerenciar": "Cadastrar categorias, quartos e produtos",
+  "tarifas.gerenciar": "Configurar tarifas",
+  "config.gerenciar": "Configurar a pousada, usuários, perfis e checklists",
+  supervisor: "Autorizar ações sensíveis com a senha de supervisor",
+};
+
 export type UsuarioSessao = {
   id: string;
   nome: string;
