@@ -66,6 +66,38 @@ describe("tela Produtos", () => {
     await vi.waitFor(() => expect(chamadas.find((c) => c.caminho === "/api/produtos/p1/desativar")).toBeDefined());
   });
 
+  test("M3: a lista mostra a coluna Unidade", async () => {
+    instalarApiFalsa({ "GET /api/produtos": [{ ...AGUA, unidade: "garrafa" }, JANTAR] });
+    renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Produtos" });
+    expect(await within(lista).findByRole("columnheader", { name: "Unidade" })).toBeInTheDocument();
+    expect(within(lista).getByText("garrafa")).toBeInTheDocument();
+  });
+
+  test("editar preserva o setor interno hospedagem no PUT", async () => {
+    const u = userEvent.setup();
+    const INTERNO = { ...AGUA, setores: ["hospedagem", "recepcao"] };
+    instalarApiFalsa({ "GET /api/produtos": [INTERNO], "PUT /api/produtos/p1": INTERNO });
+    renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Produtos" });
+    await u.click(await within(lista).findByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Produtos/ });
+    expect(within(painel).queryByLabelText("Hospedagem")).not.toBeInTheDocument();
+    await u.click(within(painel).getByLabelText("Bar"));
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "PUT")).toBeDefined());
+    expect((chamadas.find((c) => c.metodo === "PUT")!.corpo as { setores: string[] }).setores).toEqual(["hospedagem", "recepcao", "bar"]);
+  });
+
+  test("I1: abrir Produtos não põe desativados na chave de uso de produtos", async () => {
+    instalarApiFalsa({ "GET /api/produtos": [AGUA, ANTIGO] });
+    const { cliente } = renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    await screen.findByRole("region", { name: "Produtos" });
+    await vi.waitFor(() => expect(cliente.getQueryData(["produtos", "retaguarda"])).toHaveLength(2));
+    expect(cliente.getQueryData(["produtos", null])).toBeUndefined();
+    expect(cliente.getQueryData(["produtos"])).toBeUndefined();
+  });
+
   test("filtra por setor e mostra desativados sob demanda; reativar", async () => {
     const u = userEvent.setup();
     instalarApiFalsa({ "GET /api/produtos": [AGUA, JANTAR, ANTIGO], "POST /api/produtos/p3/reativar": { ok: true } });

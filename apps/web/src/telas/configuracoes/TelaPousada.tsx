@@ -24,10 +24,11 @@ const lerNumero = (t: string): number | null => (t.trim() === "" || Number.isNaN
  * Estado de uma seção. Enquanto não houver edição do usuário, acompanha os dados novos do servidor;
  * depois de editar (sujo), preserva o que foi digitado até salvar.
  */
-function useEditavel<T extends object>(inicial: T) {
+function useEditavel<T extends object>(inicial: T, aoMudarSujo?: (sujo: boolean) => void) {
   const [v, setV] = useState(inicial);
   const [sujo, setSujo] = useState(false);
   const assinatura = JSON.stringify(inicial);
+  useEffect(() => aoMudarSujo?.(sujo), [sujo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!sujo) setV(inicial);
   }, [assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -101,8 +102,8 @@ function Numero({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; aoM
   );
 }
 
-export function SecaoDados({ config }: { config: ConfigPousada }) {
-  const { v, mudar, salvo } = useEditavel({ razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso });
+export function SecaoDados({ config, aoMudarSujo }: { config: ConfigPousada; aoMudarSujo?: (sujo: boolean) => void }) {
+  const { v, mudar, salvo } = useEditavel({ razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso }, aoMudarSujo);
   const fusos = FUSOS.includes(v.fuso) ? FUSOS : [v.fuso, ...FUSOS];
   return (
     <Secao titulo="Dados" corpo={v} aoSalvo={salvo}>
@@ -121,8 +122,8 @@ export function SecaoDados({ config }: { config: ConfigPousada }) {
   );
 }
 
-export function SecaoHorarios({ config }: { config: ConfigPousada }) {
-  const { v, mudar, salvo } = useEditavel({ horaCheckin: config.horaCheckin, horaCheckout: config.horaCheckout, viradaDia: config.viradaDia });
+export function SecaoHorarios({ config, aoMudarSujo }: { config: ConfigPousada; aoMudarSujo?: (sujo: boolean) => void }) {
+  const { v, mudar, salvo } = useEditavel({ horaCheckin: config.horaCheckin, horaCheckout: config.horaCheckout, viradaDia: config.viradaDia }, aoMudarSujo);
   const completo = v.horaCheckin !== "" && v.horaCheckout !== "" && v.viradaDia !== "";
   return (
     <Secao titulo="Horários" corpo={completo ? v : null} aoSalvo={salvo}>

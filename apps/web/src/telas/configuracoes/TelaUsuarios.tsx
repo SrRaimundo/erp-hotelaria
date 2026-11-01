@@ -85,7 +85,7 @@ function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; pe
     ...(nome.trim() === "" ? ["Informe o nome."] : []),
     ...(!item && login.trim() === "" ? ["Informe o login."] : []),
     ...(perfil === "" ? ["Escolha o perfil."] : []),
-    ...(!item && senha === "" ? ["Informe a senha inicial."] : []),
+    ...(!item && senha.length < 6 ? ["A senha inicial deve ter pelo menos 6 caracteres."] : []),
   ];
   const valido = motivos.length === 0;
 
@@ -145,7 +145,7 @@ function PainelUsuario({ item, perfis, fechar }: { item: UsuarioLista | null; pe
           <Botao type="submit" disabled={!valido || salvar.isPending}>Salvar</Botao>
         </div>
       </form>
-      {item && <AcaoRedefinirSenha id={item.id} />}
+      {item && !ehEu && <AcaoRedefinirSenha id={item.id} />}
       {item && !ehEu && <AcaoAtivo id={item.id} ativo={item.ativo} aoConcluir={fechar} />}
     </>
   );

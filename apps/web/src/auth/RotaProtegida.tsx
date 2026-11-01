@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router";
+import { AberturaAssistente } from "./AberturaAssistente";
 import { useSessao } from "./SessaoProvider";
 
 export function RotaProtegida() {
@@ -7,5 +8,10 @@ export function RotaProtegida() {
   const atual = local.pathname + local.search;
   if (!usuario) return <Navigate to={`/login?voltar=${encodeURIComponent(atual)}`} replace />;
   if (usuario.trocarSenha) return <Navigate to={`/trocar-senha?voltar=${encodeURIComponent(atual)}`} replace />;
-  return <Outlet />;
+  return (
+    <>
+      <AberturaAssistente />
+      <Outlet />
+    </>
+  );
 }

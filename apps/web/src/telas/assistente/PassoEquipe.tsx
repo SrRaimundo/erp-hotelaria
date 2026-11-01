@@ -16,7 +16,7 @@ function problemas(l: Linha, rotulo: string): string[] {
     ...(l.nome.trim() === "" ? [`Informe o nome${rotulo}.`] : []),
     ...(l.login.trim() === "" ? [`Informe o login${rotulo}.`] : []),
     ...(l.perfil === "" ? [`Escolha o perfil${rotulo}.`] : []),
-    ...(l.senha === "" ? [`Informe a senha inicial${rotulo}.`] : []),
+    ...(l.senha.length < 6 ? [`A senha inicial${rotulo} deve ter pelo menos 6 caracteres.`] : []),
   ];
 }
 

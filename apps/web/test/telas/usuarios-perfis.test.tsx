@@ -137,6 +137,32 @@ describe("tela Usuários (reativar)", () => {
     await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  test("R9: não mostra Redefinir senha para o próprio usuário, só para os outros", async () => {
+    instalarApiFalsa(leiturasUsuarios());
+    renderizar(<TelaUsuarios />, { usuario: USUARIO });
+    const proprio = await abrirEdicao("Maria Admin");
+    expect(within(proprio.painel).queryByRole("button", { name: "Redefinir senha" })).not.toBeInTheDocument();
+    await proprio.u.click(within(proprio.painel).getByRole("button", { name: "Fechar" }));
+    const outro = await abrirEdicao("João Recepção");
+    expect(within(outro.painel).getByRole("button", { name: "Redefinir senha" })).toBeInTheDocument();
+  });
+
+  test("M9: senha inicial com menos de 6 caracteres mantém o Salvar desligado e diz o motivo", async () => {
+    instalarApiFalsa(leiturasUsuarios());
+    renderizar(<TelaUsuarios />, { usuario: USUARIO });
+    const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "+ Novo" }));
+    const painel = await screen.findByRole("dialog", { name: /Novo/ });
+    await u.type(within(painel).getByLabelText("Nome"), "Ana");
+    await u.type(within(painel).getByLabelText("Login"), "ana");
+    await u.selectOptions(await within(painel).findByLabelText("Perfil"), "Recepção");
+    await u.type(within(painel).getByLabelText("Senha inicial"), "12345");
+    expect(within(painel).getByText("A senha inicial deve ter pelo menos 6 caracteres.")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
+    await u.type(within(painel).getByLabelText("Senha inicial"), "6");
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeEnabled();
+  });
+
   test("editar o próprio nome relê a sessão", async () => {
     const u = userEvent.setup();
     instalarApiFalsa(leiturasUsuarios({ "PUT /api/usuarios/u1": MARIA, "GET /api/sessoes/atual": { id: "u1", nome: "Maria Nova", perfil: "admin", permissoes: ["config.gerenciar"], trocarSenha: false, limiteDesconto: 100 } }));

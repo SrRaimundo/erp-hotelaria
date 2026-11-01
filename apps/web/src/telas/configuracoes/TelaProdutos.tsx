@@ -160,6 +160,7 @@ export function TelaProdutos() {
           { titulo: "Nome", celula: (p) => p.nome },
           { titulo: "Código", celula: (p) => p.codigo },
           { titulo: "Preço", celula: (p) => formatarReais(p.precoCentavos) },
+          { titulo: "Unidade", celula: (p) => p.unidade },
           { titulo: "Tipo", celula: (p) => (p.tipo === "servico" ? "Serviço" : "Produto") },
           { titulo: "Setores", celula: (p) => p.setores.map((s) => ROTULO_SETOR[s] ?? s).join(", ") },
         ]}

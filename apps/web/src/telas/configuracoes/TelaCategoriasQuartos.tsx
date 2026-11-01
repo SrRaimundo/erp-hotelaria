@@ -8,6 +8,7 @@ import { useSessao } from "../../auth/SessaoProvider";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { Gaveta } from "../../componentes/Gaveta";
 import { formatarReais } from "../../lib/dinheiro";
+import { Dicas } from "./Dicas";
 import { ListaCadastro } from "./ListaCadastro";
 import "./configuracoes.css";
 
@@ -39,18 +40,6 @@ function ErroComDetalhes({ erro }: { erro: Error | null | undefined }) {
         <span key={e} className="cq__extra">{e}</span>
       ))}
     </p>
-  );
-}
-
-/** Motivos pelos quais o botão de salvar está desligado, ditos ao usuário. */
-function Dicas({ motivos }: { motivos: string[] }) {
-  if (motivos.length === 0) return null;
-  return (
-    <ul className="cq__aviso cq__dicas">
-      {motivos.map((m) => (
-        <li key={m}>{m}</li>
-      ))}
-    </ul>
   );
 }
 
@@ -187,6 +176,12 @@ function PainelCategoria({ item, tabela, precos: comPermissao, erroPrecos, fecha
         </fieldset>
       )}
       <Dicas motivos={motivos} />
+      {!comPermissao && !item && (
+        <p className="cq__aviso" role="status">Sem a permissão de tarifas, a categoria será criada sem preço base; peça a quem gerencia tarifas para defini-lo.</p>
+      )}
+      {salvar.isError && criadaId.current !== null && !item && (
+        <p className="cq__aviso" role="status">A categoria foi criada, mas o preço base não foi salvo. Salve de novo para tentar outra vez; sem preço a categoria não tem cotação.</p>
+      )}
       <ErroComDetalhes erro={salvar.error} />
       <div className="formulario__acoes">
         <Botao type="submit" disabled={!valido || salvar.isPending}>Salvar</Botao>
@@ -318,8 +313,8 @@ export function TelaCategoriasQuartos() {
   const verPrecos = pode("tarifas.gerenciar");
 
   // O servidor informa `ativo`; uma única leitura de cada lista (com desativados) alimenta tudo e a tela filtra.
-  const categoriasQ = useQuery({ queryKey: ["categorias"], queryFn: () => chamarApi<Categoria[]>("GET", "/api/categorias?incluirInativos=1") });
-  const quartosQ = useQuery({ queryKey: ["quartos"], queryFn: () => chamarApi<Quarto[]>("GET", "/api/quartos?incluirInativos=1") });
+  const categoriasQ = useQuery({ queryKey: ["categorias", "retaguarda"], queryFn: () => chamarApi<Categoria[]>("GET", "/api/categorias?incluirInativos=1") });
+  const quartosQ = useQuery({ queryKey: ["quartos", "retaguarda"], queryFn: () => chamarApi<Quarto[]>("GET", "/api/quartos?incluirInativos=1") });
   const tabelas = useQuery({ queryKey: ["tarifas", "tabelas-base"], queryFn: () => chamarApi<TabelaBaseCategoria[]>("GET", "/api/tarifas/tabelas-base"), enabled: verPrecos });
 
   const todasCategorias = categoriasQ.data ?? [];
@@ -328,6 +323,8 @@ export function TelaCategoriasQuartos() {
   const filtroAtual = ativas.some((c) => c.id === filtro) ? filtro : "";
   const categoriasLista = inativasCategorias ? todasCategorias : ativas;
   const quartosLista = (quartosQ.data ?? []).filter((q) => (inativosQuartos || q.ativo) && (filtroAtual === "" || q.categoriaId === filtroAtual));
+
+  const semPreco = verPrecos && tabelas.data ? ativas.filter((c) => !tabelas.data.some((t) => t.categoriaId === c.id)) : [];
 
   const nomeDe = (id: string) => todasCategorias.find((c) => c.id === id)?.nome ?? "—";
   const erroLeitura = categoriasQ.error ?? quartosQ.error;
@@ -348,6 +345,9 @@ export function TelaCategoriasQuartos() {
   return (
     <div className="cq">
       <ErroAcao erro={erroLeitura} />
+      {semPreco.length > 0 && (
+        <p className="cq__aviso" role="status">Categorias sem preço base (sem cotação): {semPreco.map((c) => c.nome).join(", ")}.</p>
+      )}
       <ListaCadastro<Categoria>
         titulo="Categorias"
         itens={categoriasLista}

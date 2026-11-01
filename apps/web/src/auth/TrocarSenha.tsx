@@ -1,23 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
-import { chamarApi, ErroApi } from "../api/cliente";
+import { ErroApi } from "../api/cliente";
 import { destinoSeguro, useSessao } from "./SessaoProvider";
-
-const CHAVE_ASSISTENTE = "erp.assistente-oferecido";
-
-/** Quem configura a pousada, numa base sem quartos, é levado ao assistente uma vez por sessão (após a troca de senha). */
-async function precisaAssistente(permissoes: string[]): Promise<boolean> {
-  if (!permissoes.includes("config.gerenciar")) return false;
-  try {
-    if (sessionStorage.getItem(CHAVE_ASSISTENTE)) return false;
-    const estado = await chamarApi<{ quartos: boolean }>("GET", "/api/assistente");
-    if (estado.quartos) return false;
-    sessionStorage.setItem(CHAVE_ASSISTENTE, "1");
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export function TrocarSenha() {
   const { usuario, trocarSenha } = useSessao();
@@ -40,8 +24,7 @@ export function TrocarSenha() {
     setEnviando(true);
     try {
       await trocarSenha(atual, nova);
-      const assistente = await precisaAssistente(usuario!.permissoes);
-      void navegar(assistente ? "/configuracoes/assistente" : destinoSeguro(params.get("voltar"), usuario!), { replace: true });
+      void navegar(destinoSeguro(params.get("voltar"), usuario!), { replace: true });
     } catch (x) {
       setErro(x instanceof ErroApi ? x.message : "Não foi possível trocar a senha. Tente de novo.");
       setEnviando(false);

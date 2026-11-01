@@ -45,6 +45,14 @@ async function preencherCategoria(u: ReturnType<typeof userEvent.setup>, grupo: 
   if (v.bloco) await u.type(within(grupo).getByLabelText("Bloco"), v.bloco);
 }
 
+const USUARIO_LOGIN = { ...ADMIN, limiteDesconto: 100, trocarSenha: false };
+async function entrarPeloLogin(u: ReturnType<typeof userEvent.setup>, usuario: Record<string, unknown> = USUARIO_LOGIN) {
+  await u.type(await screen.findByLabelText("Login"), "admin");
+  await u.type(screen.getByLabelText("Senha"), "admin123");
+  await u.click(screen.getByRole("button", { name: "Entrar" }));
+  return usuario;
+}
+
 async function trocarSenha(u: ReturnType<typeof userEvent.setup>) {
   await u.type(await screen.findByLabelText("Senha atual"), "admin123");
   await u.type(screen.getByLabelText("Nova senha"), "nova-senha");
@@ -53,33 +61,68 @@ async function trocarSenha(u: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("assistente de primeira configuração", () => {
-  test("admin em base vazia é levado ao assistente após a troca de senha (uma vez por sessão)", async () => {
+  test("R10: login normal de admin em base sem quartos leva ao assistente", async () => {
     instalarApiFalsa({
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: USUARIO_LOGIN },
       "GET /api/painel": PAINEL,
-      "PUT /api/usuarios/me/senha": { __status: 204 },
       "GET /api/assistente": { pousada: false, quartos: false, equipe: false, categorias: [] },
       "GET /api/config": { ...CONFIG, razaoSocial: "" },
     });
     const u = userEvent.setup();
-    telaApp("/trocar-senha", { usuario: { ...ADMIN, trocarSenha: true } });
-    await trocarSenha(u);
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
     expect(await screen.findByRole("heading", { name: "Primeira configuração" })).toBeInTheDocument();
     expect(screen.getByTestId("local")).toHaveTextContent("/configuracoes/assistente");
     expect(await screen.findByRole("listitem", { current: "step" })).toHaveTextContent("1 Pousada");
-    expect(sessionStorage.getItem("erp.assistente-oferecido")).toBe("1");
   });
 
-  test("com quartos já criados a troca de senha segue o destino normal", async () => {
+  test("login com troca de senha obrigatória também chega ao assistente depois da troca", async () => {
     instalarApiFalsa({
-      "GET /api/painel": PAINEL,
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: { ...USUARIO_LOGIN, trocarSenha: true } },
       "PUT /api/usuarios/me/senha": { __status: 204 },
+      "GET /api/painel": PAINEL,
+      "GET /api/assistente": { pousada: false, quartos: false, equipe: false, categorias: [] },
+      "GET /api/config": { ...CONFIG, razaoSocial: "" },
+    });
+    const u = userEvent.setup();
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
+    await trocarSenha(u);
+    expect(await screen.findByRole("heading", { name: "Primeira configuração" })).toBeInTheDocument();
+  });
+
+  test("a oferta vale uma vez por login: Sair do assistente vai ao destino normal e não a repete", async () => {
+    instalarApiFalsa({
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: USUARIO_LOGIN },
+      "DELETE /api/sessoes": { __status: 204 },
+      "GET /api/painel": PAINEL,
+      "GET /api/assistente": VAZIO,
+      "GET /api/config": CONFIG,
+    });
+    const u = userEvent.setup();
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
+    await screen.findByRole("heading", { name: "Primeira configuração" });
+    const antes = chamadas.filter((c) => c.caminho === "/api/assistente").length;
+    await u.click(await screen.findByRole("button", { name: "Sair do assistente" }));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+    await screen.findByText(/ocupação hoje/);
+    expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/);
+    expect(chamadas.filter((c) => c.caminho === "/api/assistente")).toHaveLength(antes);
+  });
+
+  test("com quartos já criados o login segue o destino normal", async () => {
+    instalarApiFalsa({
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: USUARIO_LOGIN },
+      "GET /api/painel": PAINEL,
       "GET /api/assistente": { ...VAZIO, quartos: true },
       "GET /api/config": CONFIG,
     });
     const u = userEvent.setup();
-    telaApp("/trocar-senha", { usuario: { ...ADMIN, trocarSenha: true } });
-    await trocarSenha(u);
-    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
+    await screen.findByText(/ocupação hoje/);
+    expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/);
   });
 
   test("abre no primeiro passo incompleto; o passo de quartos envia as categorias e avança", async () => {
@@ -318,26 +361,50 @@ describe("assistente: ajustes da revisão", () => {
     expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
   });
 
-  test("troca de senha sem config.gerenciar não consulta nem redireciona", async () => {
-    instalarApiFalsa({ "PUT /api/usuarios/me/senha": { __status: 204 }, "GET /api/painel": PAINEL, "GET /api/config": CONFIG });
+  test("login sem config.gerenciar não consulta o assistente", async () => {
+    instalarApiFalsa({
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: { ...USUARIO_LOGIN, permissoes: ["reservas.gerenciar"] } },
+      "GET /api/painel": PAINEL,
+      "GET /api/config": CONFIG,
+    });
     const u = userEvent.setup();
-    telaApp("/trocar-senha", { usuario: { ...ADMIN, permissoes: ["reservas.gerenciar"], trocarSenha: true } });
-    await trocarSenha(u);
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
     await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
+    await screen.findByText(/ocupação hoje/);
     expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
   });
 
-  test("falha ao consultar o assistente na troca de senha segue o destino normal", async () => {
+  test("falha ao consultar o assistente no login segue o destino normal", async () => {
     instalarApiFalsa({
-      "PUT /api/usuarios/me/senha": { __status: 204 },
+      "POST /api/sessoes": { __status: 201, token: "tk", usuario: USUARIO_LOGIN },
       "GET /api/assistente": { __status: 500, codigo: "ERRO", mensagem: "Falhou." },
       "GET /api/painel": PAINEL,
       "GET /api/config": CONFIG,
     });
     const u = userEvent.setup();
-    telaApp("/trocar-senha", { usuario: { ...ADMIN, trocarSenha: true } });
-    await trocarSenha(u);
-    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
-    expect(sessionStorage.getItem("erp.assistente-oferecido")).toBeNull();
+    telaApp("/login", { semSessao: true });
+    await entrarPeloLogin(u);
+    await screen.findByText(/ocupação hoje/);
+    expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/);
+  });
+
+  test("sessão já aberta (recarregar a página) não redireciona ao assistente", async () => {
+    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/config": CONFIG });
+    telaApp("/");
+    await screen.findByText(/ocupação hoje/);
+    expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
+  });
+
+  test("M2: Avançar com edição não salva no passo Pousada avisa e não avança", async () => {
+    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/assistente": { ...VAZIO, pousada: false }, "GET /api/config": CONFIG });
+    const u = userEvent.setup();
+    telaApp("/configuracoes/assistente");
+    const dados = await screen.findByRole("region", { name: "Dados" });
+    await u.type(within(dados).getByLabelText("CNPJ"), "123");
+    await u.click(screen.getByRole("button", { name: "Avançar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("alterações não salvas em Dados");
+    expect(screen.getByRole("heading", { name: "Pousada" })).toBeInTheDocument();
+    expect(within(dados).getByLabelText("CNPJ")).toHaveValue("123");
   });
 });

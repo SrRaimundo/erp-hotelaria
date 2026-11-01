@@ -2,6 +2,7 @@ import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { TelaCategoriasQuartos } from "../../src/telas/configuracoes/TelaCategoriasQuartos";
+import { chamarApi } from "../../src/api/cliente";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
 import { renderizar } from "../ajuda";
 
@@ -89,6 +90,7 @@ describe("tela Categorias e quartos", () => {
     await u.type(within(painel).getByLabelText("Adulto extra"), "50");
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     expect(await within(painel).findByRole("alert")).toHaveTextContent("Preço recusado.");
+    expect(within(painel).getByText(/categoria foi criada, mas o preço base não foi salvo/)).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: /Categorias/ })).toBeInTheDocument();
     expect(chamadas.find((c) => c.metodo === "POST" && c.caminho === "/api/categorias")!.corpo).toEqual({
       nome: "Suíte", maxAdultos: 2, maxCriancas: 0, comodidades: ["Varanda"],
@@ -319,5 +321,54 @@ describe("tela Categorias e quartos", () => {
     const painel = await screen.findByRole("dialog", { name: /Quartos/ });
     await u.click(within(painel).getByRole("button", { name: "Desativar" }));
     expect(await within(painel).findByRole("alert")).toHaveTextContent("Reservas: 10");
+  });
+});
+
+describe("cache e avisos da tela Categorias e quartos", () => {
+  const INATIVA = { ...LUXO, id: "c3", nome: "Antiga", ativo: false };
+  const Q_INATIVO = { ...Q201, id: "q3", numero: "301", ativo: false };
+
+  test("I1: a tela guarda a lista com desativados em chaves próprias; as chaves de uso não recebem inativos", async () => {
+    instalarApiFalsa(leituras({ "GET /api/categorias": [STD, INATIVA], "GET /api/quartos": [Q101, Q_INATIVO] }));
+    const { cliente } = renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    await screen.findByRole("region", { name: "Quartos" });
+    await vi.waitFor(() => expect(cliente.getQueryData(["quartos", "retaguarda"])).toHaveLength(2));
+    expect(cliente.getQueryData(["categorias", "retaguarda"])).toHaveLength(2);
+    expect(cliente.getQueryData(["categorias"])).toBeUndefined();
+    expect(cliente.getQueryData(["quartos"])).toBeUndefined();
+  });
+
+  test("I1: consumidor operacional depois da tela de configuração só recebe ativos; invalidar o prefixo atinge as duas chaves", async () => {
+    instalarApiFalsa(
+      leituras({
+        "GET /api/categorias": (_c: unknown, url: URL) => (url.searchParams.has("incluirInativos") ? [STD, INATIVA] : [STD]),
+        "GET /api/quartos": [Q101],
+      }),
+    );
+    const { cliente } = renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    await screen.findByRole("region", { name: "Categorias" });
+    await vi.waitFor(() => expect(cliente.getQueryData(["categorias", "retaguarda"])).toHaveLength(2));
+    const operacional = await cliente.fetchQuery({ queryKey: ["categorias"], queryFn: () => chamarApi<{ id: string }[]>("GET", "/api/categorias") });
+    expect(operacional.map((c) => c.id)).toEqual(["c1"]);
+    expect(cliente.getQueryData(["categorias", "retaguarda"])).toHaveLength(2);
+    await cliente.invalidateQueries({ queryKey: ["categorias"], refetchType: "none" });
+    expect(cliente.getQueryState(["categorias"])?.isInvalidated).toBe(true);
+    expect(cliente.getQueryState(["categorias", "retaguarda"])?.isInvalidated).toBe(true);
+  });
+
+  test("M7: aviso na tela lista categorias sem preço base", async () => {
+    instalarApiFalsa(leituras());
+    renderizar(<TelaCategoriasQuartos />, { usuario: USUARIO });
+    expect(await screen.findByText(/Categorias sem preço base \(sem cotação\): Luxo\./)).toBeInTheDocument();
+  });
+
+  test("M7: sem tarifas.gerenciar, o painel de nova categoria avisa que ficará sem preço", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/categorias": [STD], "GET /api/quartos": [Q101] });
+    renderizar(<TelaCategoriasQuartos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Categorias" });
+    await u.click(within(lista).getByRole("button", { name: "+ Novo" }));
+    const painel = await screen.findByRole("dialog", { name: /Categorias/ });
+    expect(within(painel).getByText(/será criada sem preço base/)).toBeInTheDocument();
   });
 });
