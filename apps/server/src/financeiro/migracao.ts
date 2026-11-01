@@ -7,6 +7,7 @@ export const migracaoFinanceiro: Migracao = {
     // 1. fin_local — Local segregation
     await db.schema
       .createTable("fin_local")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("pousada_id", "text", (c) => c.notNull().unique())
       .addColumn("nome", "text", (c) => c.notNull())
@@ -18,6 +19,7 @@ export const migracaoFinanceiro: Migracao = {
     // 2. fin_cliente — Cadastro de clientes
     await db.schema
       .createTable("fin_cliente")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("nome", "text", (c) => c.notNull())
@@ -34,6 +36,7 @@ export const migracaoFinanceiro: Migracao = {
     // 3. fin_fornecedor — Cadastro de fornecedores
     await db.schema
       .createTable("fin_fornecedor")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("razao_social", "text", (c) => c.notNull())
@@ -50,6 +53,7 @@ export const migracaoFinanceiro: Migracao = {
     // 4. fin_conta_bancaria — Contas bancárias
     await db.schema
       .createTable("fin_conta_bancaria")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("nome", "text", (c) => c.notNull())
@@ -68,6 +72,7 @@ export const migracaoFinanceiro: Migracao = {
     // 5. fin_moeda — Moedas (global, not per local)
     await db.schema
       .createTable("fin_moeda")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("codigo", "text", (c) => c.notNull().unique())
       .addColumn("nome", "text", (c) => c.notNull())
@@ -77,6 +82,7 @@ export const migracaoFinanceiro: Migracao = {
     // 6. fin_lancamento — Core: all transactions
     await db.schema
       .createTable("fin_lancamento")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("data", "text", (c) => c.notNull())
@@ -104,6 +110,7 @@ export const migracaoFinanceiro: Migracao = {
     // 7. fin_faturamento — Invoices (Hospedagem checkouts)
     await db.schema
       .createTable("fin_faturamento")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("cliente_id", "text", (c) => c.notNull().references("fin_cliente.id"))
@@ -121,6 +128,7 @@ export const migracaoFinanceiro: Migracao = {
     // 8. fin_conta_receber — Receivables (Faturamento → receivement)
     await db.schema
       .createTable("fin_conta_receber")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("cliente_id", "text", (c) => c.notNull().references("fin_cliente.id"))
@@ -138,6 +146,7 @@ export const migracaoFinanceiro: Migracao = {
     // 9. fin_movimento — Caixa/Banco movements
     await db.schema
       .createTable("fin_movimento")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
       .addColumn("conta_id", "text", (c) => c.notNull().references("fin_conta_bancaria.id"))
@@ -159,6 +168,7 @@ export const migracaoFinanceiro: Migracao = {
     // 10. fin_saldo — Caixa/Banco balance history
     await db.schema
       .createTable("fin_saldo")
+      .ifNotExists()
       .addColumn("id", "text", (c) => c.primaryKey())
       .addColumn("conta_id", "text", (c) => c.notNull().references("fin_conta_bancaria.id"))
       .addColumn("data", "text", (c) => c.notNull())
