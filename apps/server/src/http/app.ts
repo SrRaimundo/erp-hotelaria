@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Contexto } from "../shared/contexto.js";
+import { registrarRotasFinanceiro } from "../financeiro/rotas/index.js";
 import { registrarRotasBase } from "../nucleo/rotas.js";
 import { registrarRotasGovernanca } from "../governanca/rotas.js";
 import { registrarRotasHospedagem } from "../hospedagem/rotas.js";
@@ -15,6 +16,7 @@ export function criarApp(ctx: Contexto, opcoes: { webDir?: string } = {}): Fasti
   registrarAutenticacao(app, ctx);
   registrarRotasBase(app, ctx);
   registrarRotasTarifas(app, ctx);
+  registrarRotasFinanceiro(app, ctx);
   registrarRotasHospedagem(app, ctx);
   registrarRotasGovernanca(app, ctx);
   registrarRotasRetaguarda(app, ctx);
