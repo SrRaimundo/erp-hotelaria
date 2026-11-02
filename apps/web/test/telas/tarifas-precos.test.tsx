@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { TelaDiasSemana } from "../../src/telas/tarifas/TelaDiasSemana";
@@ -153,7 +153,7 @@ describe("aba Dias da semana", () => {
       "PUT /api/tarifas/dias-semana": (c: { dia: number; percentual: number }) => c,
     });
     renderizar(<TelaDiasSemana />, { usuario: USUARIO });
-    await vi.waitFor(() => expect(screen.getByLabelText("Sábado (%)")).toHaveValue("15"));
+    await waitFor(() => expect(screen.getByLabelText("Sábado (%)")).toHaveValue("15"));
     expect(screen.getByLabelText("Sexta-feira (%)")).toHaveValue("7");
     expect(screen.getByLabelText("Segunda-feira (%)")).toHaveValue("0");
     await u.clear(screen.getByLabelText("Domingo (%)"));
