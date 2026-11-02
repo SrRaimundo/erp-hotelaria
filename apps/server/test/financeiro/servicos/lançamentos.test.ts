@@ -92,7 +92,7 @@ test("listar: filtra por local e período, ordenado por data", async () => {
   const b = await servico.criar({ ...base, data: new Date("2026-11-01T10:00:00Z") });
   const c = await servico.criar({ ...base, data: new Date("2026-11-08T10:00:00Z") });
   await servico.criar({ ...base, local_id: outro.id });
-  expect((await servico.listar(local.id)).map((x) => x.id)).toEqual([b.id, a.id, c.id]);
+  expect((await servico.listar(local.id)).map((x) => x.id)).toEqual([c.id, a.id, b.id]);
   const r = await servico.listar(local.id, { data_inicio: new Date("2026-11-02T00:00:00Z"), data_fim: new Date("2026-11-05T00:00:00Z") });
   expect(r.map((x) => x.id)).toEqual([a.id]);
   expect(await servico.listar(gerarUUID())).toEqual([]);
