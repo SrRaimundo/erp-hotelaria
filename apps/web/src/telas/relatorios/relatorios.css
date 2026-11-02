@@ -56,3 +56,4 @@
   .rel-tabela td.rel-em-branco { background: none; height: 9mm; min-width: 25mm; }
   .rel-resumo__item { border: 1px solid #000; }
 }
+.rel-erro { color: var(--terracota); font-weight: 600; flex-basis: 100%; }

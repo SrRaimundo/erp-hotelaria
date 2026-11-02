@@ -49,6 +49,14 @@ function Corpo({ item }: { item: ItemCatalogo }) {
   // Veio de outra tela (reserva, caixa, catálogo): volta nela; aberto direto, vai ao catálogo.
   const voltar = () => (local.key === "default" ? navegar("/relatorios") : navegar(-1));
 
+  const cabecalho = {
+    nome: config.data?.nomeEstabelecimento ?? "",
+    razaoSocial: config.data?.razaoSocial ?? "",
+    cnpj: config.data?.cnpj ?? "",
+    endereco: config.data?.endereco ?? "",
+    usuario: usuario?.nome ?? "",
+  };
+
   let conteudo;
   if (faltaReserva) {
     conteudo = (
@@ -81,7 +89,7 @@ function Corpo({ item }: { item: ItemCatalogo }) {
         <h1>{item.nome}</h1>
       </div>
       <FiltrosRelatorio item={item} valores={valores} aoMudar={mudar} busca={textoBusca} aoMudarBusca={setTextoBusca} />
-      <BarraSaidas pronto={relatorio.data !== undefined} />
+      <BarraSaidas relatorio={relatorio.data} cabecalho={cabecalho} />
       {conteudo}
     </div>
   );
