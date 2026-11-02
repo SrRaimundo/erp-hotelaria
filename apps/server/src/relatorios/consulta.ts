@@ -52,7 +52,7 @@ export const ordemQuarto = (a: { quarto: string; hospede: string }, b: { quarto:
 export async function reservasParaRelatorio(
   ctx: Contexto,
   estados: EstadoReserva[],
-  onde: { chegada?: Data; saida?: Data; chegadaAntes?: Data; saidaDepoisOuEm?: Data },
+  onde: { reservaId?: string; chegada?: Data; saida?: Data; chegadaAntes?: Data; saidaDepoisOuEm?: Data },
 ): Promise<ReservaRel[]> {
   let qb = ctx.db
     .selectFrom("reservas as r")
@@ -64,6 +64,7 @@ export async function reservasParaRelatorio(
       "r.adultos", "r.criancas", "r.chegada", "r.saida", "r.estado", "r.conta_id as contaId",
     ])
     .where("r.estado", "in", estados);
+  if (onde.reservaId) qb = qb.where("r.id", "=", onde.reservaId);
   if (onde.chegada) qb = qb.where("r.chegada", "=", onde.chegada);
   if (onde.saida) qb = qb.where("r.saida", "=", onde.saida);
   if (onde.chegadaAntes) qb = qb.where("r.chegada", "<", onde.chegadaAntes);
