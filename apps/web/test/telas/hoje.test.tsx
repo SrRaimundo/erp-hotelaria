@@ -170,6 +170,24 @@ describe("tela Hoje", () => {
     expect(screen.getByText("lotado")).toBeInTheDocument();
   });
 
+  test("ocupados por canal: total, canais na ordem do servidor, proporção e posição depois dos próximos dias", async () => {
+    montar(criarPainel({ ocupadosPorCanal: [{ canal: "Booking", quartos: 5 }, { canal: "Decolar", quartos: 3 }, { canal: "Sem canal", quartos: 2 }] }));
+    const bloco = (await screen.findByRole("heading", { name: "Ocupados por canal" })).closest("section")!;
+    expect(within(bloco).getByText("10 ocupados")).toBeInTheDocument();
+    const itens = within(bloco).getAllByRole("listitem");
+    expect(itens.map((i) => i.textContent)).toEqual(["Booking5", "Decolar3", "Sem canal2"]);
+    expect(itens[0]!.querySelector<HTMLElement>(".hoje-canal__preenchimento")!.style.width).toBe("50%");
+    expect(itens[2]!.querySelector<HTMLElement>(".hoje-canal__preenchimento")!.style.width).toBe("20%");
+    const titulos = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(titulos.indexOf("Ocupados por canal")).toBeGreaterThan(titulos.indexOf("Próximos dias"));
+  });
+
+  test("ocupados por canal fica oculto sem hospedados", async () => {
+    montar(criarPainel({ ocupadosPorCanal: [] }));
+    await screen.findByRole("heading", { name: "Próximos dias" });
+    expect(screen.queryByRole("heading", { name: "Ocupados por canal" })).not.toBeInTheDocument();
+  });
+
   test("estados vazios", async () => {
     const p = criarPainel();
     Object.assign(p, { chegadas: [], saidas: [], governanca: [], atencao: [] });

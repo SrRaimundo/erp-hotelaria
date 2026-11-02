@@ -105,6 +105,17 @@ test.describe.serial("relatórios do hotel", () => {
   });
 });
 
+test("5b. reservas por canal: abre pelo catálogo, mostra as duas seções e o filtro de período", async ({ page }) => {
+  await entrar(page, "recepcao", "recepcao123");
+  await page.getByRole("link", { name: "Relatórios" }).click();
+  await page.getByRole("link", { name: /Reservas por canal/ }).click();
+  await expect(page.getByRole("heading", { name: "Reservas por canal", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hospedados agora", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No período", level: 2 })).toBeVisible();
+  await expect(page.getByLabel("De", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
+});
+
 test("5. relatório no celular não rola a página na horizontal @celular", async ({ page }) => {
   await entrar(page, "recepcao", "recepcao123");
   for (const id of ["check-in", "limpeza"]) {

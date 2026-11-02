@@ -4,7 +4,7 @@
 
 Dar à recepção os relatórios do dia a dia dentro do grupo Hotel, substituindo caderno e planilha. Todo relatório abre na tela, e o usuário pode **imprimir, exportar PDF ou compartilhar**.
 
-Fora desta entrega: Resumo do dia, Previsão de ocupação, Desempenho e Reservas por canal (segunda entrega); relatórios de Financeiro, Estoque e Cadastros.
+Fora desta entrega: Resumo do dia, Previsão de ocupação e Desempenho (segunda entrega; Reservas por canal já foi entregue); relatórios de Financeiro, Estoque e Cadastros.
 
 ## 2. Relatórios
 
@@ -18,6 +18,14 @@ Fora desta entrega: Resumo do dia, Previsão de ocupação, Desempenho e Reserva
 | `conta` | Conta do hóspede | reserva | dados da estadia, extrato da conta, total de débitos, créditos e saldo | `reservas.gerenciar` |
 | `hospedes` | Hóspedes cadastrados | busca por nome ou documento | nome, documento, telefone, e-mail, nº de estadias, última saída | `reservas.gerenciar`; gerar é auditado |
 | `caixa` | Fechamento de caixa | período; turno | turnos do período; no turno escolhido: operador, abertura, fechamento, esperado, contado e diferença por forma, movimentos | `caixa.operar`; só os próprios turnos, exceto com `config.gerenciar` ou `supervisor` |
+| `canais` | Reservas por canal | período (padrão: mês atual do dia hoteleiro) | "Hospedados agora" por canal (quartos, pessoas, % dos quartos); "No período" por canal (reservas, noites, receita de hospedagem em centavos, cancelamentos, no-shows, % das noites) e linha de totais | `reservas.gerenciar` |
+
+Regras do relatório `canais`:
+- Período por sobreposição da estadia (chegada <= fim e saída > início). Estadia que cruza a borda conta só as noites dentro do período, e a receita é a das mesmas noites.
+- Receita de hospedagem = soma de `reserva_noites.valor` das noites do período (o valor que a virada lança como diária; inclui desconto e acompanha saída antecipada e alteração de datas, e cobre noites futuras ainda não lançadas). Extras e taxas ficam fora.
+- "Reservas" e "noites" contam pré-reserva, confirmada, hospedada e finalizada. Cancelada e no-show só entram nas colunas próprias, por sobreposição da estadia original, sem noites nem receita.
+- Canal vazio aparece como "Sem canal". Linhas por noites decrescentes (empate por reservas, depois nome).
+- Tela Hoje: o bloco "Ocupados por canal" usa os mesmos quartos hospedados do número "Hospedados" (`painel.ocupadosPorCanal`, soma = `numeros.hospedados`); difere de `ocupacao.ocupados`, que também conta pré-reservas e confirmadas que cobrem o dia.
 
 Regras comuns:
 - Data no formato `YYYY-MM-DD`, dinheiro em centavos, cálculo de "hoje" pelo dia hoteleiro.
@@ -42,7 +50,7 @@ Rota única `GET /api/relatorios/:id` com os filtros na query. Id desconhecido �
 
 ## 4. Web
 
-- `/relatorios`: catálogo em cartões, com nome e uma frase do que cada relatório traz, e a seção "Em breve" com os quatro da segunda entrega.
+- `/relatorios`: catálogo em cartões, com nome e uma frase do que cada relatório traz, e a seção "Em breve" com os três da segunda entrega.
 - `/relatorios/:id`: filtros no topo, visor genérico que desenha qualquer `Relatorio`, e barra **Imprimir · Exportar PDF · Compartilhar**.
 - Abrem como página normal do Shell, com botão Voltar.
 - A tela da reserva ganha "Imprimir conta", que abre `/relatorios/conta?reserva=<id>`. A tela do caixa ganha "Relatório", que abre `/relatorios/caixa`.

@@ -4,6 +4,7 @@ import { exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
 import { ErroDominio } from "../shared/erros.js";
 import { relatorioCafe } from "./cafe.js";
+import { relatorioCanais } from "./canais.js";
 import { relatorioCaixa, filtrosPeriodo, resolverPeriodo, turnosDoPeriodo } from "./caixa.js";
 import { relatorioCheckIn } from "./check-in.js";
 import { relatorioCheckOut } from "./check-out.js";
@@ -15,7 +16,7 @@ import { relatorioNaCasa } from "./na-casa.js";
 
 /** Catálogo: um relatório novo é uma entrada aqui (id, permissão, filtros zod e gerar). */
 export const REGISTRO: DefinicaoRelatorio[] = [
-  relatorioCheckIn, relatorioCheckOut, relatorioNaCasa, relatorioCafe, relatorioLimpeza, relatorioConta, relatorioHospedes, relatorioCaixa,
+  relatorioCheckIn, relatorioCheckOut, relatorioNaCasa, relatorioCafe, relatorioLimpeza, relatorioConta, relatorioHospedes, relatorioCaixa, relatorioCanais,
 ];
 
 function analisar<T>(esquema: z.ZodType<T, unknown>, entrada: unknown): T {

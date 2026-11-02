@@ -40,6 +40,22 @@ function FiltroPeriodo({ valores, aoMudar }: Pick<Props, "valores" | "aoMudar">)
   );
 }
 
+function FiltroIntervalo({ valores, aoMudar }: Pick<Props, "valores" | "aoMudar">) {
+  return (
+    <>
+      <label className="campo">
+        De
+        <input type="date" value={valores.inicio ?? ""} onChange={(e) => aoMudar({ inicio: e.target.value })} />
+      </label>
+      <label className="campo">
+        Até
+        <input type="date" value={valores.fim ?? ""} onChange={(e) => aoMudar({ fim: e.target.value })} />
+      </label>
+      <span className="rel-dica">Em branco vale o mês atual; com uma só data, vale aquele dia.</span>
+    </>
+  );
+}
+
 export function FiltrosRelatorio({ item, valores, aoMudar, busca, aoMudarBusca }: Props) {
   if (item.filtros.length === 0) return null;
   return (
@@ -56,6 +72,7 @@ export function FiltrosRelatorio({ item, valores, aoMudar, busca, aoMudarBusca }
           <input type="search" value={busca} onChange={(e) => aoMudarBusca(e.target.value)} />
         </label>
       )}
+      {item.filtros.includes("intervalo") && <FiltroIntervalo valores={valores} aoMudar={aoMudar} />}
       {item.filtros.includes("periodo") && <FiltroPeriodo valores={valores} aoMudar={aoMudar} />}
       {item.filtros.includes("reserva") && valores.reserva && (
         <span className="rel-dica">

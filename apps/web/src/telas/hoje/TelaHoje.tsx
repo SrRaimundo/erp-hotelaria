@@ -5,6 +5,7 @@ import { Cartao } from "../../componentes/Cartao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { nomeDiaSemana } from "../../lib/datas";
 import { BlocoAtencao } from "./BlocoAtencao";
+import { BlocoCanais } from "./BlocoCanais";
 import { BlocoChamados } from "./BlocoChamados";
 import { BlocoGovernanca } from "./BlocoGovernanca";
 import { ListaChegadas } from "./ListaChegadas";
@@ -73,6 +74,7 @@ export function TelaHoje() {
         <ListaSaidas saidas={p.saidas} horaCheckout={config.data?.horaCheckout} aoAbrir={(id) => abrir(reserva(id, "&fluxo=checkout"))} />
         <BlocoGovernanca governanca={p.governanca} ocupadosSemArrumacao={n.ocupadosSemArrumacao} />
         <ProximosDias dias={p.proximosDias} />
+        <BlocoCanais canais={p.ocupadosPorCanal} />
       </div>
     </div>
   );
