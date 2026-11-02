@@ -1,0 +1,58 @@
+.rel { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
+.rel h1 { font-size: 1.5rem; }
+.rel-topo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rel-subtitulo { font-size: 1.0625rem; color: var(--texto-suave); }
+.rel-catalogo { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.rel-cartao-link { color: inherit; text-decoration: none; }
+.rel-cartao-link:hover .rel-cartao, .rel-cartao-link:focus-visible .rel-cartao { border-color: var(--verde); }
+.rel-cartao { height: 100%; display: flex; flex-direction: column; gap: 6px; }
+.rel-cartao h2 { font-size: 1.0625rem; }
+.rel-cartao p, .rel-em-breve { color: var(--texto-suave); font-size: 0.9375rem; }
+.rel-em-breve { padding-left: 18px; }
+
+.rel-filtros { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.rel-filtros select { border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; }
+.rel-filtros input { border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; }
+.rel-dica { color: var(--texto-suave); font-size: 0.875rem; }
+.rel-barra { display: flex; gap: 8px; flex-wrap: wrap; }
+.rel-titulo h2 { font-size: 1.0625rem; color: var(--texto-suave); font-weight: 600; }
+.rel-guia { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 16px; }
+
+.rel-visor { display: flex; flex-direction: column; gap: 18px; }
+.rel-resumo { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
+.rel-resumo__item { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 8px 14px; }
+.rel-resumo dt { color: var(--texto-suave); font-size: 0.8125rem; }
+.rel-resumo dd { margin: 0; font-weight: 700; }
+.rel-secao { display: flex; flex-direction: column; gap: 8px; }
+.rel-secao h2 { font-size: 1.0625rem; }
+.rel-vazio { color: var(--texto-suave); }
+.rel-rolagem { overflow-x: auto; }
+.rel-tabela { width: 100%; border-collapse: collapse; }
+.rel-tabela th, .rel-tabela td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); }
+.rel-tabela th { color: var(--texto-suave); font-size: 0.8125rem; }
+.rel-tabela tfoot th { color: var(--texto); font-size: 0.9375rem; border-top: 2px solid var(--borda); }
+.rel-tabela .rel-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rel-tabela td.rel-em-branco { background: color-mix(in srgb, var(--borda) 25%, var(--superficie)); min-width: 90px; }
+
+.rel-cabecalho-impressao { display: none; }
+
+@media print {
+  /* Some tudo que é navegação ou controle; fica o cabeçalho, as tabelas e os totais. */
+  .menu, .topo, .faixa-conexao, .gaveta, .rel-nao-imprimir { display: none !important; }
+  body, .shell, .shell__conteudo { background: #fff; }
+  .shell { display: block; }
+  .shell__conteudo { padding: 0; }
+  .rel { max-width: none; gap: 8px; color: #000; }
+  .rel-cabecalho-impressao { display: block; margin-bottom: 8px; font-size: 10pt; }
+  .rel-cabecalho-impressao__nome { font-size: 13pt; }
+  .rel-cabecalho-impressao h1 { font-size: 14pt; margin-top: 6px; }
+  .rel-rolagem { overflow: visible; }
+  .rel-tabela { font-size: 9pt; }
+  .rel-tabela th, .rel-tabela td { border: 1px solid #000; color: #000; padding: 4px 6px; }
+  .rel-tabela thead { display: table-header-group; }
+  .rel-tabela tfoot { display: table-footer-group; }
+  .rel-tabela tr { break-inside: avoid; }
+  /* Colunas em branco são para escrever à mão: borda visível e altura de linha confortável. */
+  .rel-tabela td.rel-em-branco { background: none; height: 9mm; min-width: 25mm; }
+  .rel-resumo__item { border: 1px solid #000; }
+}

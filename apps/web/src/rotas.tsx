@@ -21,6 +21,8 @@ import { TelaUsuarios } from "./telas/configuracoes/TelaUsuarios";
 import { TelaMapa } from "./telas/mapa/TelaMapa";
 import { TelaNovaReserva } from "./telas/nova-reserva/TelaNovaReserva";
 import { TelaReservas } from "./telas/reservas/TelaReservas";
+import { TelaRelatorio } from "./telas/relatorios/TelaRelatorio";
+import { TelaRelatorios } from "./telas/relatorios/TelaRelatorios";
 
 /** Telas já construídas, por rota do menu. Itens do menu fora daqui viram "em breve": trocar é acrescentar uma linha. */
 const TELAS_PRONTAS: Record<string, ReactElement> = {
@@ -29,6 +31,7 @@ const TELAS_PRONTAS: Record<string, ReactElement> = {
   "/reservas": <TelaReservas />,
   "/caixa": <TelaCaixa />,
   "/governanca": <TelaGovernanca />,
+  "/relatorios": <TelaRelatorios />,
   "/cadastros/produtos": <TelaProdutos />,
   "/cadastros/categorias-e-quartos": <TelaCategoriasQuartos />,
 };
@@ -50,6 +53,7 @@ export function AppRotas() {
             return i.para === "/" ? <Route key={i.para} index element={tela} /> : <Route key={i.para} path={i.para} element={tela} />;
           })}
           <Route path="/reservas/nova" element={<ExigePermissao permissao="reservas.gerenciar"><TelaNovaReserva /></ExigePermissao>} />
+          <Route path="/relatorios/:id" element={<TelaRelatorio />} />
           {/* Endereços antigos: Produtos e Categorias e quartos agora vivem em Cadastros (fora da guarda de Configurações). */}
           <Route path="/configuracoes/produtos" element={<Navigate to="/cadastros/produtos" replace />} />
           <Route path="/configuracoes/categorias" element={<Navigate to="/cadastros/categorias-e-quartos" replace />} />
