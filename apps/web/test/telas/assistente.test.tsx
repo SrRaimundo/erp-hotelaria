@@ -354,10 +354,10 @@ describe("assistente: ajustes da revisão", () => {
     await screen.findByRole("heading", { name: "Pousada" });
   });
 
-  test("/configuracoes sem config.gerenciar não consulta o assistente", async () => {
-    instalarApiFalsa({ "GET /api/painel": PAINEL, "GET /api/categorias": [], "GET /api/quartos": [], "GET /api/tarifas/tabelas-base": [] });
+  test("/configuracoes sem config.gerenciar volta à tela inicial e não consulta o assistente", async () => {
+    instalarApiFalsa({ "GET /api/painel": PAINEL });
     telaApp("/configuracoes", { usuario: { permissoes: ["cadastros.gerenciar", "reservas.gerenciar"] } });
-    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/configuracoes/categorias"));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/$/));
     expect(chamadas.some((c) => c.caminho === "/api/assistente")).toBe(false);
   });
 

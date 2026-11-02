@@ -98,6 +98,83 @@ describe("tela Produtos", () => {
     expect(cliente.getQueryData(["produtos"])).toBeUndefined();
   });
 
+  test("Todos: marca e desmarca os quatro setores, fica parcial e envia os setores individuais", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/produtos": [], "POST /api/produtos": { __status: 201, ...AGUA } });
+    renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Produtos" });
+    await u.click(await within(lista).findByRole("button", { name: "+ Novo" }));
+    const painel = await screen.findByRole("dialog", { name: /Produtos/ });
+    const todos = within(painel).getByLabelText("Todos") as HTMLInputElement;
+    const rotulos = ["Recepção", "Frigobar", "Bar", "Restaurante"];
+    const marcados = () => rotulos.map((r) => (within(painel).getByLabelText(r) as HTMLInputElement).checked);
+    // Todos fica acima dos quatro setores.
+    const ordem = within(painel).getAllByRole("checkbox").map((c) => c.closest("label")!.textContent);
+    expect(ordem).toEqual(["Todos", ...rotulos]);
+    expect(todos.checked).toBe(false);
+    expect(todos.indeterminate).toBe(false);
+
+    await u.click(todos);
+    expect(marcados()).toEqual([true, true, true, true]);
+    expect(todos.checked).toBe(true);
+    expect(todos.indeterminate).toBe(false);
+
+    await u.click(within(painel).getByLabelText("Bar"));
+    expect(todos.checked).toBe(false);
+    expect(todos.indeterminate).toBe(true);
+
+    await u.click(within(painel).getByLabelText("Bar"));
+    expect(todos.checked).toBe(true);
+
+    await u.click(todos);
+    expect(marcados()).toEqual([false, false, false, false]);
+    expect(todos.indeterminate).toBe(false);
+    expect(within(painel).getByText("Marque ao menos um setor de venda.")).toBeInTheDocument();
+
+    // Parcial: clicar em Todos completa os quatro.
+    await u.click(within(painel).getByLabelText("Frigobar"));
+    expect(todos.indeterminate).toBe(true);
+    await u.click(todos);
+    expect(marcados()).toEqual([true, true, true, true]);
+
+    await u.type(within(painel).getByLabelText("Código"), "SUCO");
+    await u.type(within(painel).getByLabelText("Nome"), "Suco");
+    await u.type(within(painel).getByLabelText("Preço"), "12,50");
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "POST")).toBeDefined());
+    const corpo = chamadas.find((c) => c.metodo === "POST")!.corpo as { setores: string[] };
+    expect(corpo.setores).toEqual(["recepcao", "frigobar", "bar", "restaurante"]);
+    expect(corpo).not.toHaveProperty("todos");
+  });
+
+  test("Todos reflete o produto editado e preserva o setor interno hospedagem", async () => {
+    const u = userEvent.setup();
+    const COMPLETO = { ...AGUA, setores: ["hospedagem", "recepcao", "frigobar", "bar", "restaurante"] };
+    instalarApiFalsa({ "GET /api/produtos": [COMPLETO], "PUT /api/produtos/p1": COMPLETO });
+    renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Produtos" });
+    // Coluna Setores: com os quatro, mostra "Todos".
+    expect(await within(lista).findByRole("cell", { name: "Todos" })).toBeInTheDocument();
+    await u.click(within(lista).getByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog", { name: /Produtos/ });
+    const todos = within(painel).getByLabelText("Todos") as HTMLInputElement;
+    expect(todos.checked).toBe(true);
+    await u.click(todos);
+    await u.click(within(painel).getByLabelText("Bar"));
+    await u.click(within(painel).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "PUT")).toBeDefined());
+    expect((chamadas.find((c) => c.metodo === "PUT")!.corpo as { setores: string[] }).setores).toEqual(["hospedagem", "bar"]);
+  });
+
+  test("a coluna Setores lista os nomes quando não são os quatro", async () => {
+    instalarApiFalsa({ "GET /api/produtos": [AGUA, { ...JANTAR, setores: ["recepcao", "frigobar", "bar"] }] });
+    renderizar(<TelaProdutos />, { usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const lista = await screen.findByRole("region", { name: "Produtos" });
+    expect(await within(lista).findByRole("cell", { name: "Frigobar, Recepção" })).toBeInTheDocument();
+    expect(within(lista).getByRole("cell", { name: "Recepção, Frigobar, Bar" })).toBeInTheDocument();
+    expect(within(lista).queryByRole("cell", { name: "Todos" })).not.toBeInTheDocument();
+  });
+
   test("filtra por setor e mostra desativados sob demanda; reativar", async () => {
     const u = userEvent.setup();
     instalarApiFalsa({ "GET /api/produtos": [AGUA, JANTAR, ANTIGO], "POST /api/produtos/p3/reativar": { ok: true } });

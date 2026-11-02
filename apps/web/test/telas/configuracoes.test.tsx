@@ -36,21 +36,21 @@ function Arvore() {
   return (
     <Routes>
       <Route path="/" element={<p>inicio</p>} />
-      <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
+      <Route path="/configuracoes" element={<ExigePermissao permissao="config.gerenciar"><LayoutConfiguracoes /></ExigePermissao>}>
         <Route index element={<PrimeiraConfiguracao />} />
         <Route path="pousada" element={<p>tela pousada</p>} />
-        <Route path="categorias" element={<p>tela categorias</p>} />
+        <Route path="usuarios" element={<p>tela usuarios</p>} />
       </Route>
     </Routes>
   );
 }
 
 describe("área Configurações", () => {
-  test("engrenagem de Configurações só com permissão", () => {
-    const { unmount } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "quartos.situacao"] } });
+  test("engrenagem de Configurações só com config.gerenciar", () => {
+    const { unmount } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "quartos.situacao", "cadastros.gerenciar"] } });
     expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
     unmount();
-    renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "cadastros.gerenciar"] } });
+    renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "config.gerenciar"] } });
     const engrenagem = screen.getByRole("link", { name: "Configurações" });
     expect(engrenagem).toHaveAttribute("href", "/configuracoes");
     expect(engrenagem).toHaveAttribute("title", "Configurações");
@@ -58,24 +58,26 @@ describe("área Configurações", () => {
     expect(within(screen.getByRole("navigation", { name: "Menu principal" })).queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
   });
 
-  test("engrenagem aparece também só com config.gerenciar", () => {
-    renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "config.gerenciar"] } });
-    expect(screen.getByRole("link", { name: "Configurações" })).toBeInTheDocument();
-  });
-
-  test("submenu só lista as telas da permissão do usuário", () => {
-    renderizar(<Arvore />, { rota: "/configuracoes/categorias", usuario: { permissoes: ["cadastros.gerenciar"] } });
+  test("o submenu não lista mais Produtos nem Categorias e quartos (agora em Cadastros)", () => {
+    renderizar(<Arvore />, { rota: "/configuracoes/usuarios", usuario: { permissoes: ["config.gerenciar", "cadastros.gerenciar"] } });
     const sub = screen.getByRole("navigation", { name: "Configurações" });
-    expect(within(sub).getByRole("link", { name: "Categorias e quartos" })).toBeInTheDocument();
-    expect(within(sub).getByRole("link", { name: "Produtos" })).toBeInTheDocument();
-    expect(within(sub).queryByRole("link", { name: "Pousada" })).not.toBeInTheDocument();
-    expect(within(sub).queryByRole("link", { name: "Usuários" })).not.toBeInTheDocument();
-    expect(screen.getByText("tela categorias")).toBeInTheDocument();
+    expect(within(sub).getByRole("link", { name: "Usuários" })).toBeInTheDocument();
+    expect(within(sub).getByRole("link", { name: "Pousada" })).toBeInTheDocument();
+    expect(within(sub).queryByRole("link", { name: "Produtos" })).not.toBeInTheDocument();
+    expect(within(sub).queryByRole("link", { name: /Categorias/ })).not.toBeInTheDocument();
+    expect(screen.getByText("tela usuarios")).toBeInTheDocument();
   });
 
-  test("/configuracoes leva à primeira tela permitida", () => {
-    renderizar(<Arvore />, { rota: "/configuracoes", usuario: { permissoes: ["cadastros.gerenciar"] } });
-    expect(screen.getByText("tela categorias")).toBeInTheDocument();
+  test("/configuracoes leva à primeira tela permitida", async () => {
+    instalarApiFalsa({ "GET /api/assistente": { pousada: true, quartos: true, equipe: true, categorias: [] } });
+    renderizar(<Arvore />, { rota: "/configuracoes", usuario: { permissoes: ["config.gerenciar"] } });
+    expect(await screen.findByText("tela pousada")).toBeInTheDocument();
+  });
+
+  test("só com cadastros.gerenciar a área não abre", () => {
+    renderizar(<Arvore />, { rota: "/configuracoes/pousada", usuario: { permissoes: ["cadastros.gerenciar", "reservas.gerenciar"] } });
+    expect(screen.getByText("inicio")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Configurações" })).not.toBeInTheDocument();
   });
 
   test("sem nenhuma das permissões a área não abre", () => {
@@ -85,24 +87,21 @@ describe("área Configurações", () => {
   });
 });
 
-describe("acesso só à Configurações", () => {
-  test("perfil só com cadastros.gerenciar: rota inicial, redirecionamento e link no menu", () => {
+describe("acesso só a Cadastros", () => {
+  test("perfil só com cadastros.gerenciar: Hoje redireciona para a tela de produtos e não há engrenagem", () => {
     const usuario = { permissoes: ["cadastros.gerenciar"] };
     renderizar(
       <>
         <MenuLateral atencao={0} />
         <Routes>
           <Route path="/" element={<ExigePermissao permissao="reservas.gerenciar"><p>hoje</p></ExigePermissao>} />
-          <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
-            <Route index element={<PrimeiraConfiguracao />} />
-            <Route path="categorias" element={<p>tela categorias</p>} />
-          </Route>
+          <Route path="/cadastros/produtos" element={<ExigePermissao permissao="cadastros.gerenciar"><p>tela produtos</p></ExigePermissao>} />
         </Routes>
       </>,
       { rota: "/", usuario },
     );
-    expect(screen.getByText("tela categorias")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Configurações" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("tela produtos")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
     expect(screen.queryByText("hoje")).not.toBeInTheDocument();
   });
 
@@ -112,7 +111,10 @@ describe("acesso só à Configurações", () => {
     expect(rotaInicial(u(["quartos.situacao"]))).toBe("/governanca");
     expect(rotaInicial(u(["quartos.situacao", "config.gerenciar"]))).toBe("/configuracoes");
     expect(rotaInicial(u(["config.gerenciar"]))).toBe("/configuracoes");
-    expect(rotaInicial(u(["cadastros.gerenciar"]))).toBe("/configuracoes");
+    expect(rotaInicial(u(["cadastros.gerenciar"]))).toBe("/cadastros/produtos");
+    expect(rotaInicial(u(["cadastros.gerenciar", "caixa.operar"]))).toBe("/cadastros/produtos");
+    expect(rotaInicial(u(["cadastros.gerenciar", "config.gerenciar"]))).toBe("/configuracoes");
+    expect(rotaInicial(u(["cadastros.gerenciar", "reservas.gerenciar"]))).toBe("/");
   });
 });
 

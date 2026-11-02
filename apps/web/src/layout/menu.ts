@@ -1,5 +1,5 @@
 /** Estrutura única do menu lateral: o MenuLateral e as rotas de "em breve" leem daqui. */
-export type ItemMenu = { para: string; rotulo: string; permissao?: string; algumaDe?: string[] };
+export type ItemMenu = { para: string; rotulo: string; permissao: string };
 export type GrupoMenu = { id: string; rotulo: string; itens: ItemMenu[] };
 
 const CONFIG = "config.gerenciar";
@@ -54,6 +54,7 @@ export const GRUPOS_MENU: GrupoMenu[] = [
     rotulo: "Cadastros",
     itens: [
       cadastro("produtos", "Produtos"),
+      cadastro("categorias-e-quartos", "Categorias e Quartos"),
       cadastro("setores", "Setores"),
       cadastro("fornecedor", "Fornecedor"),
       cadastro("cobranca", "Cobrança"),
@@ -66,10 +67,6 @@ export const GRUPOS_MENU: GrupoMenu[] = [
     ],
   },
 ];
-
-export const PERMISSOES_CONFIGURACOES = [CONFIG, CADASTROS];
-
-export const itemVisivel = (i: ItemMenu, pode: (p: string) => boolean): boolean => (i.algumaDe ? i.algumaDe.some(pode) : pode(i.permissao ?? ""));
 
 /** O item cuja rota contém o caminho atual (`/reservas/nova` pertence a `/reservas`). */
 export function rotaDoItem(para: string, caminho: string): boolean {

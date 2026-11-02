@@ -27,9 +27,9 @@ export function LayoutConfiguracoes() {
 /** `/configuracoes` leva à primeira tela permitida. */
 export function PrimeiraConfiguracao() {
   const { pode } = useSessao();
-  const estado = useEstadoAssistente(pode("config.gerenciar"));
+  const estado = useEstadoAssistente();
   // Enquanto não há quartos ativos, quem configura a pousada cai no assistente (falha na consulta: segue o normal).
-  if (pode("config.gerenciar") && estado.isPending) return null;
+  if (estado.isPending) return null;
   if (estado.data && !estado.data.quartos) return <Navigate to="/configuracoes/assistente" replace />;
   const primeira = TELAS_CONFIGURACOES.find((t) => pode(t.permissao));
   return primeira ? <Navigate to={`/configuracoes/${primeira.caminho}`} replace /> : null;

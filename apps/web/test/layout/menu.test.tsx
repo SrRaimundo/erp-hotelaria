@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLocation } from "react-router";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { MenuLateral } from "../../src/layout/MenuLateral";
 import { AppRotas } from "../../src/rotas";
@@ -8,6 +9,10 @@ import { criarPainel } from "../fixtures/painel";
 import { aguardarConsultas, renderizar } from "../ajuda";
 
 afterEach(() => vi.unstubAllGlobals());
+
+function Sonda() {
+  return <output data-testid="local">{useLocation().pathname}</output>;
+}
 
 const painel = { "GET /api/painel": criarPainel() };
 
@@ -30,7 +35,7 @@ describe("menu em grupos", () => {
     await itens("Hotel", ["Hoje", "Mapa", "Reservas", "Caixa", "Governança", "Relatórios"]);
     await itens("Financeiro", ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios"]);
     await itens("Estoque", ["Local", "Fiscal", "Movimento", "Requisição", "Serviço", "Compra", "Inventário", "Relatórios"]);
-    await itens("Cadastros", ["Produtos", "Setores", "Fornecedor", "Cobrança", "Tipo de Documento", "Grupo", "SubGrupo", "Contas Bancárias", "Locais", "Relatórios"]);
+    await itens("Cadastros", ["Produtos", "Categorias e Quartos", "Setores", "Fornecedor", "Cobrança", "Tipo de Documento", "Grupo", "SubGrupo", "Contas Bancárias", "Locais", "Relatórios"]);
     expect(screen.getByRole("link", { name: "Cartão de Crédito" })).toHaveAttribute("href", "/financeiro/cartao-de-credito");
     expect(screen.getAllByRole("link", { name: "Relatórios" }).map((l) => l.getAttribute("href"))).toEqual(["/relatorios", "/financeiro/relatorios", "/estoque/relatorios", "/cadastros/relatorios"]);
   });
@@ -77,11 +82,11 @@ describe("menu em grupos", () => {
     expect(screen.getByRole("link", { name: "Caixa" })).toBeInTheDocument();
   });
 
-  test("só cadastros.gerenciar: apenas o grupo Cadastros, e a engrenagem leva a /configuracoes", async () => {
+  test("só cadastros.gerenciar: apenas o grupo Cadastros, sem engrenagem", async () => {
     const { cliente } = renderizar(<MenuLateral atencao={0} />, { rota: "/cadastros/produtos", usuario: { permissoes: ["cadastros.gerenciar"] } });
     await aguardarConsultas(cliente);
     expect(cabecalhos()).toEqual(["Cadastros"]);
-    expect(screen.getByRole("link", { name: "Configurações" })).toHaveAttribute("href", "/configuracoes");
+    expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
   });
 
   test("a engrenagem tem rótulo, título e ícone, e fica ao lado do Sair", async () => {
@@ -132,6 +137,43 @@ describe("marca do menu", () => {
     const r = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: tudo } });
     expect(marca(r.container)).toBe("ALICE");
     await screen.findByRole("navigation", { name: "Menu principal" });
+  });
+});
+
+describe("Produtos e Categorias e Quartos em Cadastros", () => {
+  test("Categorias e Quartos é o segundo item de Cadastros e abre a tela real", async () => {
+    instalarApiFalsa({ "GET /api/produtos": [], "GET /api/categorias": [], "GET /api/quartos": [], "GET /api/tarifas/tabelas-base": [] });
+    const u = userEvent.setup();
+    renderizar(<AppRotas />, { rota: "/cadastros/produtos", usuario: { permissoes: ["cadastros.gerenciar"] } });
+    const cadastros = document.getElementById(screen.getByRole("button", { name: "Cadastros" }).getAttribute("aria-controls")!)!;
+    expect(nomesLinks(cadastros).slice(0, 2)).toEqual(["Produtos", "Categorias e Quartos"]);
+    await u.click(within(cadastros).getByRole("link", { name: "Categorias e Quartos" }));
+    expect(await screen.findByRole("region", { name: "Categorias" })).toBeInTheDocument();
+    expect(screen.queryByText("Esta tela ainda será construída.")).not.toBeInTheDocument();
+  });
+
+  test("sem cadastros.gerenciar a rota nova não abre", async () => {
+    instalarApiFalsa({ "GET /api/governanca": [] });
+    renderizar(<AppRotas />, { rota: "/cadastros/categorias-e-quartos", usuario: { permissoes: ["quartos.situacao"] } });
+    expect(await screen.findByRole("heading", { name: "Governança" })).toBeInTheDocument();
+  });
+
+  test.each([
+    ["/configuracoes/produtos", /produtos/i],
+    ["/configuracoes/categorias", /categorias/i],
+  ])("a URL antiga %s redireciona para o novo endereço em Cadastros", async (antiga, regiao) => {
+    instalarApiFalsa({ "GET /api/produtos": [], "GET /api/categorias": [], "GET /api/quartos": [], "GET /api/tarifas/tabelas-base": [] });
+    renderizar(<><AppRotas /><Sonda /></>, { rota: antiga, usuario: { permissoes: ["cadastros.gerenciar"] } });
+    expect(await screen.findByRole("region", { name: regiao })).toBeInTheDocument();
+    expect(screen.getByTestId("local")).toHaveTextContent(antiga.endsWith("produtos") ? "/cadastros/produtos" : "/cadastros/categorias-e-quartos");
+  });
+
+  test("perfil só com cadastros.gerenciar cai em /cadastros/produtos e não abre /configuracoes", async () => {
+    instalarApiFalsa({ "GET /api/produtos": [] });
+    renderizar(<><AppRotas /><Sonda /></>, { rota: "/configuracoes", usuario: { permissoes: ["cadastros.gerenciar"] } });
+    expect(await screen.findByRole("region", { name: "Produtos" })).toBeInTheDocument();
+    expect(screen.getByTestId("local")).toHaveTextContent("/cadastros/produtos");
+    expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
   });
 });
 
