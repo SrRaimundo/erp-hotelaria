@@ -38,10 +38,33 @@ export function gerarPdf(relatorio: Relatorio, cabecalho: CabecalhoPdf): Blob {
   linha(relatorio.titulo, 14, true);
   linha(relatorio.subtitulo, 10);
   linha(`Gerado em ${formatarInstante(relatorio.geradoEm)} por ${cabecalho.usuario}`, 9);
-  if (relatorio.resumo.length > 0) linha(relatorio.resumo.map((r) => `${r.rotulo}: ${r.valor}`).join("   |   "), 10, true);
+  if (relatorio.resumo.length > 0) {
+    // O resumo do caixa passa de uma linha de largura: quebra nas margens, sem cortar valores.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    // Empacota itens inteiros por linha (um valor nunca é partido ao meio).
+    const itens = relatorio.resumo.map((r) => limpo(`${r.rotulo}: ${r.valor}`));
+    const separador = "   |   ";
+    const linhas: string[] = [];
+    for (const item of itens) {
+      const atual = linhas[linhas.length - 1];
+      if (atual !== undefined && doc.getTextWidth(atual + separador + item) <= largura - 2 * MARGEM) linhas[linhas.length - 1] = atual + separador + item;
+      else linhas.push(item);
+    }
+    for (const parte of linhas) linha(parte, 10, true);
+  }
   y += 2;
+  const altura = doc.internal.pageSize.getHeight();
+  /** Título de seção e mensagem de vazio não podem ficar soltos no pé da página. */
+  const garantirEspaco = (mm: number) => {
+    if (y + mm > altura - 16) {
+      doc.addPage();
+      y = MARGEM;
+    }
+  };
 
   for (const { secao, t } of tabelas) {
+    garantirEspaco(secao.titulo ? 30 : 16);
     if (secao.titulo) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
@@ -77,7 +100,6 @@ export function gerarPdf(relatorio: Relatorio, cabecalho: CabecalhoPdf): Blob {
   }
 
   const paginas = doc.getNumberOfPages();
-  const altura = doc.internal.pageSize.getHeight();
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   for (let p = 1; p <= paginas; p++) {

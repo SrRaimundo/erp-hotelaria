@@ -38,13 +38,15 @@ function Conteudo({ reserva, aba, fluxo, receber, aoReceber, aoMudar }: { reserv
   return <AbaResumo reserva={reserva} />;
 }
 
-/** Painel da reserva: aparece em qualquer rota que tenha ?reserva=<id>. */
+/** Única rota em que `?reserva=` não pede o painel: lá é o filtro do relatório da conta. */
+export const ROTA_CONTA_RELATORIO = "/relatorios/conta";
+
+/** Painel da reserva: aparece em qualquer rota que tenha ?reserva=<id> (exceto o relatório da conta). */
 export function GavetaReserva() {
   const [params, setParams] = useSearchParams();
   const { pathname } = useLocation();
   const id = params.get("reserva");
-  // Em /relatorios/conta o ?reserva é o filtro do relatório, não o pedido de abrir o painel.
-  if (!id || pathname.startsWith("/relatorios")) return null;
+  if (!id || pathname === ROTA_CONTA_RELATORIO) return null;
 
   function mudar(mudancas: Mudancas) {
     setParams((atual) => {

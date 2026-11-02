@@ -52,8 +52,9 @@ function Rotas() {
         <Route path="/relatorios" element={<TelaRelatorios />} />
         <Route path="/relatorios/:id" element={<TelaRelatorio />} />
         <Route path="/caixa" element={<TelaCaixa />} />
-        <Route path="*" element={<GavetaReserva />} />
+        <Route path="*" element={null} />
       </Routes>
+      <GavetaReserva />
     </>
   );
 }
@@ -227,6 +228,50 @@ describe("atalhos nas telas", () => {
     await userEvent.setup().click(await screen.findByRole("link", { name: "Relatório" }));
     await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent("/relatorios/caixa"));
     await screen.findByRole("table");
+    await aguardarConsultas(r.cliente);
+  });
+});
+
+describe("gaveta da reserva, impressão e voltar", () => {
+  const permissoes = { permissoes: ["reservas.gerenciar"] };
+
+  test("em outro relatório o ?reserva abre a gaveta normalmente (só o da conta o usa como filtro)", async () => {
+    instalarApiFalsa({ "GET /api/painel": criarPainel(), "GET /api/reservas/r1": criarReserva(), "GET /api/relatorios/check-in": completo });
+    const r = renderizar(<Rotas />, { rota: "/relatorios/check-in?reserva=r1&data=2026-11-25", usuario: permissoes });
+    expect(await screen.findByRole("dialog", { name: "#128 · Maria Silva · Qto 101" })).toBeInTheDocument();
+    // o relatório não vê a reserva como filtro
+    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/relatorios/check-in?data=2026-11-25")).toBe(true));
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("o CSS de impressão dos relatórios só vale com um relatório montado", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/check-in": completo });
+    const r = renderizar(<Rotas />, { rota: "/relatorios", usuario: permissoes });
+    expect(document.body).not.toHaveClass("imprimindo-relatorio");
+    await userEvent.setup().click(screen.getByRole("link", { name: /Lista de check-in/ }));
+    await screen.findByRole("table");
+    expect(document.body).toHaveClass("imprimindo-relatorio");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Voltar" }));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/relatorios$/));
+    expect(document.body).not.toHaveClass("imprimindo-relatorio");
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("Voltar de um relatório aberto direto leva ao catálogo", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/check-in": completo });
+    const a = renderizar(<Rotas />, { rota: "/relatorios/check-in", usuario: permissoes });
+    await screen.findByRole("table");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Voltar" }));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/relatorios$/));
+    await aguardarConsultas(a.cliente);
+  });
+
+  test("caixa-only: Voltar vai ao caixa, não a uma tela sem permissão", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/caixa/turnos": [], "GET /api/relatorios/caixa": { ...completo, id: "caixa" }, "GET /api/caixa/atual": null, "GET /api/formas-pagamento": [] });
+    const r = renderizar(<Rotas />, { rota: "/relatorios/caixa", usuario: { permissoes: ["caixa.operar"] } });
+    await screen.findByRole("table");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Voltar" }));
+    await waitFor(() => expect(screen.getByTestId("local")).toHaveTextContent(/^\/caixa$/));
     await aguardarConsultas(r.cliente);
   });
 });

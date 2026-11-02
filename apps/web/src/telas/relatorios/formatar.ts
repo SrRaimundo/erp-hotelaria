@@ -52,4 +52,5 @@ export function dataDoInstante(iso: string): string {
   return `${d.getFullYear()}-${doisDigitos(d.getMonth() + 1)}-${doisDigitos(d.getDate())}`;
 }
 
-export const nomeDoArquivo = (r: Pick<Relatorio, "id" | "geradoEm">) => `${r.id}-${dataDoInstante(r.geradoEm)}.pdf`;
+/** `<id>-<data>.pdf`: a data é a do filtro (AAAA-MM-DD) quando há; senão a do instante de geração. */
+export const nomeDoArquivo = (r: Pick<Relatorio, "id" | "geradoEm">, data?: string) => `${r.id}-${data || dataDoInstante(r.geradoEm)}.pdf`;

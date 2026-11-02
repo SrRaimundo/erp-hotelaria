@@ -62,6 +62,26 @@ describe("Exportar PDF", () => {
     await aguardarConsultas(r.cliente);
   });
 
+  test("o nome do arquivo usa a data do filtro, não a de hoje", async () => {
+    instalarApiFalsa({ "GET /api/config": CONFIG, "GET /api/relatorios/check-in": relatorio });
+    const r = renderizar(<Tela />, { rota: "/relatorios/check-in?data=2026-12-25", usuario: { permissoes: ["reservas.gerenciar"] } });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(baixados).toEqual(["check-in-2026-12-25.pdf"]));
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("Imprimir e Exportar esperam a configuração da pousada (cabeçalho completo)", async () => {
+    let liberar: (v: unknown) => void = () => {};
+    instalarApiFalsa({ "GET /api/config": () => new Promise((ok) => (liberar = ok)), "GET /api/relatorios/check-in": relatorio });
+    const r = renderizar(<Tela />, { rota: "/relatorios/check-in", usuario: { permissoes: ["reservas.gerenciar"] } });
+    await screen.findByRole("table");
+    expect(screen.getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Imprimir" })).toBeDisabled();
+    liberar(CONFIG);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Exportar PDF" })).toBeEnabled());
+    await aguardarConsultas(r.cliente);
+  });
+
   test("falha ao gerar mostra aviso e não baixa nada", async () => {
     gerarPdfFalso.mockImplementation(() => {
       throw new Error("quebrou");
@@ -110,6 +130,16 @@ describe("Compartilhar", () => {
     expect(arg.files[0]!.name).toBe("check-in-2026-11-20.pdf");
     expect(arg.files[0]!.type).toBe("application/pdf");
     expect(canShare).toHaveBeenCalledWith({ files: expect.any(Array) });
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("falha ao compartilhar não diz que o PDF não foi gerado", async () => {
+    Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true });
+    Object.defineProperty(navigator, "share", { value: vi.fn(async () => { throw new DOMException("sem gesto", "NotAllowedError"); }), configurable: true });
+    const r = abrir();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Compartilhar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível compartilhar");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("gerar o PDF");
     await aguardarConsultas(r.cliente);
   });
 

@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useConfig, useRelatorio } from "../../api/consultas";
 import { ExigePermissao } from "../../auth/ExigePermissao";
-import { useSessao } from "../../auth/SessaoProvider";
+import { rotaInicial, useSessao } from "../../auth/SessaoProvider";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { useAtrasado } from "../../lib/useAtrasado";
 import { BarraSaidas } from "./BarraSaidas";
-import { buscarNoCatalogo, type ItemCatalogo } from "./catalogo";
+import { buscarNoCatalogo, PERM_RELATORIOS, type ItemCatalogo } from "./catalogo";
 import { CabecalhoImpressao } from "./CabecalhoImpressao";
 import { FiltrosRelatorio } from "./FiltrosRelatorio";
 import { VisorRelatorio } from "./VisorRelatorio";
@@ -20,8 +20,13 @@ function Corpo({ item }: { item: ItemCatalogo }) {
   const [params, setParams] = useSearchParams();
   const navegar = useNavigate();
   const local = useLocation();
-  const { usuario } = useSessao();
+  const { usuario, pode } = useSessao();
   const config = useConfig();
+  // Marca a página para o CSS de impressão dos relatórios valer só enquanto um relatório está na tela.
+  useEffect(() => {
+    document.body.classList.add("imprimindo-relatorio");
+    return () => document.body.classList.remove("imprimindo-relatorio");
+  }, []);
   const [textoBusca, setTextoBusca] = useState("");
   const busca = useAtrasado(textoBusca.trim(), 300);
 
@@ -47,7 +52,12 @@ function Corpo({ item }: { item: ItemCatalogo }) {
     );
   }
   // Veio de outra tela (reserva, caixa, catálogo): volta nela; aberto direto, vai ao catálogo.
-  const voltar = () => (local.key === "default" ? navegar("/relatorios") : navegar(-1));
+  const voltar = () => {
+    if (local.key !== "default") return void navegar(-1);
+    // Quem não vê o catálogo (só caixa) volta para o caixa, que é de onde o relatório sai; senão, sua tela inicial.
+    if (pode(PERM_RELATORIOS) || !usuario) void navegar("/relatorios");
+    else void navegar(pode("caixa.operar") ? "/caixa" : rotaInicial(usuario));
+  };
 
   const cabecalho = {
     nome: config.data?.nomeEstabelecimento ?? "",
@@ -89,7 +99,12 @@ function Corpo({ item }: { item: ItemCatalogo }) {
         <h1>{item.nome}</h1>
       </div>
       <FiltrosRelatorio item={item} valores={valores} aoMudar={mudar} busca={textoBusca} aoMudarBusca={setTextoBusca} />
-      <BarraSaidas relatorio={relatorio.data} cabecalho={cabecalho} />
+      <BarraSaidas
+        // Sem a config o cabeçalho sairia sem a pousada; se a consulta falhar, segue sem ele.
+        relatorio={config.isPending ? undefined : relatorio.data}
+        cabecalho={cabecalho}
+        data={filtros.data ?? filtros.inicio}
+      />
       {conteudo}
     </div>
   );

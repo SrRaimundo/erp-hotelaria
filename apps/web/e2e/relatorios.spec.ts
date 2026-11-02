@@ -95,6 +95,14 @@ test.describe.serial("relatórios do hotel", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await conferirImpressao(page, "impressao-conta.png");
   });
+
+  test("4b. fora dos relatórios, imprimir não esconde o menu (CSS de impressão escopado)", async () => {
+    await page.getByRole("link", { name: "Mapa" }).click();
+    await expect(page.locator(".menu")).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".menu")).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+  });
 });
 
 test("5. relatório no celular não rola a página na horizontal @celular", async ({ page }) => {

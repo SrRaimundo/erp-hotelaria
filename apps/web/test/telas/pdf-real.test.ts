@@ -1,3 +1,4 @@
+import { jsPDF } from "jspdf";
 import { describe, expect, test } from "vitest";
 import type { Relatorio } from "../../src/api/tipos";
 import { gerarPdf } from "../../src/telas/relatorios/gerarPdf";
@@ -77,5 +78,36 @@ describe("gerarPdf (saída real da biblioteca)", () => {
     const r = relatorio(0);
     r.secoes[0]!.linhas = [];
     expect(await bytes(gerarPdf(r, CABECALHO))).toContain("(Nada para mostrar neste filtro) Tj");
+  });
+
+  test("resumo longo (fechamento de caixa) quebra em linhas que cabem na largura da folha", async () => {
+    const r = relatorio(0);
+    r.resumo = [
+      { rotulo: "Turno", valor: "Maria Recepção" }, { rotulo: "Abertura", valor: "20/11/2026 08:00" }, { rotulo: "Fechamento", valor: "20/11/2026 18:00" },
+      { rotulo: "Esperado", valor: "R$ 12.345,67" }, { rotulo: "Contado", valor: "R$ 12.340,67" }, { rotulo: "Diferença", valor: "-R$ 5,00" },
+      { rotulo: "Movimentos", valor: "48" },
+    ];
+    r.secoes[0]!.colunas.push(...[0, 1, 2, 3].map((i) => ({ chave: `x${i}`, titulo: `X${i}`, tipo: "texto" as const }))); // paisagem
+    const pdf = await bytes(gerarPdf(r, CABECALHO));
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    const util = doc.internal.pageSize.getWidth() - 2 * 12;
+    const textos = [...pdf.matchAll(/\(([^)]*)\) Tj/g)].map((m) => m[1]!);
+    expect(textos.some((t) => t.startsWith("Turno: "))).toBe(true);
+    expect(textos.some((t) => t.includes("Diferença: -R$ 5,00"))).toBe(true); // nada cortado
+    for (const t of textos) expect(doc.getTextWidth(t), t).toBeLessThanOrEqual(util);
+    expect(textos.filter((t) => t.includes(" | ")).length).toBeGreaterThan(1); // quebrou em mais de uma linha
+  });
+
+  test("título da segunda seção nunca fica solto no pé da página", async () => {
+    for (let linhas = 28; linhas <= 48; linhas++) {
+      const r = relatorio(0);
+      r.secoes[0]!.linhas = Array.from({ length: linhas }, (_, i) => ({ hospede: `H${i}`, saldo: i, feito: null }));
+      r.secoes.push({ titulo: "Segunda seção", colunas: r.secoes[0]!.colunas, linhas: [{ hospede: "Z", saldo: 1, feito: null }] });
+      const m = /([\d.]+) ([\d.]+) Td\n\(Segunda seção\) Tj/.exec(await bytes(gerarPdf(r, CABECALHO)));
+      expect(m, `${linhas} linhas`).not.toBeNull();
+      expect(Number(m![2]), `${linhas} linhas`).toBeGreaterThan(60); // pt a partir do rodapé (A4 retrato)
+    }
   });
 });

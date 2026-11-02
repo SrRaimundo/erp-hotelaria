@@ -5,9 +5,9 @@ import { nomeDoArquivo } from "./formatar";
 import type { CabecalhoPdf } from "./gerarPdf";
 
 /** O PDF (e a biblioteca que o gera) só é baixado no primeiro clique: computadores simples não carregam isso à toa. */
-async function criarPdf(relatorio: Relatorio, cabecalho: CabecalhoPdf): Promise<File> {
+async function criarPdf(relatorio: Relatorio, cabecalho: CabecalhoPdf, data?: string): Promise<File> {
   const { gerarPdf } = await import("./gerarPdf");
-  return new File([gerarPdf(relatorio, cabecalho)], nomeDoArquivo(relatorio), { type: "application/pdf" });
+  return new File([gerarPdf(relatorio, cabecalho)], nomeDoArquivo(relatorio, data), { type: "application/pdf" });
 }
 
 /** Só quando o navegador sabe compartilhar arquivos (precisa de HTTPS; sem isso fica só o PDF). */
@@ -31,23 +31,31 @@ function baixar(arquivo: File): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-type Props = { relatorio: Relatorio | undefined; cabecalho: CabecalhoPdf };
+type Props = { relatorio: Relatorio | undefined; cabecalho: CabecalhoPdf; data?: string };
 
 /** Imprimir, exportar PDF e compartilhar. Fica fora da folha impressa. */
-export function BarraSaidas({ relatorio, cabecalho }: Props) {
+export function BarraSaidas({ relatorio, cabecalho, data }: Props) {
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const compartilhavel = podeCompartilharArquivos();
 
-  async function executar(acao: (pdf: File) => Promise<void> | void) {
+  async function executar(acao: (pdf: File) => Promise<void> | void, falha: string) {
     if (!relatorio) return;
     setOcupado(true);
     setErro(null);
+    let pdf: File;
     try {
-      await acao(await criarPdf(relatorio, cabecalho));
+      pdf = await criarPdf(relatorio, cabecalho, data);
+    } catch {
+      setErro("Não foi possível gerar o PDF. Tente de novo ou use Imprimir.");
+      setOcupado(false);
+      return;
+    }
+    try {
+      await acao(pdf);
     } catch (e) {
       // Fechar a folha de compartilhamento não é erro.
-      if (!(e instanceof DOMException && e.name === "AbortError")) setErro("Não foi possível gerar o PDF. Tente de novo ou use Imprimir.");
+      if (!(e instanceof DOMException && e.name === "AbortError")) setErro(falha);
     } finally {
       setOcupado(false);
     }
@@ -58,11 +66,11 @@ export function BarraSaidas({ relatorio, cabecalho }: Props) {
       <Botao variante="contorno" disabled={!relatorio} onClick={() => window.print()}>
         Imprimir
       </Botao>
-      <Botao variante="contorno" disabled={!relatorio || ocupado} onClick={() => executar(baixar)}>
+      <Botao variante="contorno" disabled={!relatorio || ocupado} onClick={() => executar(baixar, "Não foi possível baixar o PDF. Use Imprimir.")}>
         Exportar PDF
       </Botao>
       {compartilhavel && (
-        <Botao variante="contorno" disabled={!relatorio || ocupado} onClick={() => executar((pdf) => navigator.share({ files: [pdf], title: relatorio?.titulo }))}>
+        <Botao variante="contorno" disabled={!relatorio || ocupado} onClick={() => executar((pdf) => navigator.share({ files: [pdf], title: relatorio?.titulo }), "Não foi possível compartilhar. Use Exportar PDF e envie o arquivo.")}>
           Compartilhar
         </Botao>
       )}

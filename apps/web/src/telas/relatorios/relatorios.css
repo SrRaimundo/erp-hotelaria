@@ -36,27 +36,29 @@
 
 .rel-cabecalho-impressao { display: none; }
 
+/* Só vale com um relatório na tela: Corpo marca o body com .imprimindo-relatorio enquanto está montado.
+   O `body.imprimindo-relatorio` na frente também vence layout.css, carregado depois deste arquivo. */
 @media print {
   /* Some tudo que é navegação ou controle; fica o cabeçalho, as tabelas e os totais. */
-  .menu, .topo, .faixa-conexao, .gaveta, .rel-nao-imprimir { display: none !important; }
-  body, .shell, .shell__conteudo { background: #fff; }
-  /* layout.css é carregado depois deste arquivo: o `body` na frente garante a precedência. */
-  body .shell { display: block; }
-  body .shell__coluna { display: block; }
-  body .shell__conteudo { padding: 0; }
-  .rel { max-width: none; gap: 8px; color: #000; }
-  .rel-cabecalho-impressao { display: block; margin-bottom: 8px; font-size: 10pt; }
-  .rel-cabecalho-impressao__nome { font-size: 13pt; }
-  .rel-cabecalho-impressao h1 { font-size: 14pt; margin-top: 6px; }
-  .rel-rolagem { overflow: visible; }
-  .rel-tabela { font-size: 9pt; }
-  .rel-tabela .rel-num { white-space: nowrap; }
-  .rel-tabela th, .rel-tabela td { border: 1px solid #000; color: #000; padding: 4px 6px; }
-  .rel-tabela thead { display: table-header-group; }
-  .rel-tabela tfoot { display: table-footer-group; }
-  .rel-tabela tr { break-inside: avoid; }
+  body.imprimindo-relatorio .menu, body.imprimindo-relatorio .topo, body.imprimindo-relatorio .faixa-conexao,
+  body.imprimindo-relatorio .gaveta, body.imprimindo-relatorio .rel-nao-imprimir { display: none !important; }
+  body.imprimindo-relatorio, body.imprimindo-relatorio .shell, body.imprimindo-relatorio .shell__conteudo { background: #fff; }
+  body.imprimindo-relatorio .shell, body.imprimindo-relatorio .shell__coluna { display: block; }
+  body.imprimindo-relatorio .shell__conteudo { padding: 0; }
+  body.imprimindo-relatorio .rel { max-width: none; gap: 8px; color: #000; }
+  body.imprimindo-relatorio .rel-cabecalho-impressao { display: block; margin-bottom: 8px; font-size: 10pt; }
+  body.imprimindo-relatorio .rel-cabecalho-impressao__nome { font-size: 13pt; }
+  body.imprimindo-relatorio .rel-cabecalho-impressao h1 { font-size: 14pt; margin-top: 6px; }
+  body.imprimindo-relatorio .rel-rolagem { overflow: visible; }
+  body.imprimindo-relatorio .rel-tabela { font-size: 9pt; }
+  body.imprimindo-relatorio .rel-tabela .rel-num { white-space: nowrap; }
+  body.imprimindo-relatorio .rel-tabela th, body.imprimindo-relatorio .rel-tabela td { border: 1px solid #000; color: #000; padding: 4px 6px; }
+  body.imprimindo-relatorio .rel-tabela thead { display: table-header-group; }
+  /* Total geral só no fim da lista, não repetido a cada página. */
+  body.imprimindo-relatorio .rel-tabela tfoot { display: table-row-group; }
+  body.imprimindo-relatorio .rel-tabela tr { break-inside: avoid; }
   /* Colunas em branco são para escrever à mão: borda visível e altura de linha confortável. */
-  .rel-tabela td.rel-em-branco { background: none; height: 9mm; min-width: 25mm; }
-  .rel-resumo__item { border: 1px solid #000; }
+  body.imprimindo-relatorio .rel-tabela td.rel-em-branco { background: none; height: 9mm; min-width: 25mm; }
+  body.imprimindo-relatorio .rel-resumo__item { border: 1px solid #000; }
 }
 .rel-erro { color: var(--terracota); font-weight: 600; flex-basis: 100%; }
