@@ -1,6 +1,7 @@
-import { useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { useReserva } from "../../api/consultas";
 import type { ReservaDetalhe } from "../../api/tipos";
+import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import { Etiqueta } from "../../componentes/Etiqueta";
 import { Gaveta } from "../../componentes/Gaveta";
@@ -37,11 +38,15 @@ function Conteudo({ reserva, aba, fluxo, receber, aoReceber, aoMudar }: { reserv
   return <AbaResumo reserva={reserva} />;
 }
 
-/** Painel da reserva: aparece em qualquer rota que tenha ?reserva=<id>. */
+/** Única rota em que `?reserva=` não pede o painel: lá é o filtro do relatório da conta. */
+export const ROTA_CONTA_RELATORIO = "/relatorios/conta";
+
+/** Painel da reserva: aparece em qualquer rota que tenha ?reserva=<id> (exceto o relatório da conta). */
 export function GavetaReserva() {
   const [params, setParams] = useSearchParams();
+  const { pathname } = useLocation();
   const id = params.get("reserva");
-  if (!id) return null;
+  if (!id || pathname === ROTA_CONTA_RELATORIO) return null;
 
   function mudar(mudancas: Mudancas) {
     setParams((atual) => {
@@ -70,6 +75,7 @@ type PainelProps = { id: string; aba: Aba; fluxo: Fluxo | null; receber: number 
 
 function PainelReserva({ id, aba, fluxo, receber, aoMudar, aoFechar }: PainelProps) {
   const consulta = useReserva(id);
+  const navegar = useNavigate();
   const r = consulta.data;
   if (!r) {
     return (
@@ -84,6 +90,9 @@ function PainelReserva({ id, aba, fluxo, receber, aoMudar, aoFechar }: PainelPro
       <div className="reserva-cabecalho">
         <span>{`${formatarData(r.chegada)} → ${formatarData(r.saida)} · ${plural(r.adultos, "adulto", "adultos")} + ${plural(r.criancasNascimento.length, "criança", "crianças")}`}</span>
         <Etiqueta tom={estado.tom}>{estado.rotulo}</Etiqueta>
+        <Botao variante="contorno" tamanho="pequeno" ignorarConexao onClick={() => navegar(`/relatorios/conta?reserva=${encodeURIComponent(r.id)}`)}>
+          Imprimir conta
+        </Botao>
       </div>
       {!fluxo && <AcoesReserva reserva={r} aoMudarUrl={aoMudar} />}
       {!fluxo && (

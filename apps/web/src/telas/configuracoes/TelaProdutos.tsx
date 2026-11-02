@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi } from "../../api/cliente";
 import type { Produto, Setor } from "../../api/tipos";
@@ -19,6 +19,8 @@ const SETORES: { id: Setor; rotulo: string }[] = [
 ];
 const ROTULO_SETOR = Object.fromEntries(SETORES.map((s) => [s.id, s.rotulo]));
 const GRUPO_PADRAO = "geral";
+const TODOS_OS_SETORES = SETORES.map((s) => s.id);
+const temTodos = (setores: Setor[]) => TODOS_OS_SETORES.every((s) => setores.includes(s));
 
 function PainelProduto({ item, fechar }: { item: Produto | null; fechar: () => void }) {
   const cliente = useQueryClient();
@@ -36,6 +38,14 @@ function PainelProduto({ item, fechar }: { item: Produto | null; fechar: () => v
     ...(unidade.trim() === "" ? ["Informe a unidade."] : []),
     ...(setores.length === 0 ? ["Marque ao menos um setor de venda."] : []),
   ];
+
+  const marcados = TODOS_OS_SETORES.filter((s) => setores.includes(s)).length;
+  const todosRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (todosRef.current) todosRef.current.indeterminate = marcados > 0 && marcados < TODOS_OS_SETORES.length;
+  }, [marcados]);
+  // "Todos" é só um atalho da tela: o pedido continua levando os setores individuais.
+  const alternarTodos = () => setSetores((atual) => (temTodos(atual) ? atual.filter((s) => !TODOS_OS_SETORES.includes(s)) : [...atual.filter((s) => !TODOS_OS_SETORES.includes(s)), ...TODOS_OS_SETORES]));
 
   const alternar = (s: Setor) => setSetores((atual) => (atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s]));
 
@@ -104,6 +114,10 @@ function PainelProduto({ item, fechar }: { item: Produto | null; fechar: () => v
       </div>
       <fieldset className="pousada__grupo">
         <legend>Setores de venda</legend>
+        <label className="pousada__marcar">
+          <input ref={todosRef} type="checkbox" checked={marcados === TODOS_OS_SETORES.length} onChange={alternarTodos} />
+          Todos
+        </label>
         {SETORES.map((s) => (
           <label key={s.id} className="pousada__marcar">
             <input type="checkbox" checked={setores.includes(s.id)} onChange={() => alternar(s.id)} />
@@ -162,7 +176,7 @@ export function TelaProdutos() {
           { titulo: "Preço", celula: (p) => formatarReais(p.precoCentavos) },
           { titulo: "Unidade", celula: (p) => p.unidade },
           { titulo: "Tipo", celula: (p) => (p.tipo === "servico" ? "Serviço" : "Produto") },
-          { titulo: "Setores", celula: (p) => p.setores.map((s) => ROTULO_SETOR[s] ?? s).join(", ") },
+          { titulo: "Setores", celula: (p) => (temTodos(p.setores) ? "Todos" : p.setores.map((s) => ROTULO_SETOR[s] ?? s).join(", ")) },
         ]}
         renderPainel={(p) => <PainelProduto item={p.item} fechar={p.fechar} />}
       />

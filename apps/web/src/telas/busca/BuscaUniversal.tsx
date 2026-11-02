@@ -4,6 +4,7 @@ import { useBusca, usePainel } from "../../api/consultas";
 import type { ResultadoBusca } from "../../api/tipos";
 import { somarDiasIso } from "../../lib/datas";
 import { Botao } from "../../componentes/Botao";
+import { ROTA_CONTA_RELATORIO } from "../reserva/GavetaReserva";
 import { ErroAcao } from "../../componentes/ErroAcao";
 import "./busca.css";
 
@@ -46,13 +47,15 @@ export function BuscaUniversal({ aoFechar }: { aoFechar: () => void }) {
   /** Reserva abre na rota atual (contrato da gaveta, R1); demais ações têm destino próprio. */
   const executar = (r: ResultadoBusca, acao: string) => {
     const reserva = `?reserva=${encodeURIComponent(r.id)}`;
+    // No relatório da conta o ?reserva é o filtro do relatório: as ações do painel vão para o mapa, onde a gaveta abre.
+    const base = pathname === ROTA_CONTA_RELATORIO ? "/mapa" : pathname;
     const destinos: Record<string, string> = {
       abrir: r.tipo === "quarto" ? "/mapa" : pathname + reserva,
       ver_quarto: "/mapa",
-      checkin: `${pathname}${reserva}&fluxo=checkin`,
-      checkout: `${pathname}${reserva}&fluxo=checkout`,
-      registrar_pagamento: `${pathname}${reserva}&aba=conta`,
-      lancar_extra: `${pathname}${reserva}&aba=conta`,
+      checkin: `${base}${reserva}&fluxo=checkin`,
+      checkout: `${base}${reserva}&fluxo=checkout`,
+      registrar_pagamento: `${base}${reserva}&aba=conta`,
+      lancar_extra: `${base}${reserva}&aba=conta`,
       nova_reserva: `/reservas/nova?hospede=${encodeURIComponent(r.id)}`,
       ver_historico: `/reservas?q=${encodeURIComponent(r.rotulo.split(" — ")[0] ?? r.rotulo)}${dia ? `&inicio=${somarDiasIso(dia, -365)}` : ""}&estado=finalizada`,
     };

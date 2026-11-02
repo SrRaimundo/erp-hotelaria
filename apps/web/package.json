@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.8",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^7.18.4"

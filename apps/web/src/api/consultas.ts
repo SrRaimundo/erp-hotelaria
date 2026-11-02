@@ -1,7 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chamarApi, ErroApi } from "./cliente";
 import { useConexao } from "./useConexao";
-import type { Categoria, ConfigPousada, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa, ItemGovernanca, Setor } from "./tipos";
+import type { Categoria, ConfigPousada, Relatorio, FormaPagamento, ItemListaReserva, LinhaExtrato, Mapa, Painel, Produto, ReservaDetalhe, ResultadoBusca, ResumoCaixa, ItemGovernanca, Setor } from "./tipos";
 
 export function criarQueryClient(): QueryClient {
   return new QueryClient({
@@ -108,3 +108,24 @@ export function useAcao<TCorpo, TResp>(fn: (corpo: TCorpo) => Promise<TResp>) {
     },
   });
 }
+
+export type TurnoRelatorio = { id: string; operador: string; abertoEm: string; fechadoEm: string | null; situacao: "aberto" | "fechado"; valorInicial: number };
+
+/** Relatório pronto; sem atualização automática, para a folha impressa bater com a tela. `ativo` falso adia a consulta (filtro obrigatório ainda vazio). */
+export const useRelatorio = (id: string, filtros: Record<string, string>, ativo = true) =>
+  useQuery({
+    queryKey: ["relatorio", id, filtros],
+    queryFn: () => chamarApi<Relatorio>("GET", `/api/relatorios/${encodeURIComponent(id)}${consulta(filtros)}`),
+    enabled: ativo,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
+/** Turnos do período para escolher no relatório de caixa. */
+export const useTurnosRelatorio = (inicio: string, fim: string, ativo: boolean) =>
+  useQuery({
+    queryKey: ["relatorio-turnos", inicio, fim],
+    queryFn: () => chamarApi<TurnoRelatorio[]>("GET", `/api/relatorios/caixa/turnos${consulta({ inicio, fim })}`),
+    enabled: ativo,
+    refetchInterval: false,
+  });

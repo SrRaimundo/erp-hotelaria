@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { chamarApi } from "../../api/cliente";
 import { useAcao, useCaixa, useFormasPagamento } from "../../api/consultas";
 import type { ResumoCaixa } from "../../api/tipos";
@@ -199,7 +200,12 @@ export function TelaCaixa() {
 
   return (
     <div className="caixa">
-      <h1>Caixa</h1>
+      <div className="caixa-topo">
+        <h1>Caixa</h1>
+        <Link to="/relatorios/caixa" className="botao botao--contorno botao--pequeno">
+          Relatório
+        </Link>
+      </div>
       {corpo}
     </div>
   );

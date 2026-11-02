@@ -143,12 +143,13 @@ export function useSessao(): Sessao {
 }
 
 /**
- * Rota inicial após o login: governança-only vai a /governanca; sem reservas mas com configuração, a /configuracoes.
+ * Rota inicial após o login: governança-only vai a /governanca; sem reservas, config.gerenciar vai a /configuracoes e só cadastros.gerenciar a /cadastros/produtos.
  */
 export function rotaInicial(u: UsuarioSessao): string {
   const tem = (p: string) => u.permissoes.includes(p);
   if (u.permissoes.length === 1 && tem("quartos.situacao")) return "/governanca";
-  if (!tem("reservas.gerenciar") && (tem("config.gerenciar") || tem("cadastros.gerenciar"))) return "/configuracoes";
+  if (!tem("reservas.gerenciar") && tem("config.gerenciar")) return "/configuracoes";
+  if (!tem("reservas.gerenciar") && tem("cadastros.gerenciar")) return "/cadastros/produtos";
   return "/";
 }
 

@@ -9,3 +9,5 @@
 .caixa-num { text-align: right !important; }
 .caixa-esperado { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .caixa-esperado li { display: flex; justify-content: space-between; gap: 12px; }
+.caixa-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.caixa-topo .botao { text-decoration: none; }

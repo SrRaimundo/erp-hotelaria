@@ -115,4 +115,15 @@ describe("busca universal", () => {
     await u.keyboard("{Control>}k{/Control}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  test("no relatório da conta (onde ?reserva é filtro) check-in vai ao mapa, onde a gaveta abre", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/busca": [{ tipo: "reserva", id: "r9", rotulo: "Reserva #9 — Ana", acoes: ["checkin"] }], "GET /api/painel": criarPainel() });
+    renderizar(<App />, { ...recepcao, rota: "/relatorios/conta?reserva=r1" });
+    await u.keyboard("{Control>}k{/Control}");
+    await u.type(await screen.findByRole("combobox"), "ana");
+    await screen.findByText("Reserva #9 — Ana");
+    await u.keyboard("{Enter}");
+    expect(screen.getByTestId("local")).toHaveTextContent("/mapa?reserva=r9&fluxo=checkin");
+  });
 });

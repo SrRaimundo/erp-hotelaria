@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from "react-router";
 import { useConfig } from "../api/consultas";
 import { useSessao } from "../auth/SessaoProvider";
 import { Botao } from "../componentes/Botao";
-import { GRUPOS_MENU, PERMISSOES_CONFIGURACOES, itemVisivel, rotaDoItem } from "./menu";
+import { GRUPOS_MENU, rotaDoItem } from "./menu";
 
 function IconeEngrenagem() {
   return (
@@ -20,7 +20,7 @@ export function MenuLateral({ atencao }: { atencao: number }) {
   const config = useConfig();
   const marca = config.data?.nomeEstabelecimento?.trim() || config.data?.razaoSocial?.trim() || "ALICE";
 
-  const grupos = GRUPOS_MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => itemVisivel(i, pode)) })).filter((g) => g.itens.length > 0);
+  const grupos = GRUPOS_MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => pode(i.permissao)) })).filter((g) => g.itens.length > 0);
   const grupoDaRota = grupos.find((g) => g.itens.some((i) => rotaDoItem(i.para, pathname)))?.id;
   const [abertos, setAbertos] = useState<string[]>(grupoDaRota ? [grupoDaRota] : []);
   // Navegar (inclusive por link de dentro das telas) abre o grupo da nova rota, sem fechar os que o usuário abriu.
@@ -31,7 +31,7 @@ export function MenuLateral({ atencao }: { atencao: number }) {
 
   // Com um único destino (ex.: governança) o menu não tem o que oferecer: ficam só o nome e o Sair.
   const simples = grupos.reduce((n, g) => n + g.itens.length, 0) <= 1;
-  const podeConfigurar = PERMISSOES_CONFIGURACOES.some(pode);
+  const podeConfigurar = pode("config.gerenciar");
   return (
     <aside className={simples ? "menu menu--simples" : "menu"}>
       <div className="menu__marca">{marca}</div>
