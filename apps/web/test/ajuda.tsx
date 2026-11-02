@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
+import { expect } from "vitest";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import type { UsuarioSessao } from "../src/api/tipos";
@@ -36,3 +37,6 @@ export function renderizar(ui: ReactElement, opcoes: Opcoes = {}) {
     ),
   };
 }
+
+/** Espera as consultas em andamento (ex.: a config lida pelo menu) terminarem dentro do act, para o teste não encerrar com atualização pendente. */
+export const aguardarConsultas = (cliente: QueryClient) => waitFor(() => expect(cliente.isFetching()).toBe(0));

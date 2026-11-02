@@ -103,10 +103,11 @@ function Numero({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; aoM
 }
 
 export function SecaoDados({ config, aoMudarSujo }: { config: ConfigPousada; aoMudarSujo?: (sujo: boolean) => void }) {
-  const { v, mudar, salvo } = useEditavel({ razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso }, aoMudarSujo);
+  const { v, mudar, salvo } = useEditavel({ nomeEstabelecimento: config.nomeEstabelecimento ?? "", razaoSocial: config.razaoSocial, cnpj: config.cnpj, endereco: config.endereco, fuso: config.fuso }, aoMudarSujo);
   const fusos = FUSOS.includes(v.fuso) ? FUSOS : [v.fuso, ...FUSOS];
   return (
     <Secao titulo="Dados" corpo={v} aoSalvo={salvo}>
+      <Texto rotulo="Nome do estabelecimento" valor={v.nomeEstabelecimento} aoMudar={(nomeEstabelecimento) => mudar({ nomeEstabelecimento })} />
       <Texto rotulo="Razão social" valor={v.razaoSocial} aoMudar={(razaoSocial) => mudar({ razaoSocial })} />
       <Texto rotulo="CNPJ" valor={v.cnpj} aoMudar={(cnpj) => mudar({ cnpj })} />
       <Texto rotulo="Endereço" valor={v.endereco} aoMudar={(endereco) => mudar({ endereco })} />

@@ -68,6 +68,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
     const ator = admin.id;
 
     await salvarConfig(tx, {
+      nomeEstabelecimento: "Pousada Sol",
       razaoSocial: "Pousada Sol (demonstração)",
       sinal: { exigir: true, tipo: "percentual", percentual: 30, prazoHoras: 48, toleranciaHoras: 12 },
       camareiraLancaFrigobar: true,
