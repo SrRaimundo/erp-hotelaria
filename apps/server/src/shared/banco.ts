@@ -17,6 +17,6 @@ export async function migrar(db: Kysely<any>, migracoes: Migracao[]): Promise<vo
       return Object.fromEntries(migracoes.map((m) => [m.nome, { up: m.up }]));
     },
   };
-  const { error } = await new Migrator({ db, provider }).migrateToLatest();
+  const { error } = await new Migrator({ db, provider, allowUnorderedMigrations: true }).migrateToLatest();
   if (error) throw error;
 }
