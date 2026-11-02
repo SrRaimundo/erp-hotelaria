@@ -14,8 +14,8 @@ export type Pacote = { id: string; nome: string; categoriaId: string; inicio: st
 export type Restricao = { categoriaId: string; data: string; minNoites: number | null; fechadoChegada: boolean; fechadoSaida: boolean; fechadoVenda: boolean };
 
 /** Leitura de uma lista de regras; sai da cache quando qualquer aba de tarifas salva. */
-export const useRegra = <T,>(nome: string, caminho: string, extra: unknown[] = []) =>
-  useQuery({ queryKey: ["tarifas", nome, ...extra], queryFn: () => chamarApi<T>("GET", caminho), refetchInterval: false });
+export const useRegra = <T,>(nome: string, caminho: string, extra: unknown[] = [], ativo = true) =>
+  useQuery({ queryKey: ["tarifas", nome, ...extra], queryFn: () => chamarApi<T>("GET", caminho), refetchInterval: false, enabled: ativo });
 
 export const useCategoriasTarifa = () =>
   useQuery({ queryKey: ["categorias", "tarifas"], queryFn: () => chamarApi<Categoria[]>("GET", "/api/categorias"), refetchInterval: false });

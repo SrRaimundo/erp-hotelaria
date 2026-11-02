@@ -5,8 +5,9 @@ type Props = { rotulo: string; valor: number | null; aoMudar: (v: number | null)
 const comoTexto = (v: number | null) => (v === null ? "" : String(v).replace(".", ","));
 /** "12,5" -> 12.5; vazio ou inválido -> null. Até duas casas. */
 export function lerPercentual(t: string, aceitaNegativo: boolean): number | null {
-  const m = new RegExp(`^${aceitaNegativo ? "-?" : ""}\d+(?:[,.]\d{1,2})?$`).exec(t.trim());
-  return m ? Number(t.trim().replace(",", ".")) : null;
+  const limpo = t.trim();
+  const valido = (aceitaNegativo ? /^-?\d+(?:[,.]\d{1,2})?$/ : /^\d+(?:[,.]\d{1,2})?$/).test(limpo);
+  return valido ? Number(limpo.replace(",", ".")) : null;
 }
 
 export function CampoPercentual({ rotulo, valor, aoMudar, aceitaNegativo = false }: Props) {
