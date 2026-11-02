@@ -1,5 +1,7 @@
 .reservas { display: flex; flex-direction: column; gap: 12px; }
 .reservas h1 { font-size: 1.5rem; }
+.reservas-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reservas-topo .botao { text-decoration: none; }
 .reservas-suave { color: var(--texto-suave); font-size: 0.875rem; }
 .reservas-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .reservas-busca { flex: 1; min-width: 200px; }

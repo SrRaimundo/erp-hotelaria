@@ -55,6 +55,12 @@ const ultimaLista = () => {
 };
 
 describe("tela Reservas", () => {
+  test("o botão Simular leva ao Simulador de tarifas", async () => {
+    montar({ itens: [item(1)], total: 1 });
+    await screen.findByText("Hóspede 1");
+    expect(screen.getByRole("link", { name: "Simular" })).toHaveAttribute("href", "/reservas/tarifas/simulador");
+  });
+
   test("período padrão é painel.dia −7 a +30 e estados padrão excluem cancelada e no-show", async () => {
     montar({ itens: [item(1)], total: 1 });
     expect(await screen.findByText("Hóspede 1")).toBeInTheDocument();

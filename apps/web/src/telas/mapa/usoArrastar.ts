@@ -13,6 +13,8 @@ export type Movimento = {
   /** Só no formulário Alterar da gaveta. */
   adultos?: number;
   criancasNascimento?: string[];
+  /** Nome do novo canal: recalcula o preço e a comissão guardada. */
+  canal?: string;
 };
 
 /** Linha da grade; `categoriaId` fica indefinido quando o nome da categoria não identifica um id com segurança. */
