@@ -138,6 +138,29 @@ describe("grupo com conta única", () => {
     expect(extrato.linhas.map((l: any) => l.descricao)).toContain("Lavanderia"); // lançada na reserva irmã, vale para a conta toda
     expect(c.corpo.resumo[2].rotulo).toBe("Saldo");
   });
+
+  test("irmãs canceladas ou no-show ficam fora da lista de estadias e da contagem do grupo", async () => {
+    const g = await criarGrupo(ctx, { titularId: "h1", cobranca: "unica" }, recepcao);
+    const dg = { ...dados, grupoId: g.id, chegada: "2026-11-10", saida: "2026-11-12" };
+    const a = await criarReserva(ctx, dg, recepcao);
+    const b = await criarReserva(ctx, { ...dg, titularId: "h2" }, recepcao);
+    const c3 = await criarReserva(ctx, dg, recepcao);
+    await ctx.db.updateTable("reservas").set({ estado: "cancelada" }).where("id", "=", b.id).execute();
+    await ctx.db.updateTable("reservas").set({ estado: "no_show" }).where("id", "=", c3.id).execute();
+    // sobrou só uma ativa: não é mais "grupo"
+    const so = await gerar(`/api/relatorios/conta?reserva=${a.id}`);
+    expect(so.corpo.subtitulo).not.toContain("grupo");
+    expect(so.corpo.secoes[0].titulo).toBe("Estadia");
+    expect(so.corpo.secoes[0].linhas).toHaveLength(1);
+    // a própria reserva pedida entra mesmo cancelada; a irmã no-show continua fora
+    const pedida = await gerar(`/api/relatorios/conta?reserva=${b.id}`);
+    expect(pedida.corpo.secoes[0].linhas.map((l: any) => l.situacao).sort()).toEqual(["Cancelada", "Pré-reserva"]);
+    // com duas ativas, conta só as duas
+    const d = await criarReserva(ctx, { ...dg, titularId: "h2" }, recepcao);
+    const dois = await gerar(`/api/relatorios/conta?reserva=${d.id}`);
+    expect(dois.corpo.subtitulo).toContain("Conta do grupo (2 reservas)");
+    expect(dois.corpo.secoes[0].linhas).toHaveLength(2);
+  });
 });
 
 describe("hóspedes", () => {

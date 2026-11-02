@@ -3,7 +3,7 @@ import { extrato, saldo } from "../hospedagem/conta.js";
 import type { EstadoReserva } from "../hospedagem/estados.js";
 import { formatarBRL } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
-import { reservasParaRelatorio, rotuloEstado } from "./consulta.js";
+import { ordemQuarto, reservasParaRelatorio, rotuloEstado } from "./consulta.js";
 import { definir } from "./modelo.js";
 
 const TODOS: EstadoReserva[] = ["pre_reserva", "confirmada", "hospedada", "finalizada", "cancelada", "no_show"];
@@ -17,7 +17,9 @@ export const relatorioConta = definir({
     const [r] = await reservasParaRelatorio(ctx, TODOS, { reservaId: f.reserva });
     if (!r) throw new ErroDominio("RESERVA_NAO_ENCONTRADA", "Reserva não encontrada. Confira o número informado.", { id: f.reserva });
     // Grupo de conta única: várias reservas dividem esta conta, e o extrato e o saldo são de todas elas.
-    const naConta = await reservasParaRelatorio(ctx, TODOS, { contaId: r.contaId });
+    // Canceladas e no-show ficam de fora (spec §2), exceto a própria reserva pedida.
+    const irmas = await reservasParaRelatorio(ctx, ["pre_reserva", "confirmada", "hospedada", "finalizada"], { contaId: r.contaId });
+    const naConta = irmas.some((x) => x.reservaId === r.reservaId) ? irmas : [...irmas, r].sort(ordemQuarto);
     const compartilhada = naConta.length > 1;
     const linhas = await extrato(ctx, r.contaId);
     const total = await saldo(ctx, r.contaId);
