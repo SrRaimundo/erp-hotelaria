@@ -40,14 +40,17 @@
   /* Some tudo que é navegação ou controle; fica o cabeçalho, as tabelas e os totais. */
   .menu, .topo, .faixa-conexao, .gaveta, .rel-nao-imprimir { display: none !important; }
   body, .shell, .shell__conteudo { background: #fff; }
-  .shell { display: block; }
-  .shell__conteudo { padding: 0; }
+  /* layout.css é carregado depois deste arquivo: o `body` na frente garante a precedência. */
+  body .shell { display: block; }
+  body .shell__coluna { display: block; }
+  body .shell__conteudo { padding: 0; }
   .rel { max-width: none; gap: 8px; color: #000; }
   .rel-cabecalho-impressao { display: block; margin-bottom: 8px; font-size: 10pt; }
   .rel-cabecalho-impressao__nome { font-size: 13pt; }
   .rel-cabecalho-impressao h1 { font-size: 14pt; margin-top: 6px; }
   .rel-rolagem { overflow: visible; }
   .rel-tabela { font-size: 9pt; }
+  .rel-tabela .rel-num { white-space: nowrap; }
   .rel-tabela th, .rel-tabela td { border: 1px solid #000; color: #000; padding: 4px 6px; }
   .rel-tabela thead { display: table-header-group; }
   .rel-tabela tfoot { display: table-footer-group; }
