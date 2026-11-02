@@ -18,6 +18,7 @@ import { TelaProdutos } from "./telas/configuracoes/TelaProdutos";
 import { TelaPerfis } from "./telas/configuracoes/TelaPerfis";
 import { TelaPousada } from "./telas/configuracoes/TelaPousada";
 import { TelaUsuarios } from "./telas/configuracoes/TelaUsuarios";
+import { LayoutTarifas, PrimeiraAbaTarifas } from "./telas/tarifas/LayoutTarifas";
 import { TelaMapa } from "./telas/mapa/TelaMapa";
 import { TelaNovaReserva } from "./telas/nova-reserva/TelaNovaReserva";
 import { TelaReservas } from "./telas/reservas/TelaReservas";
@@ -36,7 +37,8 @@ const TELAS_PRONTAS: Record<string, ReactElement> = {
   "/cadastros/categorias-e-quartos": <TelaCategoriasQuartos />,
 };
 
-const ITENS_MENU = GRUPOS_MENU.flatMap((g) => g.itens);
+/** Tarifas tem rotas aninhadas próprias (abas), declaradas à parte. */
+const ITENS_MENU = GRUPOS_MENU.flatMap((g) => g.itens).filter((i) => i.para !== "/reservas/tarifas");
 const guardada = (i: ItemMenu, tela: ReactElement) => (
   <ExigePermissao permissao={i.permissao}>{tela}</ExigePermissao>
 );
@@ -52,6 +54,10 @@ export function AppRotas() {
             const tela = guardada(i, TELAS_PRONTAS[i.para] ?? <TelaEmBreve titulo={i.rotulo} />);
             return i.para === "/" ? <Route key={i.para} index element={tela} /> : <Route key={i.para} path={i.para} element={tela} />;
           })}
+          {/* Sem a guarda no layout: cada aba pede a sua permissão (o Simulador só pede reservas.gerenciar). */}
+          <Route path="/reservas/tarifas" element={<LayoutTarifas />}>
+            <Route index element={<PrimeiraAbaTarifas />} />
+          </Route>
           <Route path="/reservas/nova" element={<ExigePermissao permissao="reservas.gerenciar"><TelaNovaReserva /></ExigePermissao>} />
           <Route path="/relatorios/:id" element={<TelaRelatorio />} />
           {/* Endereços antigos: Produtos e Categorias e quartos agora vivem em Cadastros (fora da guarda de Configurações). */}

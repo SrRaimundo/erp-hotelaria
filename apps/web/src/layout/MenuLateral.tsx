@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from "react-router";
 import { useConfig } from "../api/consultas";
 import { useSessao } from "../auth/SessaoProvider";
 import { Botao } from "../componentes/Botao";
-import { GRUPOS_MENU, rotaDoItem } from "./menu";
+import { emSubitemDe, GRUPOS_MENU, rotaDoItem } from "./menu";
 
 function IconeEngrenagem() {
   return (
@@ -47,7 +47,7 @@ export function MenuLateral({ atencao }: { atencao: number }) {
                 {aberto && (
                   <div id={`menu-grupo-${g.id}`} className="menu__grupo-itens">
                     {g.itens.map((i) => (
-                      <NavLink key={i.para} to={i.para} end={i.para === "/"} className="menu__item">
+                      <NavLink key={i.para} to={i.para} end={i.para === "/" || emSubitemDe(i.para, pathname)} className={i.subitem ? "menu__item menu__item--sub" : "menu__item"}>
                         {i.rotulo}
                         {i.para === "/" && atencao > 0 && (
                           <span className="menu__contador" aria-label={`${atencao} ${atencao === 1 ? "item" : "itens"} de atenção`}>

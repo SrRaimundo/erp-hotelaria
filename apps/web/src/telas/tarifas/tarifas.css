@@ -1,0 +1,18 @@
+.tarifas { display: flex; flex-direction: column; gap: 16px; }
+.tarifas h1 { font-size: 1.5rem; }
+.tarifas__abas { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--borda); padding-bottom: 6px; }
+.tarifas__aba { color: var(--texto); text-decoration: none; border-radius: var(--raio-controle); padding: 8px 12px; white-space: nowrap; border: 1px solid transparent; }
+.tarifas__aba:hover { background: var(--superficie); }
+.tarifas__aba.active { background: var(--superficie); border-color: var(--borda); font-weight: 600; }
+.tarifas__conteudo { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.tarifas__form { display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
+.tarifas__aviso { color: var(--texto-suave); font-size: 0.9375rem; }
+.tarifas__ok { color: var(--verde); font-size: 0.9375rem; }
+.tarifas__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.tarifas__bloco { border: 1px solid var(--borda); border-radius: var(--raio-cartao); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.tarifas select, .tarifas input[type="date"], .tarifas input[type="number"] { border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; }
+.tarifas__passos { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; color: var(--texto-suave); font-size: 0.9375rem; }
+.tarifas__passos li { display: flex; justify-content: space-between; gap: 12px; }
+.tarifas__total { font-size: 1.25rem; font-weight: 600; }
+.tarifas__noite { border-bottom: 1px solid var(--borda); padding: 8px 0; }
+.tarifas__noite-topo { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
