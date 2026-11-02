@@ -160,7 +160,7 @@ export class LançamentoService {
     let q = this.ctx.db.selectFrom("fin_lancamento").selectAll().where("local_id", "=", local_id);
     if (filtros.data_inicio) q = q.where("data", ">=", filtros.data_inicio.toISOString());
     if (filtros.data_fim) q = q.where("data", "<=", filtros.data_fim.toISOString());
-    const linhas = await q.orderBy("data").orderBy("id").execute();
+    const linhas = await q.orderBy("data", "desc").orderBy("id").execute();
     return linhas.map(paraLancamento);
   }
 
