@@ -32,6 +32,8 @@ describe("casca", () => {
     expect(screen.getByText("Gil")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+ Nova reserva" })).not.toBeInTheDocument();
+    // Sem permissão de configurar, a engrenagem também não aparece.
+    expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
   });
 
   test("sem permissão de reservas não há campo de busca vazio na barra do topo", async () => {
@@ -45,7 +47,7 @@ describe("casca", () => {
     instalarApiFalsa(painel());
     renderizar(<AppRotas />, { rota: "/mapa", usuario: recepcao });
     const menu = screen.getByRole("navigation", { name: "Menu principal" });
-    expect(Array.from(menu.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["Hoje", "Mapa", "Reservas", "Caixa", "Governança"]);
+    expect(Array.from(menu.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["Hoje", "Mapa", "Reservas", "Caixa", "Governança", "Relatórios"]);
     expect(screen.getByRole("link", { name: "Mapa" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Hoje" })).not.toHaveAttribute("aria-current");
     expect(screen.getByText("Maria Recepção")).toBeInTheDocument();

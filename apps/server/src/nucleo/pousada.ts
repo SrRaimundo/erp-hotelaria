@@ -5,6 +5,8 @@ import { emTransacao, type Contexto } from "../shared/contexto.js";
 export type RegraTaxa = { tipo: "fixo" | "percentual_diaria"; valor: number };
 
 export type ConfigPousada = {
+  /** Nome exibido no topo do menu; vazio cai na razão social. */
+  nomeEstabelecimento: string;
   razaoSocial: string;
   cnpj: string;
   endereco: string;
@@ -30,6 +32,7 @@ export type ConfigPousada = {
 };
 
 export const CONFIG_PADRAO: ConfigPousada = {
+  nomeEstabelecimento: "",
   razaoSocial: "",
   cnpj: "",
   endereco: "",

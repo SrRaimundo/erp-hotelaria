@@ -95,4 +95,19 @@ describe("modelos de checklist", () => {
     const m = await app.inject({ method: "GET", url: "/api/checklists/modelos", headers: gov });
     expect(m.json().camareiraLancaFrigobar).toBe(true);
   });
+  test("nomeEstabelecimento: padrão vazio, round-trip pelo PUT/GET e qualquer sessão lê", async () => {
+    const app = criarApp(ctx);
+    const gov = await entrarComo(ctx, "governanca");
+    const antes = await app.inject({ method: "GET", url: "/api/config", headers: gov });
+    expect(antes.json().nomeEstabelecimento).toBe("");
+    const admin = await entrarComo(ctx, "admin");
+    const ruim = await app.inject({ method: "PUT", url: "/api/config", headers: admin, payload: { nomeEstabelecimento: 3 } });
+    expect(ruim.statusCode).toBe(400);
+    const negado = await app.inject({ method: "PUT", url: "/api/config", headers: gov, payload: { nomeEstabelecimento: "X" } });
+    expect(negado.statusCode).toBe(403);
+    const ok = await app.inject({ method: "PUT", url: "/api/config", headers: admin, payload: { nomeEstabelecimento: "Pousada Vista Alegre" } });
+    expect(ok.statusCode).toBe(200);
+    const depois = await app.inject({ method: "GET", url: "/api/config", headers: gov });
+    expect(depois.json().nomeEstabelecimento).toBe("Pousada Vista Alegre");
+  });
 });

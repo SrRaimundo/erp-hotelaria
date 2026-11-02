@@ -29,6 +29,10 @@ export function instalarApiFalsa(rotas: Record<string, Rota>): void {
     if (chave === "GET /api/sessoes/atual" && !(chave in rotas)) {
       return new Response(localStorage.getItem("erp.usuario") ?? "null", { status: 200, headers: { "Content-Type": "application/json" } });
     }
+    // O menu lateral lê /api/config em toda tela: por padrão devolve uma config sem nome, sem contar como chamada do teste.
+    if (chave === "GET /api/config" && !(chave in rotas)) {
+      return new Response(JSON.stringify({ nomeEstabelecimento: "", razaoSocial: "", horaCheckin: "14:00", horaCheckout: "12:00" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     chamadas.push({ metodo, caminho, corpo });
     if (!(chave in rotas)) {
       // Não lança: o cliente transformaria a exceção em SEM_CONEXAO e esconderia o motivo.

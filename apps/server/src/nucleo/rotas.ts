@@ -23,6 +23,7 @@ const regraTaxa = z.object({ tipo: z.enum(["fixo", "percentual_diaria"]), valor:
 
 const corpoConfig = z
   .object({
+    nomeEstabelecimento: z.string(),
     razaoSocial: z.string(),
     cnpj: z.string(),
     endereco: z.string(),

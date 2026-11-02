@@ -14,6 +14,7 @@ import { renderizar, usuarioPadrao } from "../ajuda";
 afterEach(() => vi.unstubAllGlobals());
 
 const CONFIG = {
+  nomeEstabelecimento: "Pousada Sol",
   razaoSocial: "Pousada Sol Ltda",
   cnpj: "12.345.678/0001-90",
   endereco: "Rua das Flores, 10",
@@ -45,15 +46,19 @@ function Arvore() {
 }
 
 describe("área Configurações", () => {
-  test("menu Configurações só com permissão; submenu mostra só as telas permitidas", () => {
+  test("engrenagem de Configurações só com permissão", () => {
     const { unmount } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "quartos.situacao"] } });
     expect(screen.queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
     unmount();
     renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "cadastros.gerenciar"] } });
-    expect(screen.getByRole("link", { name: "Configurações" })).toHaveAttribute("href", "/configuracoes");
+    const engrenagem = screen.getByRole("link", { name: "Configurações" });
+    expect(engrenagem).toHaveAttribute("href", "/configuracoes");
+    expect(engrenagem).toHaveAttribute("title", "Configurações");
+    // Não é mais um item da lista principal.
+    expect(within(screen.getByRole("navigation", { name: "Menu principal" })).queryByRole("link", { name: "Configurações" })).not.toBeInTheDocument();
   });
 
-  test("menu aparece também só com config.gerenciar", () => {
+  test("engrenagem aparece também só com config.gerenciar", () => {
     renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["caixa.operar", "config.gerenciar"] } });
     expect(screen.getByRole("link", { name: "Configurações" })).toBeInTheDocument();
   });
@@ -157,14 +162,38 @@ describe("tela Pousada", () => {
     await within(horarios).findByText("Salvo.");
 
     const dados = screen.getByRole("region", { name: "Dados" });
+    // "Nome do estabelecimento" é o primeiro campo da seção Dados.
+    const primeiro = within(dados).getAllByRole("textbox")[0]!;
+    expect(primeiro).toBe(within(dados).getByLabelText("Nome do estabelecimento"));
+    await u.clear(primeiro);
+    await u.type(primeiro, "Vista Alegre");
     await u.clear(within(dados).getByLabelText("Razão social"));
     await u.type(within(dados).getByLabelText("Razão social"), "Nova Ltda");
     await u.click(within(dados).getByRole("button", { name: "Salvar" }));
     await vi.waitFor(() => expect(chamadas.filter((c) => c.metodo === "PUT")).toHaveLength(2));
     expect(chamadas.filter((c) => c.metodo === "PUT")[1]!.corpo).toEqual({
-      razaoSocial: "Nova Ltda", cnpj: CONFIG.cnpj, endereco: CONFIG.endereco, fuso: "America/Sao_Paulo",
+      nomeEstabelecimento: "Vista Alegre", razaoSocial: "Nova Ltda", cnpj: CONFIG.cnpj, endereco: CONFIG.endereco, fuso: "America/Sao_Paulo",
     });
     await within(dados).findByText("Salvo.");
+  });
+
+  test("salvar o nome do estabelecimento atualiza a marca do menu na hora", async () => {
+    const u = userEvent.setup();
+    let atual = CONFIG;
+    instalarApiFalsa({
+      "GET /api/config": () => atual,
+      "PUT /api/config": (corpo: Partial<typeof CONFIG>) => {
+        atual = { ...atual, ...corpo };
+        return atual;
+      },
+    });
+    renderizar(<><MenuLateral atencao={0} /><TelaPousada /></>, { usuario: { permissoes: ["config.gerenciar", "caixa.operar"] } });
+    expect(await screen.findByText("Pousada Sol", { selector: ".menu__marca" })).toBeInTheDocument();
+    const dados = await screen.findByRole("region", { name: "Dados" });
+    await u.clear(within(dados).getByLabelText("Nome do estabelecimento"));
+    await u.type(within(dados).getByLabelText("Nome do estabelecimento"), "Vista Alegre");
+    await u.click(within(dados).getByRole("button", { name: "Salvar" }));
+    expect(await screen.findByText("Vista Alegre", { selector: ".menu__marca" })).toBeInTheDocument();
   });
 
   test("percentual decimal da taxa mostra mensagem e bloqueia o Salvar", async () => {
