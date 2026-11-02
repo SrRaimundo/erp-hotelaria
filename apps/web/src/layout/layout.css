@@ -38,10 +38,10 @@
   .menu { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; }
   .menu__marca { padding: 0; }
   /* Cabeçalhos dos grupos numa linha; os itens do grupo aberto numa linha rolável logo abaixo. */
-  .menu__itens { order: 3; flex: 1 0 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; overflow: visible; }
+  .menu__itens { order: 3; flex: 1 0 100%; min-width: 0; max-width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; overflow: visible; }
   .menu__grupo { display: contents; }
   .menu__grupo-cabecalho { order: 1; width: auto; flex: none; gap: 6px; padding: 8px 12px; }
-  .menu__grupo-itens { order: 2; flex: 1 0 100%; flex-direction: row; gap: 4px; padding-left: 0; overflow-x: auto; }
+  .menu__grupo-itens { order: 2; flex: 1 0 100%; min-width: 0; max-width: 100%; flex-direction: row; gap: 4px; padding-left: 0; overflow-x: auto; }
   .menu__item { flex: none; gap: 6px; padding: 8px 12px; white-space: nowrap; }
   .menu__rodape { margin-left: auto; flex-direction: row; align-items: center; gap: 8px; padding: 0; }
   .menu__rodape span { display: none; }
@@ -49,6 +49,6 @@
   .menu__engrenagem { margin-top: 0; }
   .menu--simples .menu__rodape { flex: 1; }
   .topo { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
-  .topo__busca { min-width: 0; }
+  .topo__busca { flex: 1 0 100%; min-width: 0; }
   .faixa-conexao { padding: 8px 12px; }
 }
