@@ -4,9 +4,8 @@ import type { UsuarioSessao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
 import { formatarBRL } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
-import { dataLocal, dataValida, horaLocal, somarDias, type Data } from "../shared/tempo.js";
+import { dataLocal, dataValida, diaHoteleiro, horaLocal, somarDias, type Data } from "../shared/tempo.js";
 import { obterConfig } from "../nucleo/pousada.js";
-import { dataOuHoje } from "./consulta.js";
 import { dataBR } from "./formato.js";
 import { definir, type Relatorio } from "./modelo.js";
 
@@ -29,26 +28,34 @@ export const filtrosPeriodo = z
   .object({ inicio: z.preprocess(vazioParaAusente, dataIso.optional()), fim: z.preprocess(vazioParaAusente, dataIso.optional()) })
   .refine((f) => !f.inicio || !f.fim || f.inicio <= f.fim, "O início do período deve ser anterior ou igual ao fim.");
 
-/** Turnos abertos no período (dia local da pousada, inclusive), só os do usuário, salvo supervisor ou config.gerenciar. */
-export async function turnosDoPeriodo(ctx: Contexto, usuario: UsuarioSessao, inicio: Data | undefined, fim: Data | undefined): Promise<TurnoDoPeriodo[]> {
-  const hoje = await dataOuHoje(ctx, undefined);
-  const de = inicio ?? fim ?? hoje;
-  const ate = fim ?? inicio ?? hoje;
-  const { fuso } = await obterConfig(ctx);
+export type Periodo = { de: Data; ate: Data; fuso: string; virada: string };
+
+/** Período pedido (padrão: o dia hoteleiro de hoje) com o fuso e a virada do dia da pousada. */
+export async function resolverPeriodo(ctx: Contexto, f: { inicio?: Data; fim?: Data }): Promise<Periodo> {
+  const config = await obterConfig(ctx);
+  const hoje = diaHoteleiro(ctx.relogio.agora(), config.fuso, config.viradaDia);
+  return { de: f.inicio ?? f.fim ?? hoje, ate: f.fim ?? f.inicio ?? hoje, fuso: config.fuso, virada: config.viradaDia };
+}
+
+/**
+ * Turnos do período, inclusive. O turno pertence ao dia hoteleiro em que foi aberto (entre a meia-noite e a virada
+ * do dia ainda é o dia anterior). Só os do usuário, salvo supervisor ou config.gerenciar.
+ */
+export async function turnosDoPeriodo(ctx: Contexto, usuario: UsuarioSessao, p: Periodo): Promise<TurnoDoPeriodo[]> {
   let qb = ctx.db
     .selectFrom("turnos_caixa as t")
     .innerJoin("usuarios as u", "u.id", "t.usuario_id")
     .select(["t.id", "u.nome as operador", "t.aberto_em", "t.fechado_em", "t.valor_inicial"])
-    // folga de um dia para cada lado: o dia local pode divergir do dia UTC; o filtro exato é feito abaixo
-    .where("t.aberto_em", ">=", `${somarDias(de, -1)}T00:00:00.000Z`)
-    .where("t.aberto_em", "<", `${somarDias(ate, 2)}T00:00:00.000Z`)
+    // folga de dois dias para cada lado (fuso e virada deslocam o dia); o filtro exato é feito abaixo
+    .where("t.aberto_em", ">=", `${somarDias(p.de, -2)}T00:00:00.000Z`)
+    .where("t.aberto_em", "<", `${somarDias(p.ate, 3)}T00:00:00.000Z`)
     .orderBy("t.aberto_em")
     .orderBy("t.id");
   if (!veTodos(usuario)) qb = qb.where("t.usuario_id", "=", usuario.id);
   return (await qb.execute())
     .filter((t) => {
-      const d = dataLocal(new Date(t.aberto_em), fuso);
-      return d >= de && d <= ate;
+      const d = diaHoteleiro(new Date(t.aberto_em), p.fuso, p.virada);
+      return d >= p.de && d <= p.ate;
     })
     .map((t) => ({
       id: t.id, operador: t.operador, abertoEm: t.aberto_em, fechadoEm: t.fechado_em,
@@ -65,9 +72,9 @@ async function detalheDoTurno(ctx: Contexto, usuario: UsuarioSessao, turnoId: st
     .select(["t.id", "t.usuario_id", "u.nome as operador", "t.aberto_em", "t.fechado_em", "t.valor_inicial", "t.contados"])
     .where("t.id", "=", turnoId)
     .executeTakeFirst();
-  if (!t) throw new ErroDominio("TURNO_NAO_ENCONTRADO", "Turno de caixa não encontrado. Escolha outro turno.", { turnoId });
-  if (t.usuario_id !== usuario.id && !veTodos(usuario)) {
-    throw new ErroDominio("SEM_PERMISSAO", "Você não tem permissão para realizar esta ação.", { turnoId });
+  // Turno de outro operador responde igual a turno inexistente: não revela quais ids existem.
+  if (!t || (t.usuario_id !== usuario.id && !veTodos(usuario))) {
+    throw new ErroDominio("TURNO_NAO_ENCONTRADO", "Turno de caixa não encontrado. Escolha outro turno.", { turnoId });
   }
   const movs = await ctx.db
     .selectFrom("movimentos_caixa")
@@ -84,12 +91,10 @@ export const relatorioCaixa = definir({
   permissao: "caixa.operar",
   filtros: filtrosPeriodo.and(z.object({ turno: z.preprocess(vazioParaAusente, z.string().min(1).optional()) })),
   gerar: async (ctx, f, usuario): Promise<Relatorio> => {
-    const hoje = await dataOuHoje(ctx, undefined);
-    const inicio = f.inicio ?? f.fim ?? hoje;
-    const fim = f.fim ?? f.inicio ?? hoje;
-    const { fuso } = await obterConfig(ctx);
+    const periodo = await resolverPeriodo(ctx, f);
+    const { de: inicio, ate: fim, fuso } = periodo;
     const dh = (iso: string | null) => (iso ? { data: dataLocal(new Date(iso), fuso), hora: horaLocal(new Date(iso), fuso) } : { data: null, hora: null });
-    const turnos = await turnosDoPeriodo(ctx, usuario, inicio, fim);
+    const turnos = await turnosDoPeriodo(ctx, usuario, periodo);
     const resumo = [{ rotulo: "Turnos no período", valor: String(turnos.length) }];
     const secoes: Relatorio["secoes"] = [{
       titulo: "Turnos do período",

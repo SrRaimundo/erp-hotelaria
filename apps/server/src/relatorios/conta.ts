@@ -16,12 +16,17 @@ export const relatorioConta = definir({
   gerar: async (ctx, f) => {
     const [r] = await reservasParaRelatorio(ctx, TODOS, { reservaId: f.reserva });
     if (!r) throw new ErroDominio("RESERVA_NAO_ENCONTRADA", "Reserva não encontrada. Confira o número informado.", { id: f.reserva });
+    // Grupo de conta única: várias reservas dividem esta conta, e o extrato e o saldo são de todas elas.
+    const naConta = await reservasParaRelatorio(ctx, TODOS, { contaId: r.contaId });
+    const compartilhada = naConta.length > 1;
     const linhas = await extrato(ctx, r.contaId);
     const total = await saldo(ctx, r.contaId);
     return {
       id: "conta",
       titulo: "Conta do hóspede",
-      subtitulo: `Reserva #${r.codigo} · ${r.hospede}`,
+      subtitulo: compartilhada
+        ? `Conta do grupo (${naConta.length} reservas) · pedida pela reserva #${r.codigo} · ${r.hospede}`
+        : `Reserva #${r.codigo} · ${r.hospede}`,
       geradoEm: ctx.relogio.agora().toISOString(),
       resumo: [
         { rotulo: "Débitos", valor: formatarBRL(total.debitos) },
@@ -30,7 +35,7 @@ export const relatorioConta = definir({
       ],
       secoes: [
         {
-          titulo: "Estadia",
+          titulo: compartilhada ? "Estadias na conta do grupo" : "Estadia",
           colunas: [
             { chave: "codigo", titulo: "Reserva", tipo: "numero" },
             { chave: "hospede", titulo: "Hóspede", tipo: "texto" },
@@ -42,10 +47,10 @@ export const relatorioConta = definir({
             { chave: "pessoas", titulo: "Pessoas", tipo: "numero" },
             { chave: "situacao", titulo: "Situação", tipo: "texto" },
           ],
-          linhas: [{
-            codigo: r.codigo, hospede: r.hospede, quarto: r.quarto, categoria: r.categoria, chegada: r.chegada, saida: r.saida,
-            noites: r.noites, pessoas: r.adultos + r.criancas, situacao: rotuloEstado(r.estado),
-          }],
+          linhas: naConta.map((x) => ({
+            codigo: x.codigo, hospede: x.hospede, quarto: x.quarto, categoria: x.categoria, chegada: x.chegada, saida: x.saida,
+            noites: x.noites, pessoas: x.adultos + x.criancas, situacao: rotuloEstado(x.estado),
+          })),
         },
         {
           titulo: "Extrato",

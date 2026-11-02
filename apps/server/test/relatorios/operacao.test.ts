@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { lancar, registrarPagamento } from "../../src/hospedagem/conta.js";
 import { bloquear } from "../../src/hospedagem/governanca.js";
-import { criarReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
+import { criarGrupo, criarReserva, type NovaReserva } from "../../src/hospedagem/reservas.js";
 import { criarApp } from "../../src/http/app.js";
 import { abrirCaixa, fecharCaixa } from "../../src/nucleo/caixa.js";
 import { criarCategoria } from "../../src/nucleo/categorias.js";
@@ -71,6 +71,12 @@ describe("limpeza", () => {
     ]);
   });
 
+  test("só quartos ativos, como a lista da governança", async () => {
+    await ctx.db.updateTable("quartos").set({ situacao: "sujo" }).where("id", "in", [q11, q12]).execute();
+    await ctx.db.updateTable("quartos").set({ ativo: 0 }).where("id", "=", q12).execute();
+    expect((await gerar("/api/relatorios/limpeza")).corpo.secoes[0].linhas.map((l: any) => l.quarto)).toEqual(["11"]);
+  });
+
   test("sem tarefas: lista vazia e 403 sem permissão", async () => {
     expect((await gerar("/api/relatorios/limpeza")).corpo.secoes[0].linhas).toEqual([]);
     expect((await gerar("/api/relatorios/limpeza", await entrarComo(ctx, "governanca"))).status).toBe(403);
@@ -110,6 +116,30 @@ describe("conta", () => {
   });
 });
 
+describe("grupo com conta única", () => {
+  test("check-in e check-out mostram o saldo da conta só na primeira linha; conta lista todas as reservas", async () => {
+    const g = await criarGrupo(ctx, { titularId: "h1", cobranca: "unica" }, recepcao);
+    const a = await criarReserva(ctx, { ...dados, grupoId: g.id, chegada: "2026-11-10", saida: "2026-11-12" }, recepcao);
+    const b = await criarReserva(ctx, { ...dados, titularId: "h2", grupoId: g.id, chegada: "2026-11-10", saida: "2026-11-12" }, recepcao);
+    expect(a.contaId).toBe(b.contaId);
+    await ctx.db.updateTable("reservas").set({ quarto_id: q11 }).where("id", "=", a.id).execute();
+    await ctx.db.updateTable("reservas").set({ quarto_id: q12 }).where("id", "=", b.id).execute();
+    await lancar(ctx, { contaId: a.contaId, reservaId: a.id, tipo: "extra", origem: "hospedagem", descricao: "Lavanderia", quantidade: 1, valorUnitario: 4000, setor: "recepcao" }, "u1");
+    for (const rel of ["check-in", "check-out"]) {
+      const g1 = await gerar(`/api/relatorios/${rel}?data=${rel === "check-in" ? "2026-11-10" : "2026-11-12"}`);
+      const linhas = g1.corpo.secoes[0].linhas;
+      expect(linhas.map((l: any) => [l.quarto, l.saldo])).toEqual([["11", 4000], ["12", null]]);
+    }
+    const c = await gerar(`/api/relatorios/conta?reserva=${b.id}`);
+    expect(c.corpo.subtitulo).toContain("Conta do grupo (2 reservas)");
+    const [estadias, extrato] = c.corpo.secoes;
+    expect(estadias.titulo).toBe("Estadias na conta do grupo");
+    expect(estadias.linhas.map((l: any) => [l.quarto, l.hospede])).toEqual([["11", "Maria Silva"], ["12", "João Pereira"]]);
+    expect(extrato.linhas.map((l: any) => l.descricao)).toContain("Lavanderia"); // lançada na reserva irmã, vale para a conta toda
+    expect(c.corpo.resumo[2].rotulo).toBe("Saldo");
+  });
+});
+
 describe("hóspedes", () => {
   test("lista com estadias finalizadas e última saída; busca por nome e documento", async () => {
     for (const [ch, sa] of [["2026-10-01", "2026-10-03"], ["2026-10-20", "2026-10-22"]]) {
@@ -129,11 +159,15 @@ describe("hóspedes", () => {
 
   test("cada geração é auditada com ator, filtro e quantidade; falha de permissão não audita", async () => {
     await gerar("/api/relatorios/hospedes?busca=maria");
-    await gerar("/api/relatorios/hospedes", await entrarComo(ctx, "governanca"));
-    const a = await ctx.db.selectFrom("auditoria").selectAll().where("acao", "=", "relatorio.hospedes").execute();
-    expect(a).toHaveLength(1);
-    expect(a[0]!.ator).toBe(recepcao.id);
-    expect(JSON.parse(a[0]!.dados)).toEqual({ busca: "maria", linhas: 1 });
+    await gerar("/api/relatorios/hospedes?busca=");
+    await gerar(`/api/relatorios/hospedes?busca=${"x".repeat(101)}`); // 422: não audita
+    await gerar("/api/relatorios/hospedes", await entrarComo(ctx, "governanca")); // 403: não audita
+    const a = await ctx.db.selectFrom("auditoria").selectAll().where("acao", "=", "relatorio.hospedes").orderBy("instante").execute();
+    expect(a).toHaveLength(2);
+    expect(a.every((x) => x.ator === recepcao.id)).toBe(true);
+    const dados = a.map((x) => JSON.parse(x.dados)).sort((x, y) => Number(x.comFiltro) - Number(y.comFiltro));
+    expect(dados).toEqual([{ comFiltro: false, total: 2 }, { comFiltro: true, total: 1 }]);
+    expect(JSON.stringify(a)).not.toContain("maria"); // o termo buscado nunca vai para a auditoria
   });
 });
 
@@ -179,7 +213,12 @@ describe("caixa", () => {
   });
 
   test("só os próprios turnos; admin (config.gerenciar) vê todos", async () => {
-    expect((await gerar(`/api/relatorios/caixa?turno=${turnoOutra}`)).status).toBe(403);
+    // turno de outro operador responde igual a turno inexistente
+    const alheio = await gerar(`/api/relatorios/caixa?turno=${turnoOutra}`);
+    const inexistente = await gerar("/api/relatorios/caixa?turno=nao-existe");
+    expect(alheio.status).toBe(422);
+    expect(alheio.corpo.codigo).toBe("TURNO_NAO_ENCONTRADO");
+    expect({ ...alheio.corpo, detalhes: null }).toEqual({ ...inexistente.corpo, detalhes: null });
     expect((await gerar("/api/relatorios/caixa")).corpo.secoes[0].linhas).toHaveLength(1);
     const adm = await gerar(`/api/relatorios/caixa?turno=${turnoOutra}`, hAdmin);
     expect(adm.status).toBe(200);
@@ -203,7 +242,19 @@ describe("caixa", () => {
     expect((await gerar("/api/relatorios/caixa/turnos?inicio=2026-11-10&fim=2026-11-10", hAdmin)).corpo).toHaveLength(2);
     expect((await gerar("/api/relatorios/caixa/turnos?inicio=2026-11-01&fim=2026-11-09")).corpo).toEqual([]);
     expect((await gerar("/api/relatorios/caixa/turnos", await entrarComo(ctx, "governanca"))).status).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/api/relatorios/caixa/turnos" })).statusCode).toBe(401);
     expect((await gerar("/api/relatorios/caixa/turnos?inicio=x")).status).toBe(422);
+  });
+
+  test("o turno pertence ao dia hoteleiro da abertura: entre a meia-noite e a virada ainda é o dia anterior", async () => {
+    // 04:00Z = 01:00 local (virada 04:00): dia hoteleiro 11-09, embora o dia civil seja 11-10
+    await ctx.db.updateTable("turnos_caixa").set({ aberto_em: "2026-11-10T04:00:00.000Z" }).where("id", "=", turnoOutra).execute();
+    ctx.relogio.definir("2026-11-10T05:00:00Z"); // 02:00 local: "hoje" é 11-09
+    const padrao = await gerar("/api/relatorios/caixa/turnos", hAdmin);
+    expect(padrao.corpo.map((t: any) => t.id)).toEqual([turnoOutra]);
+    expect((await gerar("/api/relatorios/caixa", hAdmin)).corpo.secoes[0].linhas).toHaveLength(1);
+    expect((await gerar("/api/relatorios/caixa/turnos?inicio=2026-11-10&fim=2026-11-10", hAdmin)).corpo.map((t: any) => t.id)).toEqual([turnoRecepcao]);
+    expect((await gerar("/api/relatorios/caixa/turnos?inicio=2026-11-09&fim=2026-11-09", hAdmin)).corpo.map((t: any) => t.id)).toEqual([turnoOutra]);
   });
 
   test("período considera o dia local (fuso), não o UTC", async () => {

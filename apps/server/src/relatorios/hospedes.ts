@@ -4,7 +4,7 @@ import { buscarHospedes } from "../nucleo/hospedes.js";
 import { emTransacao } from "../shared/contexto.js";
 import { definir } from "./modelo.js";
 
-/** Cadastro de hóspedes com dados pessoais: cada geração fica na auditoria (quem, filtro e quantas linhas). */
+/** Cadastro de hóspedes com dados pessoais: cada geração fica na auditoria (quem, se houve filtro e quantas linhas; nunca o termo buscado). */
 export const relatorioHospedes = definir({
   id: "hospedes",
   permissao: "reservas.gerenciar",
@@ -32,7 +32,7 @@ export const relatorioHospedes = definir({
       ultimaSaida: porHospede.get(h.id)?.ultima ?? null,
     }));
     await emTransacao(ctx, (tx) =>
-      auditar(tx, { ator: usuario.id, acao: "relatorio.hospedes", alvoTipo: "relatorio", alvoId: "hospedes", dados: { busca: busca ?? null, linhas: linhas.length } }),
+      auditar(tx, { ator: usuario.id, acao: "relatorio.hospedes", alvoTipo: "relatorio", alvoId: "hospedes", dados: { comFiltro: busca !== undefined, total: linhas.length } }),
     );
     return {
       id: "hospedes",

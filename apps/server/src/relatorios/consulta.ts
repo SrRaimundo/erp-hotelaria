@@ -52,7 +52,7 @@ export const ordemQuarto = (a: { quarto: string; hospede: string }, b: { quarto:
 export async function reservasParaRelatorio(
   ctx: Contexto,
   estados: EstadoReserva[],
-  onde: { reservaId?: string; chegada?: Data; saida?: Data; chegadaAntes?: Data; saidaDepoisOuEm?: Data },
+  onde: { reservaId?: string; contaId?: string; chegada?: Data; saida?: Data; chegadaAntes?: Data; saidaDepoisOuEm?: Data },
 ): Promise<ReservaRel[]> {
   let qb = ctx.db
     .selectFrom("reservas as r")
@@ -65,6 +65,7 @@ export async function reservasParaRelatorio(
     ])
     .where("r.estado", "in", estados);
   if (onde.reservaId) qb = qb.where("r.id", "=", onde.reservaId);
+  if (onde.contaId) qb = qb.where("r.conta_id", "=", onde.contaId);
   if (onde.chegada) qb = qb.where("r.chegada", "=", onde.chegada);
   if (onde.saida) qb = qb.where("r.saida", "=", onde.saida);
   if (onde.chegadaAntes) qb = qb.where("r.chegada", "<", onde.chegadaAntes);
@@ -78,7 +79,6 @@ export async function reservasParaRelatorio(
     }))
     .sort(ordemQuarto);
 }
-
 
 /** Saldo (débitos − créditos) de várias contas em 2 consultas, no lugar de `saldo()` por conta (N+1). */
 export async function saldosDeContas(ctx: Contexto, contaIds: string[]): Promise<Map<string, number>> {

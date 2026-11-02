@@ -4,7 +4,7 @@ import { exigirPermissao } from "../nucleo/permissoes.js";
 import type { Contexto } from "../shared/contexto.js";
 import { ErroDominio } from "../shared/erros.js";
 import { relatorioCafe } from "./cafe.js";
-import { relatorioCaixa, filtrosPeriodo, turnosDoPeriodo } from "./caixa.js";
+import { relatorioCaixa, filtrosPeriodo, resolverPeriodo, turnosDoPeriodo } from "./caixa.js";
 import { relatorioCheckIn } from "./check-in.js";
 import { relatorioCheckOut } from "./check-out.js";
 import { relatorioConta } from "./conta.js";
@@ -30,7 +30,7 @@ export function registrarRotasRelatorios(app: FastifyInstance, ctx: Contexto): v
   app.get("/api/relatorios/caixa/turnos", async (req) => {
     exigirPermissao(req.usuario, "caixa.operar");
     const f = analisar(filtrosPeriodo, req.query);
-    return turnosDoPeriodo(ctx, req.usuario, f.inicio, f.fim);
+    return turnosDoPeriodo(ctx, req.usuario, await resolverPeriodo(ctx, f));
   });
 
   app.get("/api/relatorios/:id", async (req, res) => {

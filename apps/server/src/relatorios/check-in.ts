@@ -28,9 +28,11 @@ export async function listaDeMovimento(
     (a, b) => Number(a.estado === "finalizada") - Number(b.estado === "finalizada"),
   );
   const saldos = await saldosDeContas(ctx, reservas.map((r) => r.contaId));
+  // Reservas de um grupo de conta única compartilham a conta: o saldo aparece uma vez, na primeira linha dela.
+  const contasVistas = new Set<string>();
   const linhas = reservas.map((r) => ({
     codigo: r.codigo, hospede: r.hospede, telefone: r.telefone, quarto: r.quarto, categoria: r.categoria,
-    pessoas: r.adultos + r.criancas, noites: r.noites, saldo: saldos.get(r.contaId) ?? 0, situacao: r.estado === "finalizada" ? "Saiu" : rotuloEstado(r.estado),
+    pessoas: r.adultos + r.criancas, noites: r.noites, saldo: contasVistas.has(r.contaId) ? null : (contasVistas.add(r.contaId), saldos.get(r.contaId) ?? 0), situacao: r.estado === "finalizada" ? "Saiu" : rotuloEstado(r.estado),
   }));
   return {
     id: p.id,
