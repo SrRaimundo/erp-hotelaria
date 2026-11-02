@@ -11,7 +11,7 @@ Fora desta entrega: Resumo do dia, Previsão de ocupação, Desempenho e Reserva
 | Id | Nome | Filtros | Conteúdo | Permissão |
 |---|---|---|---|---|
 | `check-in` | Lista de check-in | data (padrão: dia hoteleiro) | reservas ativas com chegada na data: código, hóspede, telefone, quarto, categoria, pessoas, noites, saldo, situação | `reservas.gerenciar` |
-| `check-out` | Lista de check-out | data | reservas ativas com saída na data: mesmas colunas | `reservas.gerenciar` |
+| `check-out` | Lista de check-out | data | todas as saídas da data (ativas e as já finalizadas, com situação "Saiu"; pendentes primeiro): mesmas colunas | `reservas.gerenciar` |
 | `na-casa` | Hóspedes na casa | nenhum | reservas hospedadas: quarto, hóspede, telefone, entrada, saída, adultos, crianças; total de quartos e de pessoas | `reservas.gerenciar` |
 | `cafe` | Lista do café da manhã | data | quem dormiu na noite anterior à data (`chegada < data <= saída`, reservas hospedadas ou confirmadas): quarto, hóspede, adultos, crianças; totais | `reservas.gerenciar` |
 | `limpeza` | Limpeza dos apartamentos | nenhum | lista da governança de hoje: quarto, situação, serviço (saída ou arrumação), hospedado até, motivo; colunas em branco "Feito" e "Camareira" para preencher à mão | `reservas.gerenciar` |
