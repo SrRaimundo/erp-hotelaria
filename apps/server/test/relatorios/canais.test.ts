@@ -103,6 +103,29 @@ describe("relatório canais: Reservas por canal", () => {
     expect(r.corpo.secoes[1].totais).toMatchObject({ reservas: 2, noites: 4, receita: 120000 });
   });
 
+  test("tipo, comissão guardada e líquida por canal, com totais e soma por tipo no resumo", async () => {
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false, tipo: "ota", comissaoPercentual: 15 }, "u1");
+    await salvarCanal(ctx, { nome: "Site", percentual: 0, exigeSinal: false, tipo: "direta", comissaoPercentual: 3.5 }, "u1");
+    await reserva("A", { chegada: "2026-11-10", saida: "2026-11-13", canal: "Booking" }); // 3 x 30000 = 90000
+    await reserva("B", { chegada: "2026-11-10", saida: "2026-11-11", canal: "Site" }); // 30000
+    await reserva("Borda", { chegada: "2026-10-31", saida: "2026-11-02", canal: "Booking" }); // só 01/11 conta: 30000
+    // mudar o percentual do canal depois não muda o passado
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false, comissaoPercentual: 50 }, "u1");
+    const r = await gerar("canais");
+    const b = porCanal(r.corpo, 1, "Booking");
+    expect(b).toMatchObject({ tipo: "OTA", receita: 120000, comissao: 18000, liquida: 102000 });
+    expect(porCanal(r.corpo, 1, "Site")).toMatchObject({ tipo: "Direta", receita: 30000, comissao: 1050, liquida: 28950 });
+    expect(r.corpo.secoes[1].totais).toMatchObject({ receita: 150000, comissao: 19050, liquida: 130950 });
+    const colunas = r.corpo.secoes[1].colunas;
+    expect(colunas.find((c: any) => c.chave === "comissao")).toMatchObject({ tipo: "dinheiro" });
+    expect(colunas.find((c: any) => c.chave === "tipo")).toMatchObject({ tipo: "texto" });
+    const resumo = Object.fromEntries(r.corpo.resumo.map((x: any) => [x.rotulo, x.valor]));
+    expect(resumo["Comissão"]).toBe("R$ 190,50");
+    expect(resumo["Receita líquida"]).toBe("R$ 1.309,50");
+    expect(resumo["Comissão (OTA)"]).toBe("R$ 180,00");
+    expect(resumo["Comissão (Direta)"]).toBe("R$ 10,50");
+  });
+
   test("canal vazio vira 'Sem canal' nas duas seções", async () => {
     const a = await reserva("Sem", { chegada: "2026-11-09", saida: "2026-11-11" }, "hospedada", q11);
     await ctx.db.updateTable("reservas").set({ canal: "" }).where("id", "=", a.id).execute();

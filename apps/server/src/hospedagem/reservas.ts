@@ -44,6 +44,7 @@ export type Reserva = {
   adultos: number;
   criancasNascimento: Data[];
   canal: string;
+  comissaoPercentual: number;
   observacoes: string | null;
   grupoId: string | null;
   contaId: string;
@@ -77,7 +78,7 @@ function paraReserva(l: any): Reserva {
   return {
     id: l.id, codigo: l.codigo, estado: l.estado, titularId: l.titular_id, categoriaId: l.categoria_id,
     quartoId: l.quarto_id, chegada: l.chegada, saida: l.saida, adultos: l.adultos,
-    criancasNascimento: JSON.parse(l.criancas), canal: l.canal, observacoes: l.observacoes, grupoId: l.grupo_id,
+    criancasNascimento: JSON.parse(l.criancas), canal: l.canal, comissaoPercentual: l.comissao_percentual ?? 0, observacoes: l.observacoes, grupoId: l.grupo_id,
     contaId: l.conta_id, valorSinal: l.valor_sinal, prazoSinal: l.prazo_sinal, avisoSinalEm: l.aviso_sinal_em,
     criadaEm: l.criada_em,
   };
@@ -208,7 +209,7 @@ export async function criarReserva(ctx: Contexto, d: NovaReserva, usuario: Usuar
       id, codigo: Number(ultimo?.m ?? 0) + 1, estado: comSinal ? "pre_reserva" : "confirmada",
       titular_id: d.titularId, categoria_id: d.categoriaId, quarto_id: d.quartoId ?? null,
       chegada: d.chegada, saida: d.saida, adultos: d.adultos, criancas: JSON.stringify(d.criancasNascimento),
-      canal: d.canal, observacoes: d.observacoes ?? null, grupo_id: d.grupoId ?? null, conta_id: contaId,
+      canal: d.canal, comissao_percentual: canal.comissaoPercentual, observacoes: d.observacoes ?? null, grupo_id: d.grupoId ?? null, conta_id: contaId,
       valor_sinal: valorSinal, prazo_sinal: prazoSinal, aviso_sinal_em: null, criada_em: agora.toISOString(),
     };
     await tx.db.insertInto("reservas").values(linha).execute();

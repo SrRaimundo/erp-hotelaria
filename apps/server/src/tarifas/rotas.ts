@@ -6,8 +6,8 @@ import { data, estadiaPermitida, MSG_ESTADIA_LONGA } from "../http/validacao.js"
 import { cotar } from "./cotacao.js";
 import {
   listarCanais, listarFaixasCrianca, listarFaixasOcupacao, listarPacotes, listarPercentuaisDiaSemana,
-  listarRestricoes, listarTabelasBase, listarTemporadas, salvarCanal, salvarFaixasCrianca, salvarFaixasOcupacao,
-  salvarPacote, salvarPercentualDiaSemana, salvarRestricao, salvarTabelaBase, salvarTemporada,
+  listarRestricoes, listarTabelasBase, listarTemporadas, removerCanal, salvarCanal, salvarFaixasCrianca, salvarFaixasOcupacao,
+  salvarPacote, salvarPercentualDiaSemana, salvarRestricao, salvarTabelaBase, salvarTemporada, TIPOS_CANAL,
 } from "./regras.js";
 
 const centavos = z.number().int().min(0);
@@ -27,7 +27,15 @@ const corpoTemporada = z.object({
   tabelas: z.array(tabela.extend({ categoriaId: texto })).optional(),
 });
 const corpoDia = z.object({ dia: z.number().int().min(0).max(6), percentual });
-const corpoCanal = z.object({ id: z.string().optional(), nome: texto, percentual, exigeSinal: z.boolean() });
+const comissao = z
+  .number()
+  .min(0, "A comissão deve ficar entre 0 e 100")
+  .max(100, "A comissão deve ficar entre 0 e 100")
+  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, "A comissão aceita no máximo duas casas decimais");
+const corpoCanal = z.object({
+  id: z.string().optional(), nome: texto, percentual, exigeSinal: z.boolean(),
+  tipo: z.enum(TIPOS_CANAL).optional(), comissaoPercentual: comissao.optional(),
+});
 const corpoFaixasOcupacao = z.array(z.object({ acimaDe: limite, percentual }));
 const corpoFaixasCrianca = z.array(
   z.object({
@@ -78,6 +86,12 @@ export function registrarRotasTarifas(app: FastifyInstance, ctx: Contexto): void
   app.put("/api/tarifas/canais", async (req) => {
     gerenciar(req);
     return salvarCanal(ctx, corpoCanal.parse(req.body), req.usuario.id);
+  });
+
+  app.delete("/api/tarifas/canais/:id", async (req) => {
+    gerenciar(req);
+    await removerCanal(ctx, z.object({ id: texto }).parse(req.params).id, req.usuario.id);
+    return { ok: true };
   });
 
   app.get("/api/tarifas/faixas-ocupacao", async (req) => { gerenciar(req); return listarFaixasOcupacao(ctx); });

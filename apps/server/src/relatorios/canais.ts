@@ -2,6 +2,7 @@ import { z } from "zod";
 import { obterConfig } from "../nucleo/pousada.js";
 import type { Contexto } from "../shared/contexto.js";
 import { formatarBRL } from "../shared/dinheiro.js";
+import { calcularComissao } from "../tarifas/comissao.js";
 import { diaHoteleiro, diasEntre, somarDias, type Data } from "../shared/tempo.js";
 import { filtrosPeriodo } from "./caixa.js";
 import { dataBR } from "./formato.js";
@@ -27,7 +28,10 @@ async function periodoDoMes(ctx: Contexto, f: { inicio?: Data; fim?: Data }): Pr
   return { de, ate: somarDias(proximo, -1) };
 }
 
-type Acumulado = { reservas: number; noites: number; receita: number; cancelamentos: number; noShows: number };
+type Acumulado = { reservas: number; noites: number; receita: number; comissao: number; cancelamentos: number; noShows: number };
+
+const ROTULO_TIPO: Record<string, string> = { direta: "Direta", ota: "OTA", agencia: "Agência", passante: "Passante" };
+const SEM_TIPO = "—";
 
 export const relatorioCanais = definir({
   id: "canais",
@@ -52,7 +56,7 @@ export const relatorioCanais = definir({
     // (b) No período: estadia que se sobrepõe ao período (chegada <= fim e saída > início).
     const reservas = await ctx.db
       .selectFrom("reservas")
-      .select(["id", "canal", "estado", "chegada", "saida"])
+      .select(["id", "canal", "estado", "chegada", "saida", "comissao_percentual"])
       .where("chegada", "<=", ate)
       .where("saida", ">", de)
       .execute();
@@ -69,11 +73,13 @@ export const relatorioCanais = definir({
     const receitaPorReserva = new Map<string, number>();
     for (const n of noitesDaReserva) receitaPorReserva.set(n.reservaId, (receitaPorReserva.get(n.reservaId) ?? 0) + n.valor);
 
+    const tipos = new Map((await ctx.db.selectFrom("canais").select(["nome", "tipo"]).execute()).map((c) => [c.nome, ROTULO_TIPO[c.tipo] ?? c.tipo]));
+
     const periodo = new Map<string, Acumulado>();
     const fim1 = somarDias(ate, 1);
     for (const r of reservas) {
       const c = nomeDoCanal(r.canal);
-      const a = periodo.get(c) ?? { reservas: 0, noites: 0, receita: 0, cancelamentos: 0, noShows: 0 };
+      const a = periodo.get(c) ?? { reservas: 0, noites: 0, receita: 0, comissao: 0, cancelamentos: 0, noShows: 0 };
       periodo.set(c, a);
       if (r.estado === "cancelada") a.cancelamentos += 1;
       else if (r.estado === "no_show") a.noShows += 1;
@@ -81,12 +87,21 @@ export const relatorioCanais = definir({
         a.reservas += 1;
         // só as noites dentro do período: de max(chegada, início) até min(saída, fim + 1), saída exclusiva
         a.noites += Math.max(0, diasEntre(r.chegada > de ? r.chegada : de, r.saida < fim1 ? r.saida : fim1));
-        a.receita += receitaPorReserva.get(r.id) ?? 0;
+        const receita = receitaPorReserva.get(r.id) ?? 0;
+        a.receita += receita;
+        // comissão guardada na reserva sobre a receita de hospedagem das noites do período, por reserva e em centavos inteiros
+        a.comissao += calcularComissao(receita, r.comissao_percentual);
       }
     }
     const linhasPeriodo = [...periodo].sort((a, b) => b[1].noites - a[1].noites || b[1].reservas - a[1].reservas || porNome(a[0], b[0]));
     const soma = (k: keyof Acumulado) => linhasPeriodo.reduce((t, [, x]) => t + x[k], 0);
     const totalNoites = soma("noites");
+    const liquida = (x: Acumulado) => x.receita - x.comissao;
+    const comissaoPorTipo = new Map<string, number>();
+    for (const [canal, x] of linhasPeriodo) {
+      const t = tipos.get(canal) ?? SEM_TIPO;
+      comissaoPorTipo.set(t, (comissaoPorTipo.get(t) ?? 0) + x.comissao);
+    }
 
     const secaoAgora: Secao = {
       titulo: "Hospedados agora",
@@ -105,14 +120,17 @@ export const relatorioCanais = definir({
         { chave: "canal", titulo: "Canal", tipo: "texto" },
         { chave: "reservas", titulo: "Reservas", tipo: "numero" },
         { chave: "noites", titulo: "Noites", tipo: "numero" },
+        { chave: "tipo", titulo: "Tipo", tipo: "texto" },
         { chave: "receita", titulo: "Receita de hospedagem", tipo: "dinheiro" },
+        { chave: "comissao", titulo: "Comissão", tipo: "dinheiro" },
+        { chave: "liquida", titulo: "Receita líquida", tipo: "dinheiro" },
         { chave: "cancelamentos", titulo: "Cancelamentos", tipo: "numero" },
         { chave: "noShows", titulo: "No-shows", tipo: "numero" },
         { chave: "pct", titulo: "% das noites", tipo: "numero" },
       ],
-      linhas: linhasPeriodo.map(([canal, x]) => ({ canal, ...x, pct: pct(x.noites, totalNoites) })),
+      linhas: linhasPeriodo.map(([canal, x]) => ({ canal, tipo: tipos.get(canal) ?? SEM_TIPO, ...x, liquida: liquida(x), pct: pct(x.noites, totalNoites) })),
       totais: {
-        reservas: soma("reservas"), noites: totalNoites, receita: soma("receita"), cancelamentos: soma("cancelamentos"), noShows: soma("noShows"),
+        reservas: soma("reservas"), noites: totalNoites, receita: soma("receita"), comissao: soma("comissao"), liquida: soma("receita") - soma("comissao"), cancelamentos: soma("cancelamentos"), noShows: soma("noShows"),
         pct: totalNoites > 0 ? "100,0%" : "0,0%",
       },
     };
@@ -127,6 +145,9 @@ export const relatorioCanais = definir({
         { rotulo: "Reservas no período", valor: String(soma("reservas")) },
         { rotulo: "Noites", valor: String(totalNoites) },
         { rotulo: "Receita de hospedagem", valor: formatarBRL(soma("receita")) },
+        { rotulo: "Comissão", valor: formatarBRL(soma("comissao")) },
+        { rotulo: "Receita líquida", valor: formatarBRL(soma("receita") - soma("comissao")) },
+        ...[...comissaoPorTipo].sort((a, b) => porNome(a[0], b[0])).map(([t, v]) => ({ rotulo: `Comissão (${t})`, valor: formatarBRL(v) })),
       ],
       secoes: [secaoAgora, secaoPeriodo],
     };

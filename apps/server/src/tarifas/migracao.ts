@@ -1,5 +1,18 @@
 import type { Migracao } from "../shared/banco.js";
 
+/**
+ * Número 0710, acima do 0700_financeiro: o Migrator do Kysely recusa uma migração pendente
+ * que ordena antes de outra já executada (ver shared/banco.ts), então ela precisa vir depois.
+ */
+export const migracaoTarifasCanaisComissao: Migracao = {
+  nome: "0710_tarifas_canais_comissao",
+  async up(db) {
+    await db.schema.alterTable("canais").addColumn("tipo", "text", (c) => c.notNull().defaultTo("direta")).execute();
+    await db.schema.alterTable("canais").addColumn("comissao_percentual", "real", (c) => c.notNull().defaultTo(0)).execute();
+    await db.schema.alterTable("reservas").addColumn("comissao_percentual", "real", (c) => c.notNull().defaultTo(0)).execute();
+  },
+};
+
 export const migracaoTarifas: Migracao = {
   nome: "0300_tarifas",
   async up(db) {

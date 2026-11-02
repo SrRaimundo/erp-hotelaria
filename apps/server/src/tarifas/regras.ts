@@ -2,6 +2,7 @@ import { auditar } from "../infra/auditoria.js";
 import { registrarEvento } from "../infra/outbox.js";
 import { emTransacao, type Contexto } from "../shared/contexto.js";
 import type { Centavos } from "../shared/dinheiro.js";
+import { ErroDominio } from "../shared/erros.js";
 import { novoId } from "../shared/ids.js";
 import type { Data } from "../shared/tempo.js";
 import type { FaixaCrianca, TabelaBase } from "./tipos.js";
@@ -13,7 +14,10 @@ export type Temporada = {
   id: string; nome: string; inicio: Data; fim: Data; prioridade: number; percentual: number | null;
   tabelas: (TabelaBase & { categoriaId: string })[];
 };
-export type Canal = { id: string; nome: string; percentual: number; exigeSinal: boolean };
+export const TIPOS_CANAL = ["direta", "ota", "agencia", "passante"] as const;
+export type TipoCanal = (typeof TIPOS_CANAL)[number];
+export const CANAL_REFERENCIA = "Balcão";
+export type Canal = { id: string; nome: string; percentual: number; exigeSinal: boolean; tipo: TipoCanal; comissaoPercentual: number };
 export type FaixaOcupacao = { acimaDe: number; percentual: number };
 export type Pacote = {
   id: string; nome: string; categoriaId: string; inicio: Data; fim: Data; minNoites: number;
@@ -127,15 +131,41 @@ export async function listarPercentuaisDiaSemana(ctx: Contexto): Promise<{ dia: 
 
 // ---------- canais ----------
 
+async function exigirCanalLivre(tx: Contexto, nome: string, acao: string): Promise<void> {
+  const uso = await tx.db.selectFrom("reservas").select("id").where("canal", "=", nome).limit(1).executeTakeFirst();
+  if (uso) {
+    throw new ErroDominio(
+      "CANAL_EM_USO",
+      `O canal "${nome}" já tem reservas e não pode ${acao}, porque as reservas guardam o canal pelo nome. Crie outro canal.`,
+      { canais: [nome] },
+    );
+  }
+}
+
+/** `tipo` e `comissaoPercentual` omitidos mantêm o valor atual do canal (ou direta e 0 num canal novo). */
 export async function salvarCanal(
   ctx: Contexto,
-  d: { id?: string; nome: string; percentual: number; exigeSinal: boolean },
+  d: { id?: string; nome: string; percentual: number; exigeSinal: boolean; tipo?: TipoCanal; comissaoPercentual?: number },
   ator: string,
 ): Promise<Canal> {
   return emTransacao(ctx, async (tx) => {
-    const existente = d.id ? undefined : await tx.db.selectFrom("canais").select("id").where("nome", "=", d.nome).executeTakeFirst();
-    const c: Canal = { id: d.id ?? existente?.id ?? novoId(), nome: d.nome, percentual: d.percentual, exigeSinal: d.exigeSinal };
-    const valores = { nome: c.nome, percentual: c.percentual, exige_sinal: c.exigeSinal ? 1 : 0 };
+    const atual = await tx.db
+      .selectFrom("canais")
+      .selectAll()
+      .where(d.id ? "id" : "nome", "=", (d.id ?? d.nome) as string)
+      .executeTakeFirst();
+    if (atual && atual.nome !== d.nome) {
+      if (atual.nome === CANAL_REFERENCIA) {
+        throw new ErroDominio("CANAL_BALCAO_FIXO", `O canal ${CANAL_REFERENCIA} é a referência de preço e não pode ser renomeado.`, { canais: [atual.nome] });
+      }
+      await exigirCanalLivre(tx, atual.nome, "ser renomeado");
+    }
+    const c: Canal = {
+      id: atual?.id ?? d.id ?? novoId(), nome: d.nome, percentual: d.percentual, exigeSinal: d.exigeSinal,
+      tipo: d.tipo ?? (atual?.tipo as TipoCanal | undefined) ?? "direta",
+      comissaoPercentual: d.comissaoPercentual ?? atual?.comissao_percentual ?? 0,
+    };
+    const valores = { nome: c.nome, percentual: c.percentual, exige_sinal: c.exigeSinal ? 1 : 0, tipo: c.tipo, comissao_percentual: c.comissaoPercentual };
     await tx.db
       .insertInto("canais")
       .values({ id: c.id, ...valores })
@@ -146,9 +176,25 @@ export async function salvarCanal(
   });
 }
 
+export async function removerCanal(ctx: Contexto, id: string, ator: string): Promise<void> {
+  await emTransacao(ctx, async (tx) => {
+    const c = await tx.db.selectFrom("canais").select("nome").where("id", "=", id).executeTakeFirst();
+    if (!c) throw new ErroDominio("CANAL_NAO_ENCONTRADO", "Canal não encontrado.", { id });
+    if (c.nome === CANAL_REFERENCIA) {
+      throw new ErroDominio("CANAL_BALCAO_FIXO", `O canal ${CANAL_REFERENCIA} é a referência de preço e não pode ser removido.`, { canais: [c.nome] });
+    }
+    await exigirCanalLivre(tx, c.nome, "ser removido");
+    await tx.db.deleteFrom("canais").where("id", "=", id).execute();
+    await registrar(tx, ator, "canal_removido", id, { nome: c.nome });
+  });
+}
+
 export async function listarCanais(ctx: Contexto): Promise<Canal[]> {
   const ls = await ctx.db.selectFrom("canais").selectAll().orderBy("nome").execute();
-  return ls.map((l) => ({ id: l.id, nome: l.nome, percentual: l.percentual, exigeSinal: l.exige_sinal === 1 }));
+  return ls.map((l) => ({
+    id: l.id, nome: l.nome, percentual: l.percentual, exigeSinal: l.exige_sinal === 1,
+    tipo: l.tipo as TipoCanal, comissaoPercentual: l.comissao_percentual,
+  }));
 }
 
 // ---------- faixas ----------

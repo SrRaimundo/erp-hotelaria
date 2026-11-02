@@ -10,6 +10,7 @@ import { arredondarCentavos, type Centavos } from "../shared/dinheiro.js";
 import { ErroDominio } from "../shared/erros.js";
 import { diaHoteleiro, noites as datasDasNoites, type Data } from "../shared/tempo.js";
 import { cotar, exigirEstadiaPermitida } from "../tarifas/cotacao.js";
+import { listarCanais } from "../tarifas/regras.js";
 import { verificarRestricoes, type Violacao } from "../tarifas/restricoes.js";
 import type { ValorNoite } from "../tarifas/tipos.js";
 import { alertarSaldoOrfao, confirmarSeSinalPago } from "./conta.js";
@@ -18,6 +19,7 @@ import { ESTADOS_ATIVOS, transicionar } from "./estados.js";
 import { obterReserva, verificarCapacidade, type Reserva, type ReservaDetalhe } from "./reservas.js";
 
 export type Mudanca = {
+  canal?: string;
   quartoId?: string | null;
   categoriaId?: string;
   chegada?: Data;
@@ -31,7 +33,7 @@ export type Autorizacao = { motivo: string; supervisor: { login: string; senha: 
 
 type Plano = {
   atual: ReservaDetalhe;
-  novo: { quartoId: string | null; categoriaId: string; chegada: Data; saida: Data; adultos: number; criancasNascimento: Data[] };
+  novo: { canal: string; quartoId: string | null; categoriaId: string; chegada: Data; saida: Data; adultos: number; criancasNascimento: Data[] };
   noites: ValorNoite[];
   valorAntigo: Centavos;
   valorNovo: Centavos;
@@ -48,6 +50,10 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
     throw new ErroDominio("RESERVA_NAO_ALTERAVEL", "Esta reserva não pode mais ser alterada porque já foi encerrada.", { estado: atual.estado });
   }
   const categoriaId = m.categoriaId ?? atual.categoriaId;
+  const canal = m.canal ?? atual.canal;
+  if (canal !== atual.canal && !(await listarCanais(c)).some((x) => x.nome === canal)) {
+    throw new ErroDominio("CANAL_INEXISTENTE", `O canal "${canal}" não está cadastrado. Escolha um canal existente.`, { canal });
+  }
   const chegada = m.chegada ?? atual.chegada;
   const saida = m.saida ?? atual.saida;
   const adultos = m.adultos ?? atual.adultos;
@@ -92,9 +98,9 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   }
 
   const recotarTudo =
-    categoriaId !== atual.categoriaId || adultos !== atual.adultos || !mesmasCriancas(criancasNascimento, atual.criancasNascimento);
+    categoriaId !== atual.categoriaId || canal !== atual.canal || adultos !== atual.adultos || !mesmasCriancas(criancasNascimento, atual.criancasNascimento);
   const hospedes = { adultos, criancasNascimento };
-  const pedido = { categoriaId, chegada, saida, canal: atual.canal, hospedes, ignorarReservaId: atual.id };
+  const pedido = { categoriaId, chegada, saida, canal, hospedes, ignorarReservaId: atual.id };
   const fixa = (d: Data) => (lancadas.has(d) ? congeladas.get(d) : undefined);
   const precisaCotar = periodo.some((d) => !fixa(d) && (recotarTudo || !congeladas.has(d)));
   const cotacao = precisaCotar ? await cotar(c, pedido) : undefined;
@@ -117,7 +123,7 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   const violacoes = periodoMudou ? (cotacao?.violacoes ?? (await verificarRestricoes(c, categoriaId, chegada, saida))) : [];
   return {
     atual,
-    novo: { quartoId, categoriaId, chegada, saida, adultos, criancasNascimento },
+    novo: { canal, quartoId, categoriaId, chegada, saida, adultos, criancasNascimento },
     noites,
     valorAntigo: atual.total,
     valorNovo: noites.reduce((s, n) => s + n.valor, 0),
@@ -176,8 +182,12 @@ export async function alterarReserva(
       valorSinal = sinal.tipo === "percentual" ? arredondarCentavos((p.valorNovo * sinal.percentual) / 100) : p.noites[0]!.valor;
     }
 
+    // Trocar de canal guarda a comissão atual do novo canal; sem troca, o percentual guardado não muda.
+    const comissao = novo.canal !== atual.canal
+      ? { canal: novo.canal, comissao_percentual: (await listarCanais(tx)).find((x) => x.nome === novo.canal)!.comissaoPercentual }
+      : {};
     await tx.db.updateTable("reservas").set({
-      quarto_id: novo.quartoId, categoria_id: novo.categoriaId, chegada: novo.chegada, saida: novo.saida,
+      ...comissao, quarto_id: novo.quartoId, categoria_id: novo.categoriaId, chegada: novo.chegada, saida: novo.saida,
       adultos: novo.adultos, criancas: JSON.stringify(novo.criancasNascimento), valor_sinal: valorSinal,
     }).where("id", "=", atual.id).execute();
     await tx.db.deleteFrom("reserva_noites").where("reserva_id", "=", atual.id).execute();
@@ -185,7 +195,7 @@ export async function alterarReserva(
       await tx.db.insertInto("reserva_noites").values({ reserva_id: atual.id, data: n.data, valor: n.valor, passos: JSON.stringify(n.passos) }).execute();
     }
 
-    const antes = { quartoId: atual.quartoId, categoriaId: atual.categoriaId, chegada: atual.chegada, saida: atual.saida, adultos: atual.adultos, criancasNascimento: atual.criancasNascimento };
+    const antes = { canal: atual.canal, quartoId: atual.quartoId, categoriaId: atual.categoriaId, chegada: atual.chegada, saida: atual.saida, adultos: atual.adultos, criancasNascimento: atual.criancasNascimento };
     await auditar(tx, {
       ator: usuario.id, acao: "reserva.alterar", alvoTipo: "reserva", alvoId: atual.id,
       ...(autorizado ? { motivo: autorizado.motivo, supervisorId: autorizado.supervisorId } : {}),

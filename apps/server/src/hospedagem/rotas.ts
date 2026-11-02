@@ -40,6 +40,7 @@ const queryMapa = z
 const supervisor = z.object({ login: texto, senha: z.string() });
 const corpoSensivel = z.object({ motivo: z.string(), supervisor });
 const corpoAlteracao = z.object({
+  canal: texto.optional(),
   quartoId: texto.nullable().optional(),
   categoriaId: texto.optional(),
   chegada: data.optional(),
@@ -50,6 +51,7 @@ const corpoAlteracao = z.object({
   autorizacao: corpoSensivel.optional(),
 });
 const queryPrevia = z.object({
+  canal: texto.optional(),
   quartoId: texto.optional(),
   categoriaId: texto.optional(),
   chegada: data.optional(),
