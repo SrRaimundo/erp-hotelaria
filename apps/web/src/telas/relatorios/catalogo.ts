@@ -1,4 +1,4 @@
-export type FiltroId = "data" | "reserva" | "busca" | "periodo" | "intervalo";
+export type FiltroId = "data" | "reserva" | "busca" | "periodo" | "intervalo" | "previsao";
 export type ItemCatalogo = { id: string; nome: string; descricao: string; permissao: string; filtros: FiltroId[] };
 
 export const PERM_RELATORIOS = "reservas.gerenciar";
@@ -14,8 +14,12 @@ export const CATALOGO: ItemCatalogo[] = [
   { id: "hospedes", nome: "Hóspedes cadastrados", descricao: "Cadastro de hóspedes com documento, contato e número de estadias.", permissao: PERM_RELATORIOS, filtros: ["busca"] },
   { id: "caixa", nome: "Fechamento de caixa", descricao: "Turnos do período e, no turno escolhido, esperado, contado e diferença por forma.", permissao: "caixa.operar", filtros: ["periodo"] },
   { id: "canais", nome: "Reservas por canal", descricao: "Hospedados agora e, no período, reservas, noites, receita, cancelamentos e no-shows de cada canal.", permissao: PERM_RELATORIOS, filtros: ["intervalo"] },
+  { id: "resumo-dia", nome: "Resumo do dia", descricao: "Chegadas, saídas, ocupação, receita do dia e recebimentos por forma de pagamento.", permissao: PERM_RELATORIOS, filtros: ["data"] },
+  { id: "previsao", nome: "Previsão de ocupação", descricao: "Dia a dia dos próximos dias: quartos ocupados e livres, chegadas, saídas e receita prevista.", permissao: PERM_RELATORIOS, filtros: ["previsao"] },
+  { id: "desempenho", nome: "Desempenho", descricao: "Ocupação, diária média e RevPAR do período, no total e por categoria.", permissao: PERM_RELATORIOS, filtros: ["intervalo"] },
 ];
 
-export const EM_BREVE = ["Resumo do dia", "Previsão de ocupação", "Desempenho"];
+/** Relatórios ainda não entregues (nenhum no momento). */
+export const EM_BREVE: string[] = [];
 
 export const buscarNoCatalogo = (id: string) => CATALOGO.find((r) => r.id === id);

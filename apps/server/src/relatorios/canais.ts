@@ -11,14 +11,14 @@ import { definir, type Relatorio, type Secao } from "./modelo.js";
 export const SEM_CANAL = "Sem canal";
 
 /** Estados que ocupam noites e geram receita; cancelada e no_show só entram nas colunas próprias. */
-const VENDIDAS = ["pre_reserva", "confirmada", "hospedada", "finalizada"] as const;
+export const VENDIDAS = ["pre_reserva", "confirmada", "hospedada", "finalizada"] as const;
 
 const nomeDoCanal = (c: string | null | undefined) => c?.trim() || SEM_CANAL;
 const pct = (parte: number, total: number) => (total > 0 ? `${((parte / total) * 100).toFixed(1).replace(".", ",")}%` : "0,0%");
 const porNome = (a: string, b: string) => a.localeCompare(b, "pt-BR");
 
 /** Período pedido; sem datas vale o mês atual do dia hoteleiro. Só o início (ou só o fim) vale um dia, como no caixa. */
-async function periodoDoMes(ctx: Contexto, f: { inicio?: Data; fim?: Data }): Promise<{ de: Data; ate: Data }> {
+export async function periodoDoMes(ctx: Contexto, f: { inicio?: Data; fim?: Data }): Promise<{ de: Data; ate: Data }> {
   if (f.inicio || f.fim) return { de: f.inicio ?? f.fim!, ate: f.fim ?? f.inicio! };
   const config = await obterConfig(ctx);
   const hoje = diaHoteleiro(ctx.relogio.agora(), config.fuso, config.viradaDia);

@@ -65,7 +65,12 @@ describe("catálogo", () => {
     expect(screen.getByRole("link", { name: /Lista de check-in/ })).toHaveAttribute("href", "/relatorios/check-in");
     expect(screen.getByText(/Chegadas do dia/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Fechamento de caixa/ })).not.toBeInTheDocument();
-    for (const nome of ["Resumo do dia", "Previsão de ocupação", "Desempenho"]) expect(screen.getByText(nome)).toBeInTheDocument();
+    // os três da segunda entrega viraram cartões; não sobra "Em breve"
+    expect(screen.getByRole("link", { name: /Resumo do dia/ })).toHaveAttribute("href", "/relatorios/resumo-dia");
+    expect(screen.getByRole("link", { name: /Previsão de ocupação/ })).toHaveAttribute("href", "/relatorios/previsao");
+    expect(screen.getByRole("link", { name: /Desempenho/ })).toHaveAttribute("href", "/relatorios/desempenho");
+    for (const nome of ["Resumo do dia", "Previsão de ocupação", "Desempenho"]) expect(screen.getAllByText(nome)).toHaveLength(1);
+    expect(screen.queryByText("Em breve")).not.toBeInTheDocument();
     // Reservas por canal saiu do "Em breve" e virou cartão
     expect(screen.getByRole("link", { name: /Reservas por canal/ })).toHaveAttribute("href", "/relatorios/canais");
     expect(screen.getAllByText("Reservas por canal")).toHaveLength(1);
@@ -88,6 +93,24 @@ describe("relatório por canal", () => {
     fireEvent.change(screen.getByLabelText("De"), { target: { value: "2026-11-01" } });
     fireEvent.change(screen.getByLabelText("Até"), { target: { value: "2026-11-15" } });
     await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/relatorios/canais?inicio=2026-11-01&fim=2026-11-15")).toBe(true));
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("previsão: filtros de início e dias viram consulta ao servidor", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/previsao": completo });
+    const r = renderizar(<Rotas />, { rota: "/relatorios/previsao", usuario: { permissoes: ["reservas.gerenciar"] } });
+    await screen.findByRole("table");
+    fireEvent.change(screen.getByLabelText("Início"), { target: { value: "2026-11-20" } });
+    fireEvent.change(screen.getByLabelText("Dias"), { target: { value: "30" } });
+    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/relatorios/previsao?inicio=2026-11-20&dias=30")).toBe(true));
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("resumo do dia usa o filtro de data; desempenho o de período", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/resumo-dia": completo, "GET /api/relatorios/desempenho": completo });
+    const r = renderizar(<Rotas />, { rota: "/relatorios/resumo-dia", usuario: { permissoes: ["reservas.gerenciar"] } });
+    await screen.findByRole("table");
+    expect(screen.getByLabelText("Data")).toBeInTheDocument();
     await aguardarConsultas(r.cliente);
   });
 

@@ -56,6 +56,22 @@ function FiltroIntervalo({ valores, aoMudar }: Pick<Props, "valores" | "aoMudar"
   );
 }
 
+function FiltroPrevisao({ valores, aoMudar }: Pick<Props, "valores" | "aoMudar">) {
+  return (
+    <>
+      <label className="campo">
+        Início
+        <input type="date" value={valores.inicio ?? ""} onChange={(e) => aoMudar({ inicio: e.target.value })} />
+      </label>
+      <label className="campo">
+        Dias
+        <input type="number" min={1} max={90} value={valores.dias ?? ""} placeholder="14" onChange={(e) => aoMudar({ dias: e.target.value })} />
+      </label>
+      <span className="rel-dica">Em branco vale hoje, por 14 dias (até 90).</span>
+    </>
+  );
+}
+
 export function FiltrosRelatorio({ item, valores, aoMudar, busca, aoMudarBusca }: Props) {
   if (item.filtros.length === 0) return null;
   return (
@@ -73,6 +89,7 @@ export function FiltrosRelatorio({ item, valores, aoMudar, busca, aoMudarBusca }
         </label>
       )}
       {item.filtros.includes("intervalo") && <FiltroIntervalo valores={valores} aoMudar={aoMudar} />}
+      {item.filtros.includes("previsao") && <FiltroPrevisao valores={valores} aoMudar={aoMudar} />}
       {item.filtros.includes("periodo") && <FiltroPeriodo valores={valores} aoMudar={aoMudar} />}
       {item.filtros.includes("reserva") && valores.reserva && (
         <span className="rel-dica">

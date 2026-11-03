@@ -13,10 +13,14 @@ import { relatorioHospedes } from "./hospedes.js";
 import { relatorioLimpeza } from "./limpeza.js";
 import type { DefinicaoRelatorio } from "./modelo.js";
 import { relatorioNaCasa } from "./na-casa.js";
+import { relatorioDesempenho } from "./desempenho.js";
+import { relatorioPrevisao } from "./previsao.js";
+import { relatorioResumoDia } from "./resumo-dia.js";
 
 /** Catálogo: um relatório novo é uma entrada aqui (id, permissão, filtros zod e gerar). */
 export const REGISTRO: DefinicaoRelatorio[] = [
   relatorioCheckIn, relatorioCheckOut, relatorioNaCasa, relatorioCafe, relatorioLimpeza, relatorioConta, relatorioHospedes, relatorioCaixa, relatorioCanais,
+  relatorioResumoDia, relatorioPrevisao, relatorioDesempenho,
 ];
 
 function analisar<T>(esquema: z.ZodType<T, unknown>, entrada: unknown): T {
