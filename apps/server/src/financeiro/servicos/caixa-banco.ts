@@ -50,7 +50,7 @@ export class CaixaBancoService {
 
   private async inserir(
     ctx: Contexto,
-    p: { local_id: UUID; conta_id: UUID; lancamento_id: UUID; tipo: Movimento["tipo"]; valor: Dinheiro; data: Date; saldo_inicial: number },
+    p: { local_id: UUID; conta_id: UUID; lancamento_id: UUID; tipo: Movimento["tipo"]; valor: Dinheiro; data: Date; saldo_inicial: number; reversao?: boolean },
   ): Promise<Movimento> {
     const anterior = await this.saldoAtual(ctx, p.conta_id, p.saldo_inicial);
     const posterior = anterior + SINAL[p.tipo] * p.valor.centavos;
@@ -67,6 +67,7 @@ export class CaixaBancoService {
         saldo_anterior: anterior,
         saldo_posterior: posterior,
         data: p.data.toISOString(),
+        reversao: p.reversao ? 1 : 0,
         criado_em: ctx.relogio.agora().toISOString(),
       })
       .execute();
@@ -123,7 +124,7 @@ export class CaixaBancoService {
         const conta = await this.obterConta(tx, conta_id as UUID);
         const mov = await this.inserir(tx, {
           local_id, conta_id: conta_id as UUID, lancamento_id: para_id, tipo: valor > 0 ? "debito" : "credito",
-          valor: Dinheiro.de(Math.abs(valor)), data: tx.relogio.agora(), saldo_inicial: conta.saldo_inicial,
+          valor: Dinheiro.de(Math.abs(valor)), data: tx.relogio.agora(), saldo_inicial: conta.saldo_inicial, reversao: true,
         });
         await auditar(tx, {
           ator: usuario.email, acao: "fin_movimento.reverter", alvoTipo: "fin_movimento", alvoId: mov.id,

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Contexto } from "../../shared/contexto.js";
 import { Dinheiro } from "../../shared/dinheiro.js";
 import { CATEGORIAS_PAGAR, ContasPagarService } from "../servicos/contas-pagar.js";
-import { centavos, data, exigirFinanceiro, usuarioDe, uuid } from "./comum.js";
+import { centavos, data, exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
 
 const FORMAS = ["dinheiro", "pix", "debito", "credito", "cheque", "boleto", "transferencia"] as const;
 const corpoCriar = z.object({
@@ -21,11 +21,13 @@ export function registrarRotasContasPagar(app: FastifyInstance, ctx: Contexto): 
   app.post("/api/financeiro/contas-a-pagar", async (req, res) => {
     exigirFinanceiro(req);
     const c = corpoCriar.parse(req.body);
-    const l = await new ContasPagarService(ctx).criar(
-      { ...c, valor: Dinheiro.de(c.valor), vencimento: new Date(`${c.vencimento}T12:00:00.000Z`) },
-      usuarioDe(req),
-    );
-    return res.status(201).send({ ...l, valor: l.valor.centavos });
+    return idempotente(ctx, req, res, async () => {
+      const l = await new ContasPagarService(ctx).criar(
+        { ...c, valor: Dinheiro.de(c.valor), vencimento: new Date(`${c.vencimento}T12:00:00.000Z`) },
+        usuarioDe(req),
+      );
+      return { status: 201, corpo: { ...l, valor: l.valor.centavos } };
+    });
   });
 
   app.put("/api/financeiro/contas-a-pagar/:id/baixar", async (req) => {

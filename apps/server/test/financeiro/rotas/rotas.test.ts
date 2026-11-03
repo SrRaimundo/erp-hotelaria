@@ -89,17 +89,15 @@ describe("rotas do Financeiro", () => {
     expect(r.statusCode).toBe(403);
   });
 
-  test("POST gerar-cobranca define forma e número; forma inválida é 400", async () => {
+  test("não existe rota que gere só a cobrança: a fatura só fecha por /faturamentos/:id/fechar (nada fica sem Conta a Receber)", async () => {
     const { ctx, app, admin, local, cliente_id } = await cenario();
     const f = await new FaturamentoService(ctx).criarParaCheckout(gerarUUID(), cliente_id, local.id, Dinheiro.de(20000), usuario);
-    const url = "/api/financeiro/faturamento/gerar-cobranca";
-    const ruim = await app.inject({ method: "POST", url, headers: admin, payload: { faturamento_id: f.id, forma: "cartao" } });
-    expect(ruim.statusCode).toBe(400);
-    const ok = await app.inject({ method: "POST", url, headers: admin, payload: { faturamento_id: f.id, forma: "pix" } });
+    const velha = await app.inject({ method: "POST", url: "/api/financeiro/faturamento/gerar-cobranca", headers: admin, payload: { faturamento_id: f.id, forma: "pix" } });
+    expect(velha.statusCode).toBe(404);
+    expect((await ctx.db.selectFrom("fin_faturamento").select("numero_documento").executeTakeFirstOrThrow()).numero_documento).toBeNull();
+    const ok = await app.inject({ method: "POST", url: `/api/financeiro/faturamentos/${f.id}/fechar`, headers: admin, payload: { forma: "pix", data_vencimento: "2026-12-10" } });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toMatchObject({ forma_cobranca: "pix", numero_documento: "FAT-2026-000001", valor_original: 20000 });
-    const dup = await app.inject({ method: "POST", url, headers: admin, payload: { faturamento_id: f.id, forma: "pix" } });
-    expect(dup.json().codigo).toBe("ESTADO_INVALIDO");
+    expect(await ctx.db.selectFrom("fin_conta_receber").selectAll().execute()).toHaveLength(1);
   });
 
   test("PUT confirmar-pagamento recebe, movimenta conta e recusa excesso", async () => {

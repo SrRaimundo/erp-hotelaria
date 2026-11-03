@@ -80,6 +80,6 @@ test("contas a receber e cartão", async () => {
 test("validação, 401 e 404", async () => {
   const { app, h } = await preparar();
   expect((await app.inject({ method: "GET", url: "/api/financeiro/relatorios/cartao?local_id=x" })).statusCode).toBe(401);
-  expect((await app.inject({ method: "GET", url: "/api/financeiro/relatorios/consolidado?data_inicio=ontem&data_fim=2026-11-30", headers: h })).statusCode).toBe(422);
+  expect((await app.inject({ method: "GET", url: "/api/financeiro/relatorios/consolidado?data_inicio=ontem&data_fim=2026-11-30", headers: h })).statusCode).toBe(400);
   expect((await app.inject({ method: "GET", url: "/api/financeiro/relatorios/movimento?conta_id=nao&data_inicio=2026-11-01&data_fim=2026-11-02", headers: h })).statusCode).toBe(422);
 });

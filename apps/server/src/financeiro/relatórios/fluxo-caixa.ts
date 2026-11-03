@@ -21,7 +21,7 @@ export async function fluxoCaixaDiario(ctx: Contexto, local_id: UUID, data: stri
   const contas = await ctx.db.selectFrom("fin_conta_bancaria").select("saldo_inicial").where("local_id", "=", local_id).execute();
   const movs = await ctx.db
     .selectFrom("fin_movimento")
-    .select(["tipo", "valor", "data"])
+    .select(["tipo", "valor", "data", "reversao"])
     .where("local_id", "=", local_id)
     .where("data", "<=", fim)
     .execute();
@@ -29,6 +29,9 @@ export async function fluxoCaixaDiario(ctx: Contexto, local_id: UUID, data: stri
   const r: Record<string, number> = { credito: 0, debito: 0, transferencia_in: 0, transferencia_out: 0 };
   for (const m of movs as any[]) {
     if (m.data < inicio) saldo_inicial += SINAL[m.tipo] * m.valor;
+    // Reversão no período abate o lado oposto (cancelar um recebimento não vira receita mais despesa): o líquido do dia.
+    else if (m.reversao && m.tipo === "debito") r.credito -= m.valor;
+    else if (m.reversao && m.tipo === "credito") r.debito -= m.valor;
     else r[m.tipo] += m.valor;
   }
   const taxas = (await ctx.db

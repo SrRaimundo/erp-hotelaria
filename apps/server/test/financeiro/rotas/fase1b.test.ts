@@ -31,7 +31,7 @@ describe("Local e cadastros", () => {
     expect(nascePadrao.hospedagem_padrao).toBe(true);
     await chamar("PUT", `/locais/${outro.id}`, { hospedagem_padrao: true });
     expect((await chamar("GET", "/locais")).corpo.find((l: any) => l.id === nascePadrao.id).hospedagem_padrao).toBe(false);
-    expect((await chamar("PUT", `/locais/${outro.id}`, { ativo: false })).corpo).toMatchObject({ ativo: false, hospedagem_padrao: true });
+    expect((await chamar("PUT", `/locais/${outro.id}`, { ativo: false })).status).toBe(422); // é o local da hospedagem
     expect((await chamar("PUT", `/locais/${local.id}`, { ativo: false, hospedagem_padrao: true })).status).toBe(422);
     expect((await chamar("POST", "/locais", { nome: "  " })).status).toBe(400);
     expect(await ctx.db.selectFrom("auditoria").select("acao").where("acao", "like", "fin_local.%").execute()).not.toHaveLength(0);

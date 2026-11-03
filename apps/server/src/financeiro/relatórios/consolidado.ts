@@ -18,7 +18,7 @@ export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, da
   const { inicio, fim } = await limitesNoFuso(ctx, data_inicio, data_fim);
   const locais = (await ctx.db.selectFrom("fin_local").select(["id", "nome"]).orderBy("nome").execute()) as any[];
   const contas = (await ctx.db.selectFrom("fin_conta_bancaria").select(["local_id", "saldo_inicial"]).execute()) as any[];
-  const movs = (await ctx.db.selectFrom("fin_movimento").select(["local_id", "tipo", "valor", "data"]).where("data", "<=", fim).execute()) as any[];
+  const movs = (await ctx.db.selectFrom("fin_movimento").select(["local_id", "tipo", "valor", "data", "reversao"]).where("data", "<=", fim).execute()) as any[];
   const mapa = new Map<string, ConsolidadoLocal>();
   const variacao = new Map<string, number>();
   for (const l of locais) {
@@ -33,7 +33,9 @@ export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, da
       l.saldo_inicial += SINAL[m.tipo] * m.valor;
       continue;
     }
-    if (m.tipo === "credito") l.recebimentos += m.valor;
+    if (m.reversao && m.tipo === "debito") l.recebimentos -= m.valor;
+    else if (m.reversao && m.tipo === "credito") l.pagamentos -= m.valor;
+    else if (m.tipo === "credito") l.recebimentos += m.valor;
     else if (m.tipo === "debito") l.pagamentos += m.valor;
     variacao.set(m.local_id, variacao.get(m.local_id)! + SINAL[m.tipo] * m.valor);
   }

@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../../shared/contexto.js";
-import { exigirFinanceiro, uuid } from "../rotas/comum.js";
+import { data, exigirFinanceiro, uuid } from "../rotas/comum.js";
 import { posicaoCartao } from "./cartao.js";
 import { consolidadoPorLocal } from "./consolidado.js";
 import { posicaoContasReceber } from "./contas-receber.js";
 import { fluxoCaixaDiario } from "./fluxo-caixa.js";
 import { movimentoPorConta } from "./movimento-conta.js";
 
-const dia = z.string().trim().min(1, "Campo obrigatório");
+const dia = data;
 
 export function registrarRotasRelatorios(app: FastifyInstance, ctx: Contexto): void {
   const get = <T extends z.ZodType>(caminho: string, schema: T, fn: (q: z.infer<T>) => Promise<unknown>) => {

@@ -249,3 +249,20 @@ export const migracaoFinanceiroFila: Migracao = {
     await sql`INSERT OR IGNORE INTO fin_cursor (nome, ultimo_seq) SELECT 'hospedagem', COALESCE(MAX(seq), 0) FROM outbox`.execute(db);
   },
 };
+
+/** Defesas e ajustes: marca de reversão nos movimentos, unicidade do que já era "checado antes de gravar" e chaves de idempotência. */
+export const migracaoFinanceiroDefesas: Migracao = {
+  nome: "0750_financeiro_defesas",
+  async up(db) {
+    await sql`ALTER TABLE fin_movimento ADD COLUMN reversao integer NOT NULL DEFAULT 0`.execute(db);
+    await sql`CREATE UNIQUE INDEX fin_lancamento_pagamento_hospedagem ON fin_lancamento (referencia_id) WHERE referencia_tipo = 'hospedagem_pagamento'`.execute(db);
+    await sql`CREATE UNIQUE INDEX fin_faturamento_checkout ON fin_faturamento (referencia_id) WHERE status != 'cancelado'`.execute(db);
+    await db.schema
+      .createTable("fin_idempotencia")
+      .addColumn("chave", "text", (c) => c.primaryKey())
+      .addColumn("status", "integer", (c) => c.notNull())
+      .addColumn("resposta", "text", (c) => c.notNull())
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .execute();
+  },
+};

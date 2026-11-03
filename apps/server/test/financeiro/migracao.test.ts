@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { sql } from "kysely";
 import { abrirBanco, migrar } from "../../src/shared/banco.js";
 
-test("financeiro: 12 tabelas criadas corretamente", async () => {
+test("financeiro: 13 tabelas criadas corretamente", async () => {
   const { todasMigracoes } = await import("../../src/shared/migracoes.js");
   const db = abrirBanco(":memory:");
   await migrar(db, todasMigracoes);
@@ -28,6 +28,7 @@ test("financeiro: 12 tabelas criadas corretamente", async () => {
     "fin_movimento",
     "fin_saldo",
     "fin_fornecedor",
+    "fin_idempotencia",
   ].sort();
 
   expect(tableNames).toEqual(expectedTables);
@@ -283,6 +284,7 @@ test("financeiro: todas as colunas estão presentes e com tipos corretos", async
     "saldo_posterior",
     "data",
     "criado_em",
+    "reversao",
   ]);
 
   // Check fin_saldo columns

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../../shared/contexto.js";
 import { CartaoService, TIPOS_CARTAO } from "../servicos/cartao.js";
-import { centavos, data, exigirFinanceiro, usuarioDe, uuid } from "./comum.js";
+import { centavos, data, exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
 
 const taxa = z.number().min(0, "A taxa não pode ser negativa.").max(99.99, "A taxa deve ser menor que 100%.");
 const corpoCriar = z.object({
@@ -25,7 +25,8 @@ export function registrarRotasCartao(app: FastifyInstance, ctx: Contexto): void 
 
   app.post("/api/financeiro/cartao/movimentos", async (req, res) => {
     exigirFinanceiro(req);
-    return res.status(201).send(await new CartaoService(ctx).criar(corpoCriar.parse(req.body), usuarioDe(req)));
+    const c = corpoCriar.parse(req.body);
+    return idempotente(ctx, req, res, async () => ({ status: 201, corpo: await new CartaoService(ctx).criar(c, usuarioDe(req)) }));
   });
 
   app.put("/api/financeiro/cartao/movimentos/:id/baixar", async (req) => {

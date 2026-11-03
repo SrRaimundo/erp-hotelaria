@@ -100,6 +100,12 @@ export class LocalService {
   async atualizar(id: UUID, dados: Partial<Pick<Local, "nome" | "ativo" | "parametros">>, usuario: Usuario): Promise<Local> {
     return emTransacao(this.ctx, async (tx) => {
       const antes = await new LocalService(tx).obter(id);
+      if (dados.ativo === false && antes.ativo) {
+        const marca = (await tx.db.selectFrom("fin_local").select("parametros").where("id", "=", id).executeTakeFirst()) as any;
+        if (marca?.parametros && JSON.parse(marca.parametros).hospedagem_padrao === true) {
+          throw new ErroDominio("ESTADO_INVALIDO", "Este local recebe os lançamentos da hospedagem. Marque outro local como o da hospedagem antes de desativá-lo.");
+        }
+      }
       const depois: Local = {
         ...antes,
         nome: dados.nome ?? antes.nome,

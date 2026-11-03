@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../../shared/contexto.js";
 import { CadastrosFinanceiroService, TIPOS_CONTA } from "../servicos/cadastros.js";
-import { exigirFinanceiro, usuarioDe, uuid } from "./comum.js";
+import { exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
 
 const texto = (msg: string) => z.string().trim().min(1, msg);
 const corpoConta = z.object({
@@ -37,8 +37,10 @@ export function registrarRotasCadastros(app: FastifyInstance, ctx: Contexto): vo
   app.post("/api/financeiro/contas", async (req, res) => {
     exigirFinanceiro(req);
     const c = corpoConta.parse(req.body);
-    await svc().criarConta(c, usuarioDe(req));
-    return res.status(201).send((await svc().listarContas(c.local_id)).find((x) => x.numero === c.numero));
+    return idempotente(ctx, req, res, async () => {
+      await svc().criarConta(c, usuarioDe(req));
+      return { status: 201, corpo: (await svc().listarContas(c.local_id)).find((x) => x.numero === c.numero) };
+    });
   });
 
   app.get("/api/financeiro/fornecedores", async (req) => {
@@ -47,7 +49,8 @@ export function registrarRotasCadastros(app: FastifyInstance, ctx: Contexto): vo
   });
   app.post("/api/financeiro/fornecedores", async (req, res) => {
     exigirFinanceiro(req);
-    return res.status(201).send(await svc().criarFornecedor(corpoFornecedor.parse(req.body), usuarioDe(req)));
+    const c = corpoFornecedor.parse(req.body);
+    return idempotente(ctx, req, res, async () => ({ status: 201, corpo: await svc().criarFornecedor(c, usuarioDe(req)) }));
   });
 
   app.get("/api/financeiro/clientes", async (req) => {

@@ -33,7 +33,7 @@ async function resolverLocal(tx: Contexto): Promise<UUID> {
 }
 
 async function contaCaixa(tx: Contexto, local_id: UUID): Promise<UUID | null> {
-  const c = await tx.db.selectFrom("fin_conta_bancaria").select("id").where("local_id", "=", local_id).where("nome", "=", "Caixa").executeTakeFirst();
+  const c = await tx.db.selectFrom("fin_conta_bancaria").select("id").where("local_id", "=", local_id).where("tipo", "=", "caixa").orderBy("criado_em").orderBy("id").executeTakeFirst();
   return (c?.id as UUID) ?? null;
 }
 
