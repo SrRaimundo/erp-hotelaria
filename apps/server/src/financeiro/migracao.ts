@@ -228,3 +228,24 @@ export const migracaoFinanceiroPagarCartao: Migracao = {
     await db.schema.createIndex("fin_cartao_movimento_local").on("fin_cartao_movimento").columns(["local_id", "previsao"]).execute();
   },
 };
+
+/**
+ * Fila do Financeiro sobre o outbox: um cursor persistido por consumidor.
+ * Posição inicial: o maior `seq` já existente no outbox. Eventos anteriores à instalação do Financeiro
+ * (sinais e pagamentos do histórico, sem saldo de abertura conhecido) NÃO são reprocessados; um banco novo começa em 0.
+ */
+export const migracaoFinanceiroFila: Migracao = {
+  nome: "0740_financeiro_fila",
+  async up(db) {
+    await db.schema
+      .createTable("fin_cursor")
+      .ifNotExists()
+      .addColumn("nome", "text", (c) => c.primaryKey())
+      .addColumn("ultimo_seq", "integer", (c) => c.notNull().defaultTo(0))
+      .addColumn("falha_seq", "integer")
+      .addColumn("falhas", "integer", (c) => c.notNull().defaultTo(0))
+      .addColumn("ultimo_erro", "text")
+      .execute();
+    await sql`INSERT OR IGNORE INTO fin_cursor (nome, ultimo_seq) SELECT 'hospedagem', COALESCE(MAX(seq), 0) FROM outbox`.execute(db);
+  },
+};

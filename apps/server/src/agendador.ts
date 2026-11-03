@@ -1,3 +1,4 @@
+import { processarPendentes } from "./financeiro/consumidores-eventos/fila.js";
 import { processarSinais } from "./hospedagem/sinal.js";
 import { processarVirada } from "./hospedagem/virada.js";
 import type { Contexto } from "./shared/contexto.js";
@@ -16,6 +17,7 @@ export function iniciarAgendador(ctx: Contexto, intervaloMs = 60_000): Agendador
     const jobs: [string, (c: Contexto) => Promise<unknown>][] = [
       ["sinais", processarSinais],
       ["virada", processarVirada],
+      ["financeiro", processarPendentes],
     ];
     for (const [nome, job] of jobs) {
       try {

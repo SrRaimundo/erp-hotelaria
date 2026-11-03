@@ -64,10 +64,6 @@ export async function processarPagamentoRegistrado(ctx: Contexto, evento: Pick<E
     console.log(`Financeiro: pagamento ${p.pagamentoId} (${p.formaCodigo}) ignorado - forma sem lançamento direto.`);
     return;
   }
-  if (!(p.valor > 0)) {
-    console.log(`Financeiro: pagamento ${p.pagamentoId} com valor ${p.valor} ignorado (estorno não tratado).`);
-    return;
-  }
   const forma = p.formaCodigo as FormaLancamento;
   await emTransacao(ctx, async (tx) => {
     const dup = await tx.db
@@ -134,10 +130,4 @@ export async function processarValorAReceberCriado(ctx: Contexto, evento: Pick<E
     // O checkout faturado fica aberto em Faturamento; a fatura só vai a Contas a Receber quando for fechada ali.
     await new FaturamentoService(tx).criarParaCheckout(e.valorAReceberId as UUID, cliente_id, local_id, valor, USUARIO_SISTEMA);
   });
-}
-
-/** Assina os eventos de hospedagem no barramento do contexto. */
-export function registrarConsumidoresHospedagem(ctx: Contexto & { barramento: { assinar(tipo: string, fn: (e: Evento) => void | Promise<void>): void } }): void {
-  ctx.barramento.assinar("hospedagem.PagamentoRegistrado", (e) => processarPagamentoRegistrado(ctx, e));
-  ctx.barramento.assinar("hospedagem.ValorAReceberCriado", (e) => processarValorAReceberCriado(ctx, e));
 }

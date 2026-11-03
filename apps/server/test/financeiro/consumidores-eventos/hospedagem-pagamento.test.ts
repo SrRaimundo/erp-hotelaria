@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, expect, test } from "vitest";
-import { processarPagamentoRegistrado, processarValorAReceberCriado, registrarConsumidoresHospedagem } from "../../../src/financeiro/consumidores-eventos/hospedagem-pagamento.js";
+import { processarPagamentoRegistrado, processarValorAReceberCriado } from "../../../src/financeiro/consumidores-eventos/hospedagem-pagamento.js";
 import { LocalService } from "../../../src/financeiro/servicos/locais.js";
 import { criarCategoria } from "../../../src/nucleo/categorias.js";
 import { salvarHospede } from "../../../src/nucleo/hospedes.js";
@@ -92,14 +92,6 @@ test("ValorAReceberCriado: cria cliente e faturamento aberto; recebível só ao 
   expect(fats).toHaveLength(1);
   expect(fats[0]).toMatchObject({ referencia_id: "v1", valor_original: 90000, numero_documento: null, status: "aberto", cliente_id: cli[0]!.id });
   expect(await ctx.db.selectFrom("fin_conta_receber").selectAll().execute()).toHaveLength(0);
-});
-
-test("registrarConsumidoresHospedagem: assina o evento no barramento", async () => {
-  registrarConsumidoresHospedagem(ctx);
-  const ev = pagamento("dinheiro");
-  ctx.barramento.publicar({ id: "e1", seq: 1, tipo: "hospedagem.PagamentoRegistrado", payload: ev.payload, criadoEm: CRIADO });
-  await new Promise((r) => setTimeout(r, 150));
-  expect(await ctx.db.selectFrom("fin_lancamento").selectAll().execute()).toHaveLength(1);
 });
 
 test("consumidores de eventos não dependem de permissão de usuário", () => {
