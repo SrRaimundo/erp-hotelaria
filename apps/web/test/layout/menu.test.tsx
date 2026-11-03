@@ -193,8 +193,8 @@ describe("Produtos e Categorias e Quartos em Cadastros", () => {
 describe("telas em breve", () => {
   test("item novo abre TelaEmBreve com o título e a mensagem", async () => {
     instalarApiFalsa(painel);
-    renderizar(<AppRotas />, { rota: "/financeiro/cartao-de-credito", usuario: { permissoes: tudo } });
-    expect(await screen.findByRole("heading", { level: 1, name: "Cartão de Crédito" })).toBeInTheDocument();
+    renderizar(<AppRotas />, { rota: "/estoque/fiscal", usuario: { permissoes: tudo } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Fiscal" })).toBeInTheDocument();
     expect(screen.getByText("Esta tela ainda será construída.")).toBeInTheDocument();
   });
 
