@@ -116,6 +116,23 @@ test("5b. reservas por canal: abre pelo catálogo, mostra as duas seções e o f
   await expect(page.getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
 });
 
+test("5c. segunda entrega: resumo do dia, previsão de ocupação e desempenho abrem pelo catálogo", async ({ page }) => {
+  await entrar(page, "recepcao", "recepcao123");
+  await page.getByRole("link", { name: "Relatórios" }).click();
+  await expect(page.getByText("Em breve")).toHaveCount(0);
+  await page.getByRole("link", { name: /Previsão de ocupação/ }).click();
+  await expect(page.getByRole("heading", { name: "Previsão de ocupação", level: 1 })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Quartos disponíveis" })).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(14 + 2); // cabeçalho, 14 dias e totais
+  await page.getByLabel("Dias").fill("7");
+  await expect(page.getByRole("row")).toHaveCount(7 + 2);
+  await page.goto("/relatorios/resumo-dia");
+  await expect(page.getByRole("heading", { name: "Recebimentos por forma de pagamento", level: 2 })).toBeVisible();
+  await page.goto("/relatorios/desempenho");
+  await expect(page.getByRole("heading", { name: "RevPAR" }).or(page.getByRole("columnheader", { name: "RevPAR" })).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
+});
+
 test("5. relatório no celular não rola a página na horizontal @celular", async ({ page }) => {
   await entrar(page, "recepcao", "recepcao123");
   for (const id of ["check-in", "limpeza"]) {
