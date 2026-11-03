@@ -4,9 +4,6 @@
 .fin__topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .fin__seletores { display: flex; gap: 12px; flex-wrap: wrap; }
 .fin select, .fin .campo input { border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; }
-.fin__abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); overflow-x: auto; }
-.fin__aba { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; cursor: pointer; color: var(--texto-suave); font: inherit; white-space: nowrap; }
-.fin__aba--ativa { color: var(--texto); border-bottom-color: var(--verde); font-weight: 600; }
 .fin__bloco { display: flex; flex-direction: column; gap: 10px; }
 .fin__coluna { display: flex; flex-direction: column; gap: 12px; }
 .fin__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }

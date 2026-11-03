@@ -180,12 +180,12 @@ describe("Produtos e Categorias e Quartos em Cadastros", () => {
 describe("telas em breve", () => {
   test("item novo abre TelaEmBreve com o título e a mensagem", async () => {
     instalarApiFalsa(painel);
-    renderizar(<AppRotas />, { rota: "/financeiro/contas-a-pagar", usuario: { permissoes: tudo } });
-    expect(await screen.findByRole("heading", { level: 1, name: "Contas a Pagar" })).toBeInTheDocument();
+    renderizar(<AppRotas />, { rota: "/financeiro/cartao-de-credito", usuario: { permissoes: tudo } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Cartão de Crédito" })).toBeInTheDocument();
     expect(screen.getByText("Esta tela ainda será construída.")).toBeInTheDocument();
   });
 
-  test.each(["/financeiro/relatorios", "/estoque/relatorios", "/cadastros/relatorios"])("%s é em breve, em página inteira, com a permissão do grupo", async (rota) => {
+  test.each(["/estoque/relatorios", "/cadastros/relatorios"])("%s é em breve, em página inteira, com a permissão do grupo", async (rota) => {
     instalarApiFalsa(painel);
     renderizar(<AppRotas />, { rota, usuario: { permissoes: tudo } });
     expect(await screen.findByRole("heading", { level: 1, name: "Relatórios" })).toBeInTheDocument();
