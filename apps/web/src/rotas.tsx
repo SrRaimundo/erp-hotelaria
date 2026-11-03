@@ -7,6 +7,7 @@ import { TrocarSenha } from "./auth/TrocarSenha";
 import { GRUPOS_MENU, type ItemMenu } from "./layout/menu";
 import { Shell } from "./layout/Shell";
 import { Assistente } from "./telas/assistente/Assistente";
+import { FinanceiroLayout } from "./financeiro/FinanceiroLayout";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaEmBreve } from "./telas/em-breve/TelaEmBreve";
@@ -42,6 +43,10 @@ const TELAS_PRONTAS: Record<string, ReactElement> = {
   "/caixa": <TelaCaixa />,
   "/governanca": <TelaGovernanca />,
   "/relatorios": <TelaRelatorios />,
+  "/financeiro/contas-a-pagar": <FinanceiroLayout key="lancamentos" aba="lancamentos" />,
+  "/financeiro/contas-a-receber": <FinanceiroLayout key="receber" aba="receber" />,
+  "/financeiro/caixa-e-banco": <FinanceiroLayout key="caixa" aba="caixa" />,
+  "/financeiro/relatorios": <FinanceiroLayout key="relatorios" aba="relatorios" />,
   "/cadastros/produtos": <TelaProdutos />,
   "/cadastros/categorias-e-quartos": <TelaCategoriasQuartos />,
 };
