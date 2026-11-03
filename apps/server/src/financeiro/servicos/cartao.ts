@@ -104,9 +104,18 @@ export class CartaoService {
       const taxa = taxa_percentual ?? m.taxa_percentual;
       const v = calcularCartao(m.valor_bruto, "bruto", taxa);
       const agora = tx.relogio.agora();
-      await tx.db.updateTable("fin_lancamento").set({ data: agora.toISOString() }).where("id", "=", m.lancamento_id).execute();
-      const lanc = await new LançamentoService(tx).obter(m.lancamento_id);
-      await new CaixaBancoService(tx).criarMovimento(lanc, conta_id, usuario, Dinheiro.de(v.liquido));
+      const lancs = new LançamentoService(tx);
+      const lanc = await lancs.obter(m.lancamento_id);
+      // Só o líquido entra na conta (na data da baixa); a data da venda continua no lançamento.
+      await new CaixaBancoService(tx).criarMovimento(lanc, conta_id, usuario, Dinheiro.de(v.liquido), agora);
+      if (v.taxa > 0) {
+        // Despesa só de registro: aparece em Contas a Pagar já quitada, sem movimento de caixa (o banco já recebeu o líquido).
+        await lancs.criar({
+          local_id: m.local_id, data: agora, tipo: "pagamento", origem: "manual", valor: Dinheiro.de(v.taxa), forma_pagamento: "transferencia",
+          status: "liquidado", descricao: `Taxa do cartão ${m.bandeira} (${m.tipo})`, categoria: "taxa_cartao",
+          referencia_id: m.id, referencia_tipo: "taxa_cartao", usuario,
+        });
+      }
       await tx.db.updateTable("fin_lancamento").set({ status: "liquidado", atualizado_por: usuario.email, atualizado_em: agora.toISOString() }).where("id", "=", m.lancamento_id).execute();
       await tx.db.updateTable("fin_cartao_movimento").set({
         status: "baixado", taxa_percentual: taxa, valor_taxa: v.taxa, valor_liquido: v.liquido, conta_destino_id: conta_id, baixado_em: agora.toISOString(),

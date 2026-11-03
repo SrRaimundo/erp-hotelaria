@@ -11,6 +11,8 @@ export type FluxoCaixa = {
   transferencias_entrada: number;
   transferencias_saida: number;
   saldo_final: number;
+  /** Taxas de cartão do dia: despesa só de registro, sem movimento de caixa (já descontadas do que o banco recebeu). */
+  taxas_cartao: number;
 };
 
 /** Fluxo de caixa diário de um local (valores em centavos). Entradas = créditos; saídas = débitos. */
@@ -29,9 +31,19 @@ export async function fluxoCaixaDiario(ctx: Contexto, local_id: UUID, data: stri
     if (m.data < inicio) saldo_inicial += SINAL[m.tipo] * m.valor;
     else r[m.tipo] += m.valor;
   }
+  const taxas = (await ctx.db
+    .selectFrom("fin_lancamento")
+    .select("valor")
+    .where("local_id", "=", local_id)
+    .where("referencia_tipo", "=", "taxa_cartao")
+    .where("status", "!=", "cancelado")
+    .where("data", ">=", inicio)
+    .where("data", "<=", fim)
+    .execute()) as { valor: number }[];
   const saldo_final = saldo_inicial + r.credito - r.debito + r.transferencia_in - r.transferencia_out;
   return {
     local_id, data, saldo_inicial, entradas: r.credito, saidas: r.debito,
+    taxas_cartao: taxas.reduce((s, t) => s + t.valor, 0),
     transferencias_entrada: r.transferencia_in, transferencias_saida: r.transferencia_out, saldo_final,
   };
 }

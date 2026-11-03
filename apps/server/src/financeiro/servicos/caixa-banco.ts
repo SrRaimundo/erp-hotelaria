@@ -75,7 +75,7 @@ export class CaixaBancoService {
   }
 
   /** `valor` opcional movimenta menos que o lançamento (ex.: cartão baixado pelo líquido, sem a taxa). */
-  async criarMovimento(lancamento: Lançamento, conta_id: UUID, usuario: Usuario, valor?: Dinheiro): Promise<Movimento> {
+  async criarMovimento(lancamento: Lançamento, conta_id: UUID, usuario: Usuario, valor?: Dinheiro, data?: Date): Promise<Movimento> {
     if (lancamento.status === "cancelado") throw new ErroDominio("ESTADO_INVALIDO", "Lançamento cancelado não gera movimento.");
     if (lancamento.tipo !== "recebimento" && lancamento.tipo !== "pagamento") {
       throw new ErroDominio("VALIDACAO_FALHOU", "Apenas recebimento ou pagamento geram movimento direto.");
@@ -91,7 +91,7 @@ export class CaixaBancoService {
         lancamento_id: lancamento.id,
         tipo: lancamento.tipo === "recebimento" ? "credito" : "debito",
         valor: valor ?? lancamento.valor,
-        data: lancamento.data,
+        data: data ?? lancamento.data,
         saldo_inicial: conta.saldo_inicial,
       });
       await auditar(tx, {

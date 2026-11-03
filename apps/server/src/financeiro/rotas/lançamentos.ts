@@ -25,6 +25,16 @@ export function registrarRotasLancamentos(app: FastifyInstance, ctx: Contexto): 
       .map((l) => ({ ...l, valor: l.valor.centavos, fornecedor_nome: l.fornecedor_id ? (fornecedores.get(l.fornecedor_id) ?? null) : null }));
   });
 
+  // Estornar um lançamento (recebimento, cartão, etc.): mesma regra do cancelamento, uma única vez; exige motivo e supervisor.
+  app.post("/api/financeiro/lancamentos/:id/estornar", async (req) => {
+    exigirFinanceiro(req);
+    const { id } = z.object({ id: uuid }).parse(req.params);
+    const corpo = corpoCancelar.parse(req.body ?? {});
+    const aut = await autorizarSupervisor(ctx, corpo.supervisor, corpo.motivo);
+    const l = await new LançamentoService(ctx).estornar(id, aut.motivo, aut.supervisorId, usuarioDe(req));
+    return { ...l, valor: l.valor.centavos };
+  });
+
   // Ação sensível: exige motivo e credencial de supervisor.
   app.delete("/api/financeiro/lancamentos/:id", async (req) => {
     exigirFinanceiro(req);

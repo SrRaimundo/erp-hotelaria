@@ -8,6 +8,8 @@ export type ConsolidadoLocal = {
   saldo_inicial: number;
   recebimentos: number;
   pagamentos: number;
+  /** Taxas de cartão no período (despesa só de registro; não entra em pagamentos nem no saldo). */
+  taxas_cartao: number;
   saldo_final: number;
 };
 
@@ -20,7 +22,7 @@ export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, da
   const mapa = new Map<string, ConsolidadoLocal>();
   const variacao = new Map<string, number>();
   for (const l of locais) {
-    mapa.set(l.id, { local_id: l.id, nome: l.nome, saldo_inicial: 0, recebimentos: 0, pagamentos: 0, saldo_final: 0 });
+    mapa.set(l.id, { local_id: l.id, nome: l.nome, saldo_inicial: 0, recebimentos: 0, pagamentos: 0, taxas_cartao: 0, saldo_final: 0 });
     variacao.set(l.id, 0);
   }
   for (const c of contas) if (mapa.has(c.local_id)) mapa.get(c.local_id)!.saldo_inicial += c.saldo_inicial;
@@ -35,6 +37,15 @@ export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, da
     else if (m.tipo === "debito") l.pagamentos += m.valor;
     variacao.set(m.local_id, variacao.get(m.local_id)! + SINAL[m.tipo] * m.valor);
   }
+  const taxas = (await ctx.db
+    .selectFrom("fin_lancamento")
+    .select(["local_id", "valor"])
+    .where("referencia_tipo", "=", "taxa_cartao")
+    .where("status", "!=", "cancelado")
+    .where("data", ">=", inicio)
+    .where("data", "<=", fim)
+    .execute()) as any[];
+  for (const t of taxas) if (mapa.has(t.local_id)) mapa.get(t.local_id)!.taxas_cartao += t.valor;
   const lista = [...mapa.values()];
   for (const l of lista) l.saldo_final = l.saldo_inicial + variacao.get(l.local_id)!;
   const total = lista.reduce(
@@ -42,9 +53,10 @@ export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, da
       saldo_inicial: t.saldo_inicial + l.saldo_inicial,
       recebimentos: t.recebimentos + l.recebimentos,
       pagamentos: t.pagamentos + l.pagamentos,
+      taxas_cartao: t.taxas_cartao + l.taxas_cartao,
       saldo_final: t.saldo_final + l.saldo_final,
     }),
-    { saldo_inicial: 0, recebimentos: 0, pagamentos: 0, saldo_final: 0 },
+    { saldo_inicial: 0, recebimentos: 0, pagamentos: 0, taxas_cartao: 0, saldo_final: 0 },
   );
   return { data_inicio, data_fim, locais: lista, total };
 }

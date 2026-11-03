@@ -1,7 +1,7 @@
 import type { Evento } from "../../infra/barramento.js";
 import { criarAlerta, resolverAlerta } from "../../infra/alertas.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
-import { processarPagamentoRegistrado, processarValorAReceberCriado } from "./hospedagem-pagamento.js";
+import { processarPagamentoEstornado, processarPagamentoRegistrado, processarValorAReceberCriado } from "./hospedagem-pagamento.js";
 
 /**
  * Fila do Financeiro: lê os eventos de hospedagem do `outbox` (gravados na mesma transação da operação do hotel)
@@ -17,6 +17,7 @@ type Tratador = (tx: Contexto, e: Pick<Evento, "payload" | "criadoEm">) => Promi
 const TRATADORES: Record<string, Tratador> = {
   "hospedagem.PagamentoRegistrado": processarPagamentoRegistrado,
   "hospedagem.ValorAReceberCriado": processarValorAReceberCriado,
+  "hospedagem.PagamentoEstornado": processarPagamentoEstornado,
 };
 export function registrarTratador(tipo: string, fn: Tratador): void {
   TRATADORES[tipo] = fn;

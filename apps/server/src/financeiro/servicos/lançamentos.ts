@@ -4,7 +4,7 @@ import { Dinheiro } from "../../shared/dinheiro.js";
 import { ErroDominio } from "../../shared/erros.js";
 import { novoId, type UUID } from "../../shared/ids.js";
 import type { Lançamento } from "../modelos/lançamento.js";
-import { CaixaBancoService } from "./caixa-banco.js";
+import { reverterLancamento } from "./reversao.js";
 import type { Usuario } from "./locais.js";
 
 export type ParamsCriarLancamento = {
@@ -103,76 +103,16 @@ export class LançamentoService {
     });
   }
 
+  /** Cancela (ver `reverterLancamento`): `supervisor` é o id de quem autorizou. */
   async cancelar(id: UUID, motivo: string, supervisor: string, usuario: Usuario): Promise<Lançamento> {
     exigirAutorizacao(motivo, supervisor);
-    return emTransacao(this.ctx, async (tx) => {
-      const svc = new LançamentoService(tx);
-      const antes = await svc.obter(id);
-      if (antes.status === "cancelado") throw new ErroDominio("ESTADO_INVALIDO", "Lançamento já cancelado.");
-      await tx.db
-        .updateTable("fin_lancamento")
-        .set({
-          status: "cancelado",
-          motivo_cancelamento: motivo,
-          atualizado_por: usuario.email,
-          atualizado_em: tx.relogio.agora().toISOString(),
-        })
-        .where("id", "=", id)
-        .execute();
-      // O dinheiro que já passou pelo Caixa/Banco volta; o cartão ainda a receber deixa de ser esperado.
-      await new CaixaBancoService(tx).reverterMovimentos(id, id, usuario);
-      await tx.db.updateTable("fin_cartao_movimento").set({ status: "cancelado" }).where("lancamento_id", "=", id).where("status", "=", "a_receber").execute();
-      const depois = await svc.obter(id);
-      await auditar(tx, {
-        ator: usuario.email,
-        acao: "fin_lancamento.cancelar",
-        alvoTipo: "fin_lancamento",
-        alvoId: id,
-        dados: { motivo, supervisor, dispositivo: usuario.dispositivo },
-      });
-      return depois;
-    });
+    return reverterLancamento(this.ctx, id, { modo: "cancelar", motivo, supervisorId: supervisor, usuario });
   }
 
-  /** Estorno: gera Lançamento de tipo oposto (recebimento<->pagamento) referenciando o original, que permanece intacto. */
+  /** Estorno: gera o lançamento de tipo oposto referenciando o original, que permanece como está (ver `reverterLancamento`). */
   async estornar(id: UUID, motivo: string, supervisor: string, usuario: Usuario): Promise<Lançamento> {
     exigirAutorizacao(motivo, supervisor);
-    return emTransacao(this.ctx, async (tx) => {
-      const svc = new LançamentoService(tx);
-      const original = await svc.obter(id);
-      if (original.status === "cancelado") throw new ErroDominio("ESTADO_INVALIDO", "Lançamento cancelado não pode ser estornado.");
-      if (original.referencia_tipo === "estorno") throw new ErroDominio("ESTADO_INVALIDO", "Estorno não pode ser estornado.");
-      const jaEstornado = await tx.db
-        .selectFrom("fin_lancamento")
-        .select("id")
-        .where("referencia_id", "=", id)
-        .where("referencia_tipo", "=", "estorno")
-        .executeTakeFirst();
-      if (jaEstornado) throw new ErroDominio("ESTADO_INVALIDO", "Lançamento já estornado.");
-      const oposto = original.tipo === "recebimento" ? "pagamento" : original.tipo === "pagamento" ? "recebimento" : original.tipo;
-      const novo = await svc.criar({
-        local_id: original.local_id,
-        data: tx.relogio.agora(),
-        tipo: oposto,
-        origem: original.origem,
-        valor: original.valor,
-        forma_pagamento: original.forma_pagamento,
-        referencia_id: id,
-        referencia_tipo: "estorno",
-        usuario,
-      });
-      await tx.db.updateTable("fin_lancamento").set({ motivo_cancelamento: motivo }).where("id", "=", novo.id).execute();
-      // Estorno de dinheiro que já passou pelo Caixa/Banco devolve o saldo da mesma conta.
-      await new CaixaBancoService(tx).reverterMovimentos(id, novo.id, usuario);
-      await auditar(tx, {
-        ator: usuario.email,
-        acao: "fin_lancamento.estornar",
-        alvoTipo: "fin_lancamento",
-        alvoId: id,
-        dados: { motivo, supervisor, estorno_id: novo.id },
-      });
-      return svc.obter(novo.id);
-    });
+    return reverterLancamento(this.ctx, id, { modo: "estornar", motivo, supervisorId: supervisor, usuario });
   }
 
   async listar(local_id: UUID, filtros: { data_inicio?: Date; data_fim?: Date } = {}): Promise<Lançamento[]> {
