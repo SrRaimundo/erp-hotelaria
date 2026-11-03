@@ -140,6 +140,23 @@ describe("canal em uso", () => {
 });
 
 describe("trocar o canal não mexe nos preços", () => {
+  test("pré-reserva que vai para canal sem sinal perde o prazo e fica confirmada; canal com sinal mantém", async () => {
+    await salvarCanal(ctx, { nome: "Site", percentual: 0, exigeSinal: true }, "u1");
+    await salvarCanal(ctx, { nome: "Outro", percentual: 0, exigeSinal: true }, "u1");
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false, tipo: "ota", comissaoPercentual: 15 }, "u1");
+    const r = await criarReserva(ctx, { ...dados, canal: "Site" }, usuario);
+    expect(r.estado).toBe("pre_reserva");
+    await ctx.db.insertInto("alertas").values({ id: "a1", tipo: "sinal_vencido", alvo_tipo: "reserva", alvo_id: r.id, mensagem: "x", criado_em: "2026-01-01T00:00:00Z" } as never).execute();
+
+    await alterarReserva(ctx, r.id, { canal: "Outro" }, usuario);
+    expect((await ctx.db.selectFrom("reservas").select(["estado", "prazo_sinal"]).where("id", "=", r.id).executeTakeFirstOrThrow()).estado).toBe("pre_reserva");
+
+    await alterarReserva(ctx, r.id, { canal: "Booking" }, usuario);
+    const l = await ctx.db.selectFrom("reservas").select(["estado", "prazo_sinal", "aviso_sinal_em", "valor_sinal"]).where("id", "=", r.id).executeTakeFirstOrThrow();
+    expect(l).toEqual({ estado: "confirmada", prazo_sinal: null, aviso_sinal_em: null, valor_sinal: 0 });
+    expect((await ctx.db.selectFrom("alertas").select("resolvido_em").where("id", "=", "a1").executeTakeFirstOrThrow()).resolvido_em).not.toBeNull();
+  });
+
   test("noites negociadas ficam como estão, a prévia avisa e a auditoria guarda canal e comissão antigos e novos", async () => {
     await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false, tipo: "ota", comissaoPercentual: 15 }, "u1");
     await salvarCanal(ctx, { nome: "Site", percentual: 20, exigeSinal: false, comissaoPercentual: 3 }, "u1");

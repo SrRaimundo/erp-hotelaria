@@ -16,6 +16,7 @@ A tela tem abas, cada uma com rota própria (`/reservas/tarifas/<aba>`): Tabela 
 - Canais existentes ficam com tipo `direta` e comissão 0; o dono ajusta na tela. `Balcão` continua a referência de preço e não pode ser removido.
 - A reserva guarda `comissao_percentual` no momento em que é criada. Mudar o percentual do canal depois não altera reservas existentes. Reservas anteriores à migração ficam com 0.
 - Alterar o canal da reserva troca o canal e recalcula a comissão guardada com o percentual atual do novo canal. Os preços da reserva não mudam (descontos, ajustes manuais e noites já lançadas ficam como estão); a prévia e a janela de alteração avisam disso. A auditoria registra canal e comissão antes e depois.
+- Pré-reserva que muda para canal que não exige sinal perde o prazo, tem o sinal zerado, os alertas de sinal resolvidos e fica confirmada; o que já foi pago continua na conta.
 - O simulador exige `reservas.gerenciar`. Temporadas podem ser removidas (DELETE, com auditoria); reservas existentes guardam as noites já calculadas e não mudam de preço.
 - Comissão incide sobre a receita de hospedagem da reserva.
 

@@ -193,13 +193,18 @@ export async function alterarReserva(
       const { sinal } = await obterConfig(tx);
       valorSinal = sinal.tipo === "percentual" ? arredondarCentavos((p.valorNovo * sinal.percentual) / 100) : p.noites[0]!.valor;
     }
+    // Pré-reserva que vai para canal sem sinal deixa de ter prazo: zera o sinal e a confirmação logo abaixo a libera.
+    const dispensaSinal = atual.estado === "pre_reserva" && p.trocaCanal !== undefined && !(await listarCanais(tx)).find((x) => x.nome === novo.canal)?.exigeSinal;
+    if (dispensaSinal) valorSinal = 0;
 
     // Trocar de canal guarda a comissão atual do novo canal; sem troca, o percentual guardado não muda.
     const comissao = p.trocaCanal ? { canal: novo.canal, comissao_percentual: p.trocaCanal.comissaoNova } : {};
     await tx.db.updateTable("reservas").set({
       ...comissao, quarto_id: novo.quartoId, categoria_id: novo.categoriaId, chegada: novo.chegada, saida: novo.saida,
       adultos: novo.adultos, criancas: JSON.stringify(novo.criancasNascimento), valor_sinal: valorSinal,
+      ...(dispensaSinal ? { prazo_sinal: null, aviso_sinal_em: null } : {}),
     }).where("id", "=", atual.id).execute();
+    if (dispensaSinal) await resolverAlertasDaReserva(tx, atual.id, usuario.id, true);
     await tx.db.deleteFrom("reserva_noites").where("reserva_id", "=", atual.id).execute();
     for (const n of p.noites) {
       await tx.db.insertInto("reserva_noites").values({ reserva_id: atual.id, data: n.data, valor: n.valor, passos: JSON.stringify(n.passos) }).execute();
