@@ -1,3 +1,5 @@
+import { obterConfig } from "../../nucleo/pousada.js";
+import { dataLocal } from "../../shared/tempo.js";
 import type { Contexto } from "../../shared/contexto.js";
 import type { UUID } from "../../shared/ids.js";
 
@@ -16,7 +18,8 @@ export type PosicaoReceber = {
 
 /** Posição de contas a receber. Vencido = não quitada com vencimento anterior a hoje (parcial vencida conta como vencido). Canceladas ficam fora. */
 export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promise<PosicaoReceber> {
-  const hoje = ctx.relogio.agora().toISOString().slice(0, 10);
+  const { fuso } = await obterConfig(ctx);
+  const hoje = dataLocal(ctx.relogio.agora(), fuso);
   const linhas = (await ctx.db
     .selectFrom("fin_conta_receber as r")
     .innerJoin("fin_cliente as c", "c.id", "r.cliente_id")
@@ -31,7 +34,7 @@ export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promi
   for (const l of linhas) {
     let situacao: SituacaoReceber;
     if (l.status === "recebido") situacao = "recebido";
-    else if (l.data_vencimento.slice(0, 10) < hoje) situacao = "vencido";
+    else if (dataLocal(new Date(l.data_vencimento), fuso) < hoje) situacao = "vencido";
     else if (l.status === "parcialmente_recebido") situacao = "parcialmente_recebido";
     else situacao = "aberto";
     const pendente = situacao === "recebido" ? 0 : l.valor_original - l.valor_recebido;

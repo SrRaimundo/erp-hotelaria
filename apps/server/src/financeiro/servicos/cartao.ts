@@ -1,3 +1,5 @@
+import { obterConfig } from "../../nucleo/pousada.js";
+import { dataLocal, somarDias } from "../../shared/tempo.js";
 import { auditar } from "../../infra/auditoria.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
 import { Dinheiro } from "../../shared/dinheiro.js";
@@ -42,7 +44,6 @@ export function calcularCartao(valor: number, informado: "bruto" | "liquido", ta
   return { bruto, taxa: bruto - valor, liquido: valor };
 }
 
-const somarDias = (iso: string, dias: number) => new Date(new Date(iso).getTime() + dias * 86400000).toISOString().slice(0, 10);
 
 export type ParamsMovimentoCartao = {
   local_id: UUID;
@@ -63,9 +64,10 @@ export class CartaoService {
   async registrarDeLancamento(l: Lançamento, tipo: TipoCartao, bandeira: string): Promise<MovimentoCartao> {
     return emTransacao(this.ctx, async (tx) => {
       const id = novoId();
+      const dia = dataLocal(l.data, (await obterConfig(tx)).fuso);
       await tx.db.insertInto("fin_cartao_movimento").values({
-        id, local_id: l.local_id, data: l.data.toISOString().slice(0, 10), bandeira, tipo, valor_bruto: l.valor.centavos, taxa_percentual: 0, valor_taxa: 0,
-        valor_liquido: l.valor.centavos, previsao: somarDias(l.data.toISOString(), PRAZO_PREVISAO[tipo]), status: "a_receber",
+        id, local_id: l.local_id, data: dia, bandeira, tipo, valor_bruto: l.valor.centavos, taxa_percentual: 0, valor_taxa: 0,
+        valor_liquido: l.valor.centavos, previsao: somarDias(dia, PRAZO_PREVISAO[tipo]), status: "a_receber",
         lancamento_id: l.id, conta_destino_id: null, baixado_em: null, criado_em: tx.relogio.agora().toISOString(),
       }).execute();
       return new CartaoService(tx).obter(id);
@@ -85,7 +87,7 @@ export class CartaoService {
       await tx.db.insertInto("fin_cartao_movimento").values({
         id, local_id: p.local_id, data: p.data, bandeira: p.bandeira.trim(), tipo: p.tipo, valor_bruto: v.bruto,
         taxa_percentual: p.taxa_percentual, valor_taxa: v.taxa, valor_liquido: v.liquido,
-        previsao: p.previsao ?? somarDias(data.toISOString(), PRAZO_PREVISAO[p.tipo]), status: "a_receber",
+        previsao: p.previsao ?? somarDias(p.data, PRAZO_PREVISAO[p.tipo]), status: "a_receber",
         lancamento_id: lanc.id, conta_destino_id: null, baixado_em: null, criado_em: tx.relogio.agora().toISOString(),
       }).execute();
       await auditar(tx, { ator: usuario.email, acao: "fin_cartao.criar", alvoTipo: "fin_cartao_movimento", alvoId: id, dados: { ...p, ...v } });

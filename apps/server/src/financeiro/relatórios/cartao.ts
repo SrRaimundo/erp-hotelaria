@@ -1,3 +1,5 @@
+import { obterConfig } from "../../nucleo/pousada.js";
+import { dataLocal } from "../../shared/tempo.js";
 import type { Contexto } from "../../shared/contexto.js";
 import type { UUID } from "../../shared/ids.js";
 
@@ -11,7 +13,7 @@ export type PosicaoCartao = Record<SituacaoCartao, { quantidade: number; valor: 
  * Cancelados ficam fora.
  */
 export async function posicaoCartao(ctx: Contexto, local_id: UUID): Promise<PosicaoCartao> {
-  const hoje = ctx.relogio.agora().toISOString().slice(0, 10);
+  const hoje = dataLocal(ctx.relogio.agora(), (await obterConfig(ctx)).fuso);
   const linhas = (await ctx.db
     .selectFrom("fin_cartao_movimento")
     .select(["status", "previsao", "valor_liquido"])

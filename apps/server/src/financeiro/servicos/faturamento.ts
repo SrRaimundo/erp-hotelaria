@@ -1,3 +1,5 @@
+import { obterConfig } from "../../nucleo/pousada.js";
+import { dataLocal } from "../../shared/tempo.js";
 import { auditar } from "../../infra/auditoria.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
 import { Dinheiro } from "../../shared/dinheiro.js";
@@ -112,7 +114,7 @@ export class FaturamentoService {
         .select(({ fn }) => fn.count<number>("numero_documento").as("n"))
         .where("local_id", "=", f.local_id)
         .executeTakeFirst();
-      const ano = tx.relogio.agora().getUTCFullYear();
+      const ano = dataLocal(tx.relogio.agora(), (await obterConfig(tx)).fuso).slice(0, 4);
       const numero_documento = `FAT-${ano}-${String(Number(r?.n ?? 0) + 1).padStart(6, "0")}`;
       await tx.db
         .updateTable("fin_faturamento")

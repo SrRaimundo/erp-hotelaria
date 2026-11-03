@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { autorizarSupervisor } from "../../nucleo/supervisor.js";
 import type { Contexto } from "../../shared/contexto.js";
+import { obterConfig } from "../../nucleo/pousada.js";
+import { dataLocal } from "../../shared/tempo.js";
 import { CadastrosFinanceiroService } from "../servicos/cadastros.js";
 import { LançamentoService } from "../servicos/lançamentos.js";
 import { credencialSupervisor, data, exigirFinanceiro, fimDoDia, inicioDoDia, usuarioDe, uuid } from "./comum.js";
@@ -19,10 +21,11 @@ export function registrarRotasLancamentos(app: FastifyInstance, ctx: Contexto): 
       data_inicio: q.data_inicio ? await inicioDoDia(ctx, q.data_inicio) : undefined,
       data_fim: q.data_fim ? await fimDoDia(ctx, q.data_fim) : undefined,
     });
+    const { fuso } = await obterConfig(ctx);
     const fornecedores = new Map((await new CadastrosFinanceiroService(ctx).listarFornecedores(q.local_id)).map((f) => [f.id, f.razao_social]));
     return lista
       .filter((l) => !q.tipo || l.tipo === q.tipo)
-      .map((l) => ({ ...l, valor: l.valor.centavos, fornecedor_nome: l.fornecedor_id ? (fornecedores.get(l.fornecedor_id) ?? null) : null }));
+      .map((l) => ({ ...l, dia: dataLocal(l.data, fuso), vencimento_dia: l.vencimento ? dataLocal(l.vencimento, fuso) : null, valor: l.valor.centavos, fornecedor_nome: l.fornecedor_id ? (fornecedores.get(l.fornecedor_id) ?? null) : null }));
   });
 
   // Estornar um lançamento (recebimento, cartão, etc.): mesma regra do cancelamento, uma única vez; exige motivo e supervisor.
