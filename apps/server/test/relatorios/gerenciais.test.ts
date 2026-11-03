@@ -219,13 +219,20 @@ describe("resumo do dia", () => {
     await reserva("No-show amanhã", { chegada: "2026-11-11", saida: "2026-11-12" }, "no_show");
     const velha = await reserva("Criada ontem", { chegada: "2026-11-20", saida: "2026-11-21" });
     await ctx.db.updateTable("reservas").set({ criada_em: "2026-11-10T06:00:00.000Z" }).where("id", "=", velha.id).execute(); // 03:00 local: ainda dia 09
+    // Cancelamento vale pela data em que aconteceu, não pela chegada; 02:00 local ainda é o dia hoteleiro 09.
+    const cancelada = (id: string, instante: string) =>
+      ctx.db.insertInto("auditoria").values({ id, instante, ator: "u1", acao: "reserva.cancelar", alvo_tipo: "reserva", alvo_id: "r" } as never).execute();
+    await cancelada("c-hoje", "2026-11-10T15:00:00.000Z");
+    await cancelada("c-hoje-2", "2026-11-10T16:00:00.000Z");
+    await cancelada("c-madrugada", "2026-11-10T05:00:00.000Z");
+    await cancelada("c-amanha", "2026-11-11T15:00:00.000Z");
     const r = await gerar("resumo-dia");
     expect(r.corpo.subtitulo).toContain("Dia 10/11/2026");
     expect(resumo(r.corpo)).toMatchObject({
-      Chegadas: "2", Saídas: "2", Hospedados: "2", Ocupação: "40,0%", "No-shows": "1", "Cancelamentos (chegada no dia)": "1", "Novas reservas": "9",
+      Chegadas: "2", Saídas: "2", Hospedados: "2", Ocupação: "40,0%", "No-shows": "1", Cancelamentos: "2", "Novas reservas": "9",
     });
     const outro = await gerar("resumo-dia", "?data=2026-11-11");
-    expect(resumo(outro.corpo)).toMatchObject({ Chegadas: "0", Saídas: "1", Hospedados: "1", "No-shows": "1", "Novas reservas": "0" });
+    expect(resumo(outro.corpo)).toMatchObject({ Chegadas: "0", Saídas: "1", Hospedados: "1", "No-shows": "1", Cancelamentos: "1", "Novas reservas": "0" });
   });
 
   test("sem quartos ativos: ocupação '—'", async () => {

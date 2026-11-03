@@ -27,7 +27,8 @@ export const relatorioResumoDia = definir({
     const saidas = reservas.filter((r) => r.saida === dia && ["hospedada", "finalizada"].includes(r.estado)).length;
     const hospedados = reservas.filter((r) => r.chegada <= dia && r.saida > dia && ["hospedada", "finalizada"].includes(r.estado)).length;
     const noShows = reservas.filter((r) => r.chegada === dia && r.estado === "no_show").length;
-    const cancelamentos = reservas.filter((r) => r.chegada === dia && r.estado === "cancelada").length;
+    // A reserva não guarda quando foi cancelada: a data vem da auditoria (cancelamento manual e automático do sinal).
+    const cancelamentos = (await ctx.db.selectFrom("auditoria").select("instante").where("acao", "=", "reserva.cancelar").where("instante", ">=", de).where("instante", "<", ate).execute()).filter((a) => doDia(a.instante)).length;
     const novas = (await ctx.db.selectFrom("reservas").select("criada_em").where("criada_em", ">=", de).where("criada_em", "<", ate).execute()).filter((r) => doDia(r.criada_em)).length;
 
     // Receita lançada: diária pela noite a que se refere; extras, taxas e estornos pelo dia do lançamento. Estorno vale como a origem.
@@ -67,7 +68,7 @@ export const relatorioResumoDia = definir({
         { rotulo: "Hospedados", valor: String(hospedados) },
         { rotulo: "Ocupação", valor: percentual(hospedados, quartos) },
         { rotulo: "No-shows", valor: String(noShows) },
-        { rotulo: "Cancelamentos (chegada no dia)", valor: String(cancelamentos) },
+        { rotulo: "Cancelamentos", valor: String(cancelamentos) },
         { rotulo: "Novas reservas", valor: String(novas) },
         { rotulo: "Receita do dia", valor: formatarBRL(totalReceita) },
         { rotulo: "Recebido no dia", valor: formatarBRL(totalRecebido) },

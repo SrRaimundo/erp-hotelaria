@@ -25,7 +25,7 @@ Fora desta entrega: relatórios de Financeiro, Estoque e Cadastros. Reservas por
 
 Regras do `resumo-dia`:
 - Chegadas: reservas pré-reserva, confirmada, hospedada ou finalizada com chegada na data. Saídas: hospedada ou finalizada com saída na data. Hospedados: hospedada ou finalizada com chegada <= data < saída. Ocupação = hospedados ÷ quartos ativos.
-- No-shows e cancelamentos são os de chegada na data (a reserva não guarda a data do cancelamento). Novas reservas: criadas no dia hoteleiro.
+- No-shows são os de chegada na data. Cancelamentos são os feitos no dia hoteleiro, pela auditoria. Novas reservas: criadas no dia hoteleiro.
 - Receita: diária pela noite a que se refere (`data_ref`); extras, taxas (early check-in e late check-out) e estornos de lançamento pelo dia hoteleiro do lançamento, sendo o estorno somado na linha do lançamento original. Recebimentos: pagamentos e estornos de pagamento do dia hoteleiro, somados por forma (líquido de estornos), sem "faturado", que não passa pelo caixa. Conta de grupo não duplica: lançamentos e pagamentos são lidos uma vez, pela conta.
 
 Regras da `previsao`:
