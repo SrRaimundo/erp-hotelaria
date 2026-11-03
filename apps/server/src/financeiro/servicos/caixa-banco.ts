@@ -74,7 +74,8 @@ export class CaixaBancoService {
     return paraMovimento(m);
   }
 
-  async criarMovimento(lancamento: Lançamento, conta_id: UUID, usuario: Usuario): Promise<Movimento> {
+  /** `valor` opcional movimenta menos que o lançamento (ex.: cartão baixado pelo líquido, sem a taxa). */
+  async criarMovimento(lancamento: Lançamento, conta_id: UUID, usuario: Usuario, valor?: Dinheiro): Promise<Movimento> {
     if (lancamento.status === "cancelado") throw new ErroDominio("ESTADO_INVALIDO", "Lançamento cancelado não gera movimento.");
     if (lancamento.tipo !== "recebimento" && lancamento.tipo !== "pagamento") {
       throw new ErroDominio("VALIDACAO_FALHOU", "Apenas recebimento ou pagamento geram movimento direto.");
@@ -89,7 +90,7 @@ export class CaixaBancoService {
         conta_id,
         lancamento_id: lancamento.id,
         tipo: lancamento.tipo === "recebimento" ? "credito" : "debito",
-        valor: lancamento.valor,
+        valor: valor ?? lancamento.valor,
         data: lancamento.data,
         saldo_inicial: conta.saldo_inicial,
       });
@@ -101,6 +102,34 @@ export class CaixaBancoService {
         dados: { conta_id, lancamento_id: lancamento.id, tipo: mov.tipo, valor: mov.valor.centavos },
       });
       return mov;
+    });
+  }
+
+  /**
+   * Desfaz o efeito líquido dos movimentos de `origem_id` em cada conta, gravando movimentos opostos ligados a `para_id`
+   * (o próprio lançamento ao cancelar; o lançamento de estorno ao estornar). Sem movimentos, não faz nada.
+   */
+  async reverterMovimentos(origem_id: UUID, para_id: UUID, usuario: Usuario): Promise<void> {
+    await emTransacao(this.ctx, async (tx) => {
+      const movs = (await tx.db.selectFrom("fin_movimento").selectAll().where("lancamento_id", "=", origem_id).execute()) as any[];
+      const liquido = new Map<string, { local_id: UUID; valor: number }>();
+      for (const m of movs) {
+        const atual = liquido.get(m.conta_id) ?? { local_id: m.local_id, valor: 0 };
+        atual.valor += SINAL[m.tipo as Movimento["tipo"]] * m.valor;
+        liquido.set(m.conta_id, atual);
+      }
+      for (const [conta_id, { local_id, valor }] of liquido) {
+        if (valor === 0) continue;
+        const conta = await this.obterConta(tx, conta_id as UUID);
+        const mov = await this.inserir(tx, {
+          local_id, conta_id: conta_id as UUID, lancamento_id: para_id, tipo: valor > 0 ? "debito" : "credito",
+          valor: Dinheiro.de(Math.abs(valor)), data: tx.relogio.agora(), saldo_inicial: conta.saldo_inicial,
+        });
+        await auditar(tx, {
+          ator: usuario.email, acao: "fin_movimento.reverter", alvoTipo: "fin_movimento", alvoId: mov.id,
+          dados: { origem_id, conta_id, valor: mov.valor.centavos },
+        });
+      }
     });
   }
 

@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { iniciarAgendador } from "./agendador.js";
 import { lerConfiguracao } from "./config.js";
+import { registrarConsumidoresHospedagem } from "./financeiro/consumidores-eventos/hospedagem-pagamento.js";
 import { criarApp } from "./http/app.js";
 import { Barramento } from "./infra/barramento.js";
 import { abrirBanco, migrar } from "./shared/banco.js";
@@ -15,7 +16,10 @@ async function iniciar(): Promise<void> {
   const db = abrirBanco(config.arquivoBanco);
   await migrar(db, todasMigracoes);
 
-  const ctx: Contexto = { db, relogio: relogioSistema, barramento: new Barramento(), eventosPendentes: [] };
+  const barramento = new Barramento();
+  const ctx: Contexto = { db, relogio: relogioSistema, barramento, eventosPendentes: [] };
+  // O Financeiro recebe pagamentos e checkouts faturados da hospedagem pelo barramento.
+  registrarConsumidoresHospedagem({ ...ctx, barramento });
   const app = criarApp(ctx, { webDir: config.webDir });
   const agendador = iniciarAgendador(ctx);
 

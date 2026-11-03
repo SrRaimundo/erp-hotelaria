@@ -21,6 +21,9 @@ function paraLocal(l: any): Local {
   };
 }
 
+/** Local para a lista da tela; `hospedagem_padrao` marca o local que recebe os lançamentos da hospedagem. */
+export type LocalListado = Local & { hospedagem_padrao: boolean };
+
 export class LocalService {
   constructor(private ctx: Contexto) {}
 
@@ -66,6 +69,28 @@ export class LocalService {
     return linhas.map(paraLocal);
   }
 
+  /** Todos os locais (inclusive desativados), por nome. */
+  async listar(): Promise<LocalListado[]> {
+    const linhas = (await this.ctx.db.selectFrom("fin_local").selectAll().orderBy("nome").orderBy("id").execute()) as any[];
+    return linhas.map((l) => ({ ...paraLocal(l), hospedagem_padrao: !!(l.parametros ? JSON.parse(l.parametros) : {}).hospedagem_padrao }));
+  }
+
+  /** Marca este local como o que recebe os lançamentos da hospedagem (e desmarca os demais). */
+  async definirPadraoHospedagem(id: UUID, usuario: Usuario): Promise<void> {
+    await emTransacao(this.ctx, async (tx) => {
+      const alvo = await new LocalService(tx).obter(id);
+      if (!alvo.ativo) throw new ErroDominio("ESTADO_INVALIDO", "Local desativado não pode receber a hospedagem.");
+      const todos = (await tx.db.selectFrom("fin_local").select(["id", "parametros"]).execute()) as any[];
+      for (const l of todos) {
+        const p = l.parametros ? JSON.parse(l.parametros) : {};
+        if (l.id === id ? p.hospedagem_padrao === true : !p.hospedagem_padrao) continue;
+        p.hospedagem_padrao = l.id === id;
+        await tx.db.updateTable("fin_local").set({ parametros: JSON.stringify(p) }).where("id", "=", l.id).execute();
+      }
+      await auditar(tx, { ator: usuario.email, acao: "fin_local.padrao_hospedagem", alvoTipo: "fin_local", alvoId: id, dados: {} });
+    });
+  }
+
   async obter(id: UUID): Promise<Local> {
     const l = await this.ctx.db.selectFrom("fin_local").selectAll().where("id", "=", id).executeTakeFirst();
     if (!l) throw new ErroDominio("NAO_ENCONTRADO", "Local não encontrado.");
@@ -81,9 +106,11 @@ export class LocalService {
         ativo: dados.ativo ?? antes.ativo,
         parametros: dados.parametros ?? antes.parametros,
       };
+      const linha = (await tx.db.selectFrom("fin_local").select("parametros").where("id", "=", id).executeTakeFirst()) as any;
+      const extras = linha?.parametros ? JSON.parse(linha.parametros) : {};
       await tx.db
         .updateTable("fin_local")
-        .set({ nome: depois.nome, ativo: depois.ativo ? 1 : 0, parametros: JSON.stringify(depois.parametros) })
+        .set({ nome: depois.nome, ativo: depois.ativo ? 1 : 0, parametros: JSON.stringify({ ...extras, ...depois.parametros }) })
         .where("id", "=", id)
         .execute();
       await auditar(tx, { ator: usuario.email, acao: "fin_local.atualizar", alvoTipo: "fin_local", alvoId: id, dados: { antes, depois } });

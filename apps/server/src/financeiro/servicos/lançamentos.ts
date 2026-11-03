@@ -4,6 +4,7 @@ import { Dinheiro } from "../../shared/dinheiro.js";
 import { ErroDominio } from "../../shared/erros.js";
 import { novoId, type UUID } from "../../shared/ids.js";
 import type { Lançamento } from "../modelos/lançamento.js";
+import { CaixaBancoService } from "./caixa-banco.js";
 import type { Usuario } from "./locais.js";
 
 export type ParamsCriarLancamento = {
@@ -15,6 +16,12 @@ export type ParamsCriarLancamento = {
   forma_pagamento: Lançamento["forma_pagamento"];
   referencia_id?: UUID;
   referencia_tipo?: string;
+  /** Padrão "confirmado"; Contas a Pagar nasce "pendente". */
+  status?: Lançamento["status"];
+  descricao?: string;
+  categoria?: string;
+  vencimento?: Date;
+  fornecedor_id?: UUID;
   usuario: Usuario;
 };
 
@@ -27,7 +34,10 @@ function paraLancamento(l: any): Lançamento {
     origem: l.origem,
     valor: Dinheiro.de(l.valor),
     forma_pagamento: l.forma_pagamento,
-    descricao: "",
+    descricao: l.descricao ?? "",
+    categoria: l.categoria ?? undefined,
+    vencimento: l.vencimento ? new Date(l.vencimento) : undefined,
+    fornecedor_id: l.fornecedor_id ?? undefined,
     status: l.status,
     referencia_id: l.referencia_id ?? undefined,
     referencia_tipo: l.referencia_tipo ?? undefined,
@@ -69,7 +79,11 @@ export class LançamentoService {
           origem: p.origem,
           valor: p.valor.centavos,
           forma_pagamento: p.forma_pagamento,
-          status: "confirmado",
+          status: p.status ?? "confirmado",
+          descricao: p.descricao ?? null,
+          categoria: p.categoria ?? null,
+          vencimento: p.vencimento ? p.vencimento.toISOString() : null,
+          fornecedor_id: p.fornecedor_id ?? null,
           referencia_id: p.referencia_id ?? null,
           referencia_tipo: p.referencia_tipo ?? null,
           criado_por: p.usuario.email,
@@ -105,6 +119,9 @@ export class LançamentoService {
         })
         .where("id", "=", id)
         .execute();
+      // O dinheiro que já passou pelo Caixa/Banco volta; o cartão ainda a receber deixa de ser esperado.
+      await new CaixaBancoService(tx).reverterMovimentos(id, id, usuario);
+      await tx.db.updateTable("fin_cartao_movimento").set({ status: "cancelado" }).where("lancamento_id", "=", id).where("status", "=", "a_receber").execute();
       const depois = await svc.obter(id);
       await auditar(tx, {
         ator: usuario.email,
@@ -145,6 +162,8 @@ export class LançamentoService {
         usuario,
       });
       await tx.db.updateTable("fin_lancamento").set({ motivo_cancelamento: motivo }).where("id", "=", novo.id).execute();
+      // Estorno de dinheiro que já passou pelo Caixa/Banco devolve o saldo da mesma conta.
+      await new CaixaBancoService(tx).reverterMovimentos(id, novo.id, usuario);
       await auditar(tx, {
         ator: usuario.email,
         acao: "fin_lancamento.estornar",

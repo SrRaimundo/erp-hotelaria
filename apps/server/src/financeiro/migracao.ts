@@ -194,3 +194,37 @@ export const migracaoFinanceiroPermissao: Migracao = {
     await sql`INSERT OR IGNORE INTO perfil_permissoes (perfil, permissao) SELECT nome, 'financeiro.gerenciar' FROM perfis WHERE nome = 'admin'`.execute(db);
   },
 };
+
+/**
+ * Fase 1b: Contas a Pagar (descrição, categoria, vencimento e fornecedor no lançamento),
+ * política do cliente para o Faturamento e movimentos de cartão (crédito, débito e voucher) com bruto, taxa e líquido.
+ */
+export const migracaoFinanceiroPagarCartao: Migracao = {
+  nome: "0730_financeiro_pagar_cartao",
+  async up(db) {
+    for (const coluna of ["descricao", "categoria", "vencimento", "fornecedor_id"]) {
+      await sql.raw(`ALTER TABLE fin_lancamento ADD COLUMN ${coluna} text`).execute(db);
+    }
+    await sql`ALTER TABLE fin_cliente ADD COLUMN politica text`.execute(db);
+
+    await db.schema
+      .createTable("fin_cartao_movimento")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
+      .addColumn("data", "text", (c) => c.notNull())
+      .addColumn("bandeira", "text", (c) => c.notNull())
+      .addColumn("tipo", "text", (c) => c.notNull()) // credito | debito | voucher
+      .addColumn("valor_bruto", "integer", (c) => c.notNull())
+      .addColumn("taxa_percentual", "real", (c) => c.notNull().defaultTo(0))
+      .addColumn("valor_taxa", "integer", (c) => c.notNull().defaultTo(0))
+      .addColumn("valor_liquido", "integer", (c) => c.notNull())
+      .addColumn("previsao", "text", (c) => c.notNull())
+      .addColumn("status", "text", (c) => c.notNull()) // a_receber | baixado | cancelado
+      .addColumn("lancamento_id", "text", (c) => c.notNull().references("fin_lancamento.id"))
+      .addColumn("conta_destino_id", "text")
+      .addColumn("baixado_em", "text")
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .execute();
+    await db.schema.createIndex("fin_cartao_movimento_local").on("fin_cartao_movimento").columns(["local_id", "previsao"]).execute();
+  },
+};

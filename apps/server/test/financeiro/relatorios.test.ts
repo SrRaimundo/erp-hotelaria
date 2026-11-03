@@ -1,3 +1,4 @@
+import { CartaoService } from "../../src/financeiro/servicos/cartao.js";
 import { expect, test } from "vitest";
 import { criarApp } from "../../src/http/app.js";
 import { CaixaBancoService } from "../../src/financeiro/servicos/caixa-banco.js";
@@ -69,7 +70,8 @@ test("contas a receber e cartão", async () => {
   expect(r.itens).toHaveLength(4);
 
   const lancs = new LançamentoService(ctx);
-  await lancs.criar({ local_id: local.id, data: new Date("2026-11-05T12:00:00Z"), tipo: "recebimento", origem: "manual", valor: Dinheiro.de(30000), forma_pagamento: "credito", usuario });
+  const lc = await lancs.criar({ local_id: local.id, data: new Date("2026-11-05T12:00:00Z"), tipo: "recebimento", origem: "manual", valor: Dinheiro.de(30000), forma_pagamento: "credito", usuario });
+  await new CartaoService(ctx).registrarDeLancamento(lc, "credito", "Visa");
   const c = (await app.inject({ method: "GET", url: `/api/financeiro/relatorios/cartao?local_id=${local.id}`, headers: h })).json();
   expect(c.aberto.quantidade + c.fechado.quantidade + c.liquidado.quantidade).toBe(1);
   expect(c.aberto.valor + c.fechado.valor + c.liquidado.valor).toBe(30000);

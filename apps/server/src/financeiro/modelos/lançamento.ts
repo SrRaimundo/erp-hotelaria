@@ -11,10 +11,12 @@ export type Lançamento = {
   tipo: "recebimento" | "pagamento" | "transferencia" | "ajuste";
   origem: "hospedagem" | "reserva" | "bar" | "lavanderia" | "rh" | "manual";
   categoria?: string;
+  vencimento?: Date;
+  fornecedor_id?: UUID;
 
   // Values
   valor: Dinheiro;
-  forma_pagamento: "dinheiro" | "pix" | "debito" | "credito" | "cheque" | "boleto" | "transferencia";
+  forma_pagamento: "dinheiro" | "pix" | "debito" | "credito" | "cheque" | "boleto" | "transferencia" | "voucher";
   descricao: string;
 
   // Status

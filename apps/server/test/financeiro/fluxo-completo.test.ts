@@ -65,24 +65,39 @@ test("fluxo financeiro completo: sinal, checkout dividido, faturado e idempotên
   await processarValorAReceberCriado(ctx, evFat);
   const fats = await ctx.db.selectFrom("fin_faturamento").selectAll().execute();
   expect(fats).toHaveLength(1);
-  expect(fats[0]!.numero_documento).toMatch(/^FAT-\d{4}-\d+$/);
+  expect(fats[0]).toMatchObject({ status: "aberto", numero_documento: null, valor_original: 90000 });
+  expect(await ctx.db.selectFrom("fin_conta_receber").selectAll().execute()).toHaveLength(0);
+
+  // Fase 3b: fechar a fatura envia o valor a Contas a Receber; receber leva o dinheiro ao Caixa/Banco
+  const fechar = await app.inject({
+    method: "POST", url: `/api/financeiro/faturamentos/${fats[0]!.id}/fechar`, headers: admin, payload: { forma: "pix", data_vencimento: "2026-12-10" },
+  });
+  expect(fechar.statusCode).toBe(200);
+  const numero = fechar.json().numero_documento as string;
+  expect(numero).toMatch(/^FAT-\d{4}-\d+$/);
   const recs = await ctx.db.selectFrom("fin_conta_receber").selectAll().execute();
   expect(recs).toHaveLength(1);
-  expect(recs[0]).toMatchObject({ status: "pendente", valor_original: 90000, numero_documento: fats[0]!.numero_documento });
-  expect(new Date(recs[0]!.data_vencimento).getTime() - new Date(CRIADO).getTime()).toBe(30 * 86400000);
+  expect(recs[0]).toMatchObject({ status: "pendente", valor_original: 90000, numero_documento: numero });
   const rel = await app.inject({ method: "GET", url: `/api/financeiro/relatorios/contas-receber?local_id=${local.id}`, headers: admin });
   expect(rel.statusCode).toBe(200);
   const pos = rel.json();
   expect(pos.itens).toHaveLength(1);
-  expect(pos.itens[0]).toMatchObject({ numero_documento: fats[0]!.numero_documento, valor_pendente: 90000, situacao: "aberto" });
+  expect(pos.itens[0]).toMatchObject({ numero_documento: numero, cliente_nome: "Empresa X Ltda", valor_pendente: 90000, situacao: "aberto" });
   expect(pos.situacoes.aberto.valor_pendente).toBe(90000);
+  const recebido = await app.inject({
+    method: "PUT", url: `/api/financeiro/contas-receber/${recs[0]!.id}/confirmar-pagamento`, headers: admin, payload: { valor: 90000, conta_bancaria_id: caixa.id },
+  });
+  expect(recebido.statusCode).toBe(200);
+  expect(await saldo()).toBe(112000);
+  expect(await movs()).toHaveLength(4);
+  expect((await ctx.db.selectFrom("fin_faturamento").select("status").executeTakeFirstOrThrow()).status).toBe("pago");
 
   // Fase 4: idempotência (reprocessa os mesmos eventos)
   for (const ev of [sinal, evDinheiro, evPix]) await processarPagamentoRegistrado(ctx, ev);
   await processarValorAReceberCriado(ctx, evFat);
-  expect(await lancs()).toHaveLength(3);
-  expect(await movs()).toHaveLength(3);
+  expect(await lancs()).toHaveLength(4);
+  expect(await movs()).toHaveLength(4);
   expect(await ctx.db.selectFrom("fin_faturamento").selectAll().execute()).toHaveLength(1);
   expect(await ctx.db.selectFrom("fin_conta_receber").selectAll().execute()).toHaveLength(1);
-  expect(await saldo()).toBe(22000);
+  expect(await saldo()).toBe(112000);
 });

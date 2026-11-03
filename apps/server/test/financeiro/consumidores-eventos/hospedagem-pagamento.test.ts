@@ -47,12 +47,24 @@ test.each(["dinheiro", "pix"])("pagamento %s: lança recebimento e movimenta o C
   expect(clientes[0]).toMatchObject({ nome: "Maria Hospede", cpf_cnpj: "52998224725" });
 });
 
-test.each(["debito", "credito"])("pagamento %s: lança sem movimento (roteamento de cartão futuro)", async (forma) => {
+test.each(["debito", "credito"])("pagamento %s: lança sem movimento e fica a receber da operadora", async (forma) => {
   await processarPagamentoRegistrado(ctx, pagamento(forma));
   const ls = await ctx.db.selectFrom("fin_lancamento").selectAll().execute();
   expect(ls).toHaveLength(1);
   expect(ls[0]!.forma_pagamento).toBe(forma);
   expect(await movimentos()).toHaveLength(0);
+  const cartao = await ctx.db.selectFrom("fin_cartao_movimento").selectAll().execute();
+  expect(cartao).toHaveLength(1);
+  expect(cartao[0]).toMatchObject({ tipo: forma, status: "a_receber", lancamento_id: ls[0]!.id, valor_bruto: ls[0]!.valor, valor_liquido: ls[0]!.valor });
+});
+
+test("sem nenhum Local, o primeiro pagamento cria o Local Principal em vez de se perder", async () => {
+  await ctx.db.deleteFrom("fin_conta_bancaria").execute();
+  await ctx.db.deleteFrom("fin_local").execute();
+  await processarPagamentoRegistrado(ctx, pagamento("dinheiro"));
+  const locais = await ctx.db.selectFrom("fin_local").select("nome").execute();
+  expect(locais).toEqual([{ nome: "Principal" }]);
+  expect(await ctx.db.selectFrom("fin_lancamento").selectAll().execute()).toHaveLength(1);
 });
 
 test("pagamento: idempotente, reaproveita cliente, usa titular da conta sem reserva e ignora faturado", async () => {
@@ -65,7 +77,7 @@ test("pagamento: idempotente, reaproveita cliente, usa titular da conta sem rese
   expect(await ctx.db.selectFrom("fin_cliente").selectAll().execute()).toHaveLength(1);
 });
 
-test("ValorAReceberCriado: cria cliente, faturamento, cobrança e recebível com vencimento em 30 dias", async () => {
+test("ValorAReceberCriado: cria cliente e faturamento aberto; recebível só ao fechar a fatura", async () => {
   await ctx.db.insertInto("valores_a_receber").values({
     id: "v1", conta_id: "c1", reserva_id: "r1", responsavel_nome: "Empresa X Ltda", responsavel_documento: "11222333000181",
     valor: 90000, criado_em: CRIADO, situacao: "aberto",
@@ -78,11 +90,8 @@ test("ValorAReceberCriado: cria cliente, faturamento, cobrança e recebível com
   expect(cli[0]).toMatchObject({ nome: "Empresa X Ltda", tipo: "pessoa_juridica" });
   const fats = await ctx.db.selectFrom("fin_faturamento").selectAll().execute();
   expect(fats).toHaveLength(1);
-  expect(fats[0]).toMatchObject({ referencia_id: "v1", valor_original: 90000, forma_cobranca: "boleto", cliente_id: cli[0]!.id });
-  const recs = await ctx.db.selectFrom("fin_conta_receber").selectAll().execute();
-  expect(recs).toHaveLength(1);
-  expect(recs[0]).toMatchObject({ numero_documento: fats[0]!.numero_documento, valor_original: 90000, status: "pendente" });
-  expect(new Date(recs[0]!.data_vencimento).getTime() - new Date(CRIADO).getTime()).toBe(30 * 86400000);
+  expect(fats[0]).toMatchObject({ referencia_id: "v1", valor_original: 90000, numero_documento: null, status: "aberto", cliente_id: cli[0]!.id });
+  expect(await ctx.db.selectFrom("fin_conta_receber").selectAll().execute()).toHaveLength(0);
 });
 
 test("registrarConsumidoresHospedagem: assina o evento no barramento", async () => {

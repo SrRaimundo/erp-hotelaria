@@ -4,7 +4,7 @@ import { Dinheiro } from "../../shared/dinheiro.js";
 import { novoId, type UUID } from "../../shared/ids.js";
 import type { Lançamento } from "../modelos/lançamento.js";
 import { CaixaBancoService } from "../servicos/caixa-banco.js";
-import { ContasReceberService } from "../servicos/contas-receber.js";
+import { CartaoService } from "../servicos/cartao.js";
 import { FaturamentoService } from "../servicos/faturamento.js";
 import { LançamentoService } from "../servicos/lançamentos.js";
 import { LocalService, type Usuario } from "../servicos/locais.js";
@@ -18,16 +18,15 @@ export type PagamentoRegistrado = { pagamentoId: string; contaId: string; reserv
 export type ValorAReceberCriado = { valorAReceberId: string; contaId: string; reservaId: string; valor: number };
 
 /**
- * Resolve o local financeiro da hospedagem. Há um Local por pousada; usa-se `parametros.local_padrao_hospedagem`
- * quando ele aponta para um fin_local existente, senão o próprio Local (mesmo fallback de LocalService).
+ * Resolve o local financeiro da hospedagem: o ativo marcado como padrão na tela Local; sem marcação, o ativo mais antigo.
+ * Sem nenhum local, cria o "Principal" para que nenhum pagamento se perca.
  */
-async function resolverLocal(tx: Contexto): Promise<UUID | null> {
-  const base = await tx.db.selectFrom("fin_local").select("id").where("ativo", "=", 1).orderBy("criado_em").orderBy("id").executeTakeFirst();
-  if (!base) return null;
-  const local = await new LocalService(tx).obter(base.id);
-  const padrao = local.parametros.local_padrao_hospedagem;
-  const existe = await tx.db.selectFrom("fin_local").select("id").where("id", "=", padrao).executeTakeFirst();
-  return (existe ? padrao : local.id) as UUID;
+async function resolverLocal(tx: Contexto): Promise<UUID> {
+  const ativos = (await tx.db.selectFrom("fin_local").select(["id", "parametros"]).where("ativo", "=", 1).orderBy("criado_em").orderBy("id").execute()) as any[];
+  const marcado = ativos.find((l) => l.parametros && JSON.parse(l.parametros).hospedagem_padrao === true);
+  const escolhido = marcado ?? ativos[0];
+  if (escolhido) return escolhido.id as UUID;
+  return (await new LocalService(tx).criar(novoId(), "Principal", USUARIO_SISTEMA)).id;
 }
 
 async function contaCaixa(tx: Contexto, local_id: UUID): Promise<UUID | null> {
@@ -79,7 +78,6 @@ export async function processarPagamentoRegistrado(ctx: Contexto, evento: Pick<E
       .executeTakeFirst();
     if (dup) return;
     const local_id = await resolverLocal(tx);
-    if (!local_id) throw new Error("Financeiro: nenhum Local ativo para registrar pagamento de hospedagem.");
 
     // Hóspede: titular da reserva; sem reserva, titular da conta.
     const origem = p.reservaId
@@ -107,7 +105,8 @@ export async function processarPagamentoRegistrado(ctx: Contexto, evento: Pick<E
       if (!conta) throw new Error("Financeiro: conta Caixa do Local não encontrada.");
       await new CaixaBancoService(tx).criarMovimento(lanc, conta, USUARIO_SISTEMA);
     } else {
-      console.log(`Financeiro: lançamento ${lanc.id} (${forma}) aguarda roteamento de cartão.`);
+      // Cartão: espera a operadora (previsão, taxa e baixa na tela Cartão de Crédito).
+      await new CartaoService(tx).registrarDeLancamento(lanc, forma === "debito" ? "debito" : "credito", "Não informada");
     }
   });
 }
@@ -123,7 +122,6 @@ export async function processarValorAReceberCriado(ctx: Contexto, evento: Pick<E
       .executeTakeFirst();
     if (dup) return;
     const local_id = await resolverLocal(tx);
-    if (!local_id) throw new Error("Financeiro: nenhum Local ativo para faturar checkout.");
     const v = await tx.db
       .selectFrom("valores_a_receber")
       .select(["responsavel_nome", "responsavel_documento", "valor"])
@@ -133,13 +131,8 @@ export async function processarValorAReceberCriado(ctx: Contexto, evento: Pick<E
 
     const cliente_id = await upsertCliente(tx, local_id, v.responsavel_nome, v.responsavel_documento);
     const valor = Dinheiro.de(e.valor ?? v.valor);
-    const faturamentos = new FaturamentoService(tx);
-    const fat = await faturamentos.criarParaCheckout(e.valorAReceberId as UUID, cliente_id, local_id, valor, USUARIO_SISTEMA);
-    const cobr = await faturamentos.gerarCobranca(fat.id, "boleto", USUARIO_SISTEMA);
-    // data_vencimento do faturamento = emissão + 30 dias
-    await new ContasReceberService(tx).criarRecebivel(
-      fat.id, cliente_id, local_id, cobr.numero_documento, valor, cobr.data_vencimento, USUARIO_SISTEMA,
-    );
+    // O checkout faturado fica aberto em Faturamento; a fatura só vai a Contas a Receber quando for fechada ali.
+    await new FaturamentoService(tx).criarParaCheckout(e.valorAReceberId as UUID, cliente_id, local_id, valor, USUARIO_SISTEMA);
   });
 }
 

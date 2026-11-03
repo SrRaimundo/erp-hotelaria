@@ -9,7 +9,7 @@ export type PosicaoReceber = {
   local_id: UUID;
   situacoes: Record<SituacaoReceber, Totais>;
   itens: {
-    id: UUID; numero_documento: string; cliente_id: UUID; data_vencimento: string;
+    id: UUID; numero_documento: string; cliente_id: UUID; cliente_nome: string; data_vencimento: string;
     valor_original: number; valor_recebido: number; valor_pendente: number; situacao: SituacaoReceber;
   }[];
 };
@@ -18,11 +18,12 @@ export type PosicaoReceber = {
 export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promise<PosicaoReceber> {
   const hoje = ctx.relogio.agora().toISOString().slice(0, 10);
   const linhas = (await ctx.db
-    .selectFrom("fin_conta_receber")
-    .select(["id", "numero_documento", "cliente_id", "data_vencimento", "valor_original", "valor_recebido", "status"])
-    .where("local_id", "=", local_id)
-    .where("status", "!=", "cancelado")
-    .orderBy("data_vencimento")
+    .selectFrom("fin_conta_receber as r")
+    .innerJoin("fin_cliente as c", "c.id", "r.cliente_id")
+    .select(["r.id", "r.numero_documento", "r.cliente_id", "c.nome as cliente_nome", "r.data_vencimento", "r.valor_original", "r.valor_recebido", "r.status"])
+    .where("r.local_id", "=", local_id)
+    .where("r.status", "!=", "cancelado")
+    .orderBy("r.data_vencimento")
     .execute()) as any[];
   const vazio = (): Totais => ({ quantidade: 0, valor_original: 0, valor_recebido: 0, valor_pendente: 0 });
   const situacoes: PosicaoReceber["situacoes"] = { aberto: vazio(), vencido: vazio(), parcialmente_recebido: vazio(), recebido: vazio() };
@@ -40,7 +41,7 @@ export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promi
     s.valor_recebido += l.valor_recebido;
     s.valor_pendente += pendente;
     itens.push({
-      id: l.id, numero_documento: l.numero_documento, cliente_id: l.cliente_id, data_vencimento: l.data_vencimento,
+      id: l.id, numero_documento: l.numero_documento, cliente_id: l.cliente_id, cliente_nome: l.cliente_nome, data_vencimento: l.data_vencimento,
       valor_original: l.valor_original, valor_recebido: l.valor_recebido, valor_pendente: pendente, situacao,
     });
   }
