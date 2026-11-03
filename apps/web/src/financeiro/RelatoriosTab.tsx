@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Cartao } from "../componentes/Cartao";
 import { formatarReais } from "../lib/dinheiro";
-import { Barras, Estado, rotuloStatus } from "./comuns";
+import { Barras, Estado, ROTULO_STATUS, rotulo } from "./comuns";
 import { dataLocal, useCartao, useConsolidado, useContasReceber, useFluxoCaixa, useMovimento } from "./useFinanceiro";
 
 function Painel({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -10,6 +10,7 @@ function Painel({ titulo, children }: { titulo: string; children: ReactNode }) {
 const Linha = ({ rotulo, valor }: { rotulo: string; valor: string }) => (
   <li><span>{rotulo}</span><strong>{valor}</strong></li>
 );
+const ROTULO_CARTAO = { aberto: "A receber", fechado: "Pronto para baixar", liquidado: "Baixado" } as const;
 const SEM_LOCAL = <p className="fin__suave">Selecione um local.</p>;
 
 export function RelatoriosTab({ localId, contaId }: { localId: string; contaId: string }) {
@@ -58,19 +59,19 @@ export function RelatoriosTab({ localId, contaId }: { localId: string; contaId: 
           {r ? (<>
             <ul className="fin__resumo">
               {(["aberto", "vencido", "parcialmente_recebido"] as const).map((s) => (
-                <Linha key={s} rotulo={`${rotuloStatus(s)} (${r.situacoes[s].quantidade})`} valor={formatarReais(r.situacoes[s].valor_pendente)} />
+                <Linha key={s} rotulo={`${rotulo(ROTULO_STATUS, s)} (${r.situacoes[s].quantidade})`} valor={formatarReais(r.situacoes[s].valor_pendente)} />
               ))}
-              <Linha rotulo={`recebido (${r.situacoes.recebido.quantidade})`} valor={formatarReais(r.situacoes.recebido.valor_recebido)} />
+              <Linha rotulo={`Recebido (${r.situacoes.recebido.quantidade})`} valor={formatarReais(r.situacoes.recebido.valor_recebido)} />
             </ul>
             <Barras itens={(["aberto", "vencido", "parcialmente_recebido"] as const).map((s) => ({
-              rotulo: rotuloStatus(s), valor: r.situacoes[s].valor_pendente, tom: s === "vencido" ? "terracota" : "amarelo",
+              rotulo: rotulo(ROTULO_STATUS, s), valor: r.situacoes[s].valor_pendente, tom: s === "vencido" ? "terracota" : "amarelo",
             }))} />
           </>) : SEM_LOCAL}
         </Estado>
       </Painel>
 
       <Painel titulo="Movimento da conta (30 dias)">
-        {!contaId ? <p className="fin__suave">Informe a conta no topo.</p> : (
+        {!contaId ? <p className="fin__suave">Este local ainda não tem conta.</p> : (
           <Estado carregando={mov.isLoading} erro={mov.error}>
             {mov.data && (<>
               <ul className="fin__resumo">
@@ -85,16 +86,16 @@ export function RelatoriosTab({ localId, contaId }: { localId: string; contaId: 
         )}
       </Painel>
 
-      <Painel titulo="Cartão de crédito">
+      <Painel titulo="Cartão (líquido)">
         <Estado carregando={cartao.isLoading} erro={cartao.error}>
           {c ? (<>
             <ul className="fin__resumo">
               {(["aberto", "fechado", "liquidado"] as const).map((s) => (
-                <Linha key={s} rotulo={`${s} (${c[s].quantidade})`} valor={formatarReais(c[s].valor)} />
+                <Linha key={s} rotulo={`${ROTULO_CARTAO[s]} (${c[s].quantidade})`} valor={formatarReais(c[s].valor)} />
               ))}
             </ul>
             <Barras itens={(["aberto", "fechado", "liquidado"] as const).map((s) => ({
-              rotulo: s, valor: c[s].valor, tom: s === "liquidado" ? "verde" : "amarelo",
+              rotulo: ROTULO_CARTAO[s], valor: c[s].valor, tom: s === "liquidado" ? "verde" : "amarelo",
             }))} />
           </>) : SEM_LOCAL}
         </Estado>

@@ -4,42 +4,39 @@ import { CampoDinheiro } from "../componentes/CampoDinheiro";
 import { Cartao } from "../componentes/Cartao";
 import { ErroAcao } from "../componentes/ErroAcao";
 import { Etiqueta } from "../componentes/Etiqueta";
-import { Janela } from "../componentes/Janela";
+import { Gaveta } from "../componentes/Gaveta";
 import { formatarReais } from "../lib/dinheiro";
-import { dataBr, Estado, rotuloStatus } from "./comuns";
-import { useConfirmarPagamento, useContasReceber, type ContasReceber, type SituacaoReceber } from "./useFinanceiro";
+import { dataBr, Estado, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
+import { useConfirmarPagamento, useContasReceber, type Conta, type ContasReceber, type SituacaoReceber } from "./useFinanceiro";
 
 type Item = ContasReceber["itens"][number];
 const SITUACOES: SituacaoReceber[] = ["aberto", "vencido", "parcialmente_recebido", "recebido"];
 const tom = (s: SituacaoReceber) => (s === "recebido" ? "verde" : s === "vencido" ? "terracota" : s === "aberto" ? "neutro" : "amarelo");
 
-function JanelaConfirmar({ item, contaInicial, aoFechar }: { item: Item; contaInicial: string; aoFechar: () => void }) {
+function PainelReceber({ item, contas, contaInicial, aoFechar }: { item: Item; contas: Conta[]; contaInicial: string; aoFechar: () => void }) {
   const [valor, setValor] = useState<number | null>(item.valor_pendente);
-  const [contaId, setContaId] = useState(contaInicial);
+  const [contaId, setContaId] = useState(contaInicial || contas[0]?.id || "");
   const confirmar = useConfirmarPagamento();
   const invalido = !valor || !contaId;
   return (
-    <Janela aberta aoFechar={aoFechar} titulo={`Confirmar pagamento ${item.numero_documento}`}>
-      <form className="formulario" onSubmit={(e) => {
-        e.preventDefault();
-        if (invalido || valor === null) return;
-        confirmar.mutate({ id: item.id, valor, contaId }, { onSuccess: aoFechar });
-      }}>
-        <p className="fin__suave">Pendente: {formatarReais(item.valor_pendente)}</p>
-        <CampoDinheiro rotulo="Valor recebido" valor={valor} aoMudar={setValor} />
-        <label htmlFor="cr-conta">Conta de destino</label>
-        <input id="cr-conta" value={contaId} onChange={(e) => setContaId(e.target.value.trim())} />
-        <ErroAcao erro={confirmar.error} />
-        <div className="formulario__acoes">
-          <Botao variante="contorno" ignorarConexao onClick={aoFechar}>Cancelar</Botao>
-          <Botao type="submit" disabled={invalido || confirmar.isPending}>Confirmar</Botao>
-        </div>
-      </form>
-    </Janela>
+    <form className="formulario" onSubmit={(e) => {
+      e.preventDefault();
+      if (invalido || valor === null) return;
+      confirmar.mutate({ id: item.id, valor, contaId }, { onSuccess: aoFechar });
+    }}>
+      <p>{item.cliente_nome} — documento {item.numero_documento}</p>
+      <p className="fin__suave">Pendente: {formatarReais(item.valor_pendente)}</p>
+      <CampoDinheiro rotulo="Valor recebido" valor={valor} aoMudar={setValor} />
+      <Selecao rotulo="Conta de destino" valor={contaId} aoMudar={setContaId} opcoes={contas.map((c) => ({ valor: c.id, rotulo: c.nome }))} />
+      <ErroAcao erro={confirmar.error} />
+      <div className="formulario__acoes">
+        <Botao type="submit" disabled={invalido || confirmar.isPending}>Confirmar</Botao>
+      </div>
+    </form>
   );
 }
 
-export function ContasReceberTab({ localId, contaId }: { localId: string; contaId: string }) {
+export function ContasReceberTab({ localId, contas, contaInicial }: { localId: string; contas: Conta[]; contaInicial: string }) {
   const [status, setStatus] = useState("");
   const [alvo, setAlvo] = useState<Item | null>(null);
   const q = useContasReceber(localId);
@@ -47,25 +44,22 @@ export function ContasReceberTab({ localId, contaId }: { localId: string; contaI
   return (
     <Cartao className="fin__bloco">
       <div className="fin__filtros">
-        <div className="campo"><label htmlFor="cr-sta">Status</label>
-          <select id="cr-sta" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Todos</option>
-            {SITUACOES.map((s) => <option key={s} value={s}>{rotuloStatus(s)}</option>)}
-          </select></div>
+        <Selecao rotulo="Situação" valor={status} aoMudar={setStatus} vazio="Todas" opcoes={SITUACOES.map((s) => ({ valor: s, rotulo: rotulo(ROTULO_STATUS, s) }))} />
       </div>
       <Estado carregando={q.isLoading} erro={q.error}>
-        {linhas.length === 0 ? <p className="fin__suave">Nada a receber neste filtro.</p> : (
+        {linhas.length === 0 ? <p className="fin__suave">Nada a receber neste filtro. Faturas fechadas em Faturamento aparecem aqui.</p> : (
           <div className="fin__rolagem">
             <table className="fin__tabela">
-              <thead><tr><th>Documento</th><th>Cliente</th><th className="fin__num">Valor original</th><th>Status</th><th>Vencimento</th><th><span className="fin__oculto">Ações</span></th></tr></thead>
+              <thead><tr><th>Documento</th><th>Cliente</th><th className="fin__num">Valor original</th><th className="fin__num">Pendente</th><th>Situação</th><th>Vencimento</th><th><span className="fin__oculto">Ações</span></th></tr></thead>
               <tbody>
                 {linhas.map((i) => (
                   <tr key={i.id}>
-                    <td>{i.numero_documento}</td><td>{i.cliente_id}</td>
+                    <td>{i.numero_documento}</td><td>{i.cliente_nome}</td>
                     <td className="fin__num">{formatarReais(i.valor_original)}</td>
-                    <td><Etiqueta tom={tom(i.situacao)}>{rotuloStatus(i.situacao)}</Etiqueta></td>
+                    <td className="fin__num">{formatarReais(i.valor_pendente)}</td>
+                    <td><Etiqueta tom={tom(i.situacao)}>{rotulo(ROTULO_STATUS, i.situacao)}</Etiqueta></td>
                     <td>{dataBr(i.data_vencimento)}</td>
-                    <td>{i.situacao !== "recebido" && <Botao tamanho="pequeno" onClick={() => setAlvo(i)}>Confirmar Pagamento</Botao>}</td>
+                    <td className="fin__acoes">{i.situacao !== "recebido" && <Botao tamanho="pequeno" onClick={() => setAlvo(i)}>Confirmar pagamento</Botao>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -73,7 +67,9 @@ export function ContasReceberTab({ localId, contaId }: { localId: string; contaI
           </div>
         )}
       </Estado>
-      {alvo && <JanelaConfirmar item={alvo} contaInicial={contaId} aoFechar={() => setAlvo(null)} />}
+      <Gaveta aberta={alvo !== null} aoFechar={() => setAlvo(null)} titulo="Confirmar pagamento">
+        {alvo && <PainelReceber item={alvo} contas={contas} contaInicial={contaInicial} aoFechar={() => setAlvo(null)} />}
+      </Gaveta>
     </Cartao>
   );
 }

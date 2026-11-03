@@ -25,3 +25,10 @@
 .fin__barra--verde { background: var(--verde); }
 .fin__barra--terracota { background: var(--terracota); }
 .fin__barra--amarelo { background: var(--amarelo); }
+.fin__acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.fin__tabela td.fin__acoes { display: table-cell; white-space: nowrap; text-align: right; }
+.fin__tabela td.fin__acoes > * + * { margin-left: 8px; }
+.fin__acao-topo { margin-left: auto; align-self: flex-end; }
+.fin__grupo { border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fin__grupo legend { color: var(--texto-suave); font-size: 0.8125rem; padding: 0 4px; }
+@media (max-width: 899px) { .fin__seletores, .fin__seletores .campo, .fin__seletores select { width: 100%; } }

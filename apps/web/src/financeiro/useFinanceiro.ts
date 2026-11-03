@@ -10,8 +10,28 @@ export type Lancamento = {
   origem: string;
   forma_pagamento: string;
   descricao: string;
+  categoria?: string;
+  vencimento?: string;
+  fornecedor_id?: string;
+  fornecedor_nome?: string | null;
   status: "pendente" | "confirmado" | "liquidado" | "cancelado";
   valor: number;
+};
+export type Local = { id: string; nome: string; ativo: boolean; hospedagem_padrao: boolean };
+export type Conta = { id: string; local_id: string; nome: string; banco: string; agencia: string; numero: string; tipo: string; saldo_inicial: number; saldo: number };
+export type Fornecedor = { id: string; local_id: string; razao_social: string; cnpj: string | null };
+export type Contato = { email?: string; telefone?: string; endereco?: string };
+export type Politica = { prazo_dias?: number; forma_cobranca?: "boleto" | "pix" | "deposito"; observacoes?: string };
+export type FormaCobranca = "boleto" | "pix" | "deposito";
+export type Faturamento = {
+  id: string; cliente_id: string; cliente_nome: string; cliente_documento: string | null; cliente_contato: Contato; cliente_politica: Politica;
+  reserva_codigo: number | null; valor_original: number; valor_liquido: number; data_vencimento: string; forma_cobranca: FormaCobranca;
+  numero_documento: string; status: string; fechada: boolean; criado_em: string;
+};
+export type TipoCartao = "credito" | "debito" | "voucher";
+export type MovimentoCartao = {
+  id: string; local_id: string; data: string; bandeira: string; tipo: TipoCartao; valor_bruto: number; taxa_percentual: number; valor_taxa: number;
+  valor_liquido: number; previsao: string; status: "a_receber" | "baixado" | "cancelado";
 };
 export type Saldo = { conta_id: string; data: string; saldo: number };
 export type SituacaoReceber = "aberto" | "vencido" | "parcialmente_recebido" | "recebido";
@@ -20,7 +40,7 @@ export type ContasReceber = {
   local_id: string;
   situacoes: Record<SituacaoReceber, Totais>;
   itens: {
-    id: string; numero_documento: string; cliente_id: string; data_vencimento: string;
+    id: string; numero_documento: string; cliente_id: string; cliente_nome: string; data_vencimento: string;
     valor_original: number; valor_recebido: number; valor_pendente: number; situacao: SituacaoReceber;
   }[];
 };
@@ -57,13 +77,44 @@ function qs(params: Record<string, string | undefined>): string {
 const BASE = "/api/financeiro";
 
 /** Consultas do módulo Financeiro; `localId`/`contaId` vazios desligam a consulta correspondente. */
-export function useLancamentos(localId: string, periodo: Partial<Periodo>) {
+export function useLancamentos(localId: string, periodo: Partial<Periodo>, tipo?: Lancamento["tipo"]) {
   return useQuery({
-    queryKey: ["financeiro", "lancamentos", localId, periodo.inicio, periodo.fim],
+    queryKey: ["financeiro", "lancamentos", localId, periodo.inicio, periodo.fim, tipo],
     enabled: !!localId,
-    queryFn: () => chamarApi<Lancamento[]>("GET", `${BASE}/lancamentos${qs({ local_id: localId, data_inicio: periodo.inicio, data_fim: periodo.fim })}`),
+    queryFn: () => chamarApi<Lancamento[]>("GET", `${BASE}/lancamentos${qs({ local_id: localId, data_inicio: periodo.inicio, data_fim: periodo.fim, tipo })}`),
   });
 }
+
+export const useLocais = () =>
+  useQuery({ queryKey: ["financeiro", "locais"], queryFn: () => chamarApi<Local[]>("GET", `${BASE}/locais`) });
+
+export const useContas = (localId: string) =>
+  useQuery({
+    queryKey: ["financeiro", "contas", localId],
+    enabled: !!localId,
+    queryFn: () => chamarApi<Conta[]>("GET", `${BASE}/contas${qs({ local_id: localId })}`),
+  });
+
+export const useFornecedores = (localId: string) =>
+  useQuery({
+    queryKey: ["financeiro", "fornecedores", localId],
+    enabled: !!localId,
+    queryFn: () => chamarApi<Fornecedor[]>("GET", `${BASE}/fornecedores${qs({ local_id: localId })}`),
+  });
+
+export const useFaturamentos = (localId: string) =>
+  useQuery({
+    queryKey: ["financeiro", "faturamentos", localId],
+    enabled: !!localId,
+    queryFn: () => chamarApi<Faturamento[]>("GET", `${BASE}/faturamentos${qs({ local_id: localId })}`),
+  });
+
+export const useMovimentosCartao = (localId: string) =>
+  useQuery({
+    queryKey: ["financeiro", "cartao-movimentos", localId],
+    enabled: !!localId,
+    queryFn: () => chamarApi<MovimentoCartao[]>("GET", `${BASE}/cartao/movimentos${qs({ local_id: localId })}`),
+  });
 
 export function useSaldo(contaId: string) {
   return useQuery({
@@ -131,3 +182,36 @@ export const useTransferir = () =>
 export const useConfirmarPagamento = () =>
   useAcaoFinanceira(({ id, valor, contaId }: { id: string; valor: number; contaId: string }) =>
     chamarApi("PUT", `${BASE}/contas-receber/${encodeURIComponent(id)}/confirmar-pagamento`, { valor, conta_bancaria_id: contaId }));
+
+export const useSalvarLocal = () =>
+  useAcaoFinanceira(({ id, ...corpo }: { id?: string; nome?: string; ativo?: boolean; hospedagem_padrao?: boolean }) =>
+    id ? chamarApi("PUT", `${BASE}/locais/${encodeURIComponent(id)}`, corpo) : chamarApi("POST", `${BASE}/locais`, corpo));
+
+export const useCriarConta = () =>
+  useAcaoFinanceira((c: { local_id: string; nome: string; banco: string; agencia: string; numero: string; tipo: string; saldo_inicial: number }) =>
+    chamarApi("POST", `${BASE}/contas`, c));
+
+export const useCriarFornecedor = () =>
+  useAcaoFinanceira((c: { local_id: string; razao_social: string; cnpj?: string }) => chamarApi<Fornecedor>("POST", `${BASE}/fornecedores`, c));
+
+export const useCriarContaPagar = () =>
+  useAcaoFinanceira((c: { local_id: string; descricao: string; categoria: string; valor: number; vencimento: string; fornecedor_id?: string }) =>
+    chamarApi("POST", `${BASE}/contas-a-pagar`, c));
+
+export const useBaixarContaPagar = () =>
+  useAcaoFinanceira(({ id, ...corpo }: { id: string; conta_id: string; forma_pagamento: string }) =>
+    chamarApi("PUT", `${BASE}/contas-a-pagar/${encodeURIComponent(id)}/baixar`, corpo));
+
+export const useCriarMovimentoCartao = () =>
+  useAcaoFinanceira((c: { local_id: string; data: string; bandeira: string; tipo: TipoCartao; valor: number; informado: "bruto" | "liquido"; taxa_percentual: number; previsao?: string }) =>
+    chamarApi("POST", `${BASE}/cartao/movimentos`, c));
+
+export const useBaixarCartao = () =>
+  useAcaoFinanceira(({ id, ...corpo }: { id: string; conta_id: string; taxa_percentual: number }) =>
+    chamarApi("PUT", `${BASE}/cartao/movimentos/${encodeURIComponent(id)}/baixar`, corpo));
+
+export const useFecharFatura = () =>
+  useAcaoFinanceira(async (c: { id: string; clienteId: string; contato: Contato; politica: Politica; forma: FormaCobranca; data_vencimento: string }) => {
+    await chamarApi("PUT", `${BASE}/clientes/${encodeURIComponent(c.clienteId)}`, { contato: c.contato, politica: c.politica });
+    return chamarApi("POST", `${BASE}/faturamentos/${encodeURIComponent(c.id)}/fechar`, { forma: c.forma, data_vencimento: c.data_vencimento });
+  });
