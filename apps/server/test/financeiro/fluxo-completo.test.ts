@@ -1,11 +1,11 @@
 import { expect, test } from "vitest";
-import { criarApp } from "../../../apps/server/src/http/app.js";
-import { processarPagamentoRegistrado, processarValorAReceberCriado } from "../../../apps/server/src/financeiro/consumidores-eventos/hospedagem-pagamento.js";
-import { LocalService } from "../../../apps/server/src/financeiro/servicos/locais.js";
-import { criarCategoria } from "../../../apps/server/src/nucleo/categorias.js";
-import { salvarHospede } from "../../../apps/server/src/nucleo/hospedes.js";
-import { gerarUUID } from "../../../apps/server/src/shared/ids.js";
-import { criarContextoTeste, entrarComo } from "../../../apps/server/test/ajuda.js";
+import { criarApp } from "../../src/http/app.js";
+import { processarPagamentoRegistrado, processarValorAReceberCriado } from "../../src/financeiro/consumidores-eventos/hospedagem-pagamento.js";
+import { LocalService } from "../../src/financeiro/servicos/locais.js";
+import { criarCategoria } from "../../src/nucleo/categorias.js";
+import { salvarHospede } from "../../src/nucleo/hospedes.js";
+import { gerarUUID } from "../../src/shared/ids.js";
+import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 const CRIADO = "2026-11-10T15:00:00.000Z";
 

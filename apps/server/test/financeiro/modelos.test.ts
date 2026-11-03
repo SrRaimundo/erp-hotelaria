@@ -1,12 +1,12 @@
 import { describe, test, expect } from "vitest";
-import { gerarUUID } from "../../apps/server/src/shared/ids.js";
-import { Dinheiro } from "../../apps/server/src/shared/dinheiro.js";
-import type { Local } from "../../apps/server/src/financeiro/modelos/local.js";
-import type { Cliente, Fornecedor, ContaBancaria, Moeda } from "../../apps/server/src/financeiro/modelos/cadastros.js";
-import type { Lançamento } from "../../apps/server/src/financeiro/modelos/lançamento.js";
-import type { Faturamento } from "../../apps/server/src/financeiro/modelos/faturamento.js";
-import type { ContaReceber } from "../../apps/server/src/financeiro/modelos/conta-receber.js";
-import type { Movimento, Saldo } from "../../apps/server/src/financeiro/modelos/movimento.js";
+import { gerarUUID } from "../../src/shared/ids.js";
+import { Dinheiro } from "../../src/shared/dinheiro.js";
+import type { Local } from "../../src/financeiro/modelos/local.js";
+import type { Cliente, Fornecedor, ContaBancaria, Moeda } from "../../src/financeiro/modelos/cadastros.js";
+import type { Lançamento } from "../../src/financeiro/modelos/lançamento.js";
+import type { Faturamento } from "../../src/financeiro/modelos/faturamento.js";
+import type { ContaReceber } from "../../src/financeiro/modelos/conta-receber.js";
+import type { Movimento, Saldo } from "../../src/financeiro/modelos/movimento.js";
 
 describe("Financeiro - Modelos", () => {
   describe("Local", () => {
