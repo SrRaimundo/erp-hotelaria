@@ -1,7 +1,7 @@
 import type { Contexto } from "../../shared/contexto.js";
 import { ErroDominio } from "../../shared/erros.js";
 import type { UUID } from "../../shared/ids.js";
-import { intervalo, SINAL } from "./comum.js";
+import { limitesNoFuso, SINAL } from "./comum.js";
 
 export type ExtratoConta = {
   conta_id: UUID;
@@ -16,7 +16,7 @@ export type ExtratoConta = {
 
 /** Extrato detalhado de uma conta no período; saldo corrente recalculado a partir do saldo inicial do período. */
 export async function movimentoPorConta(ctx: Contexto, conta_id: UUID, data_inicio: string, data_fim: string): Promise<ExtratoConta> {
-  const { inicio, fim } = intervalo(data_inicio, data_fim);
+  const { inicio, fim } = await limitesNoFuso(ctx, data_inicio, data_fim);
   const conta = await ctx.db.selectFrom("fin_conta_bancaria").select("saldo_inicial").where("id", "=", conta_id).executeTakeFirst();
   if (!conta) throw new ErroDominio("NAO_ENCONTRADO", "Conta não encontrada.");
   const movs = (await ctx.db

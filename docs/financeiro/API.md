@@ -430,3 +430,33 @@ curl -X POST "http://localhost:3000/api/financeiro/caixa-banco/transferencia" \
     "valor": 50000
   }'
 ```
+
+---
+
+## Addendum: rotas da fase 1b (locais, contas, contas a pagar, cartão, fechamento de fatura)
+
+Todas exigem `financeiro.gerenciar`. Valores em centavos; erros de domínio devolvem 422 e dados inválidos 400.
+Dias (`data`, `data_inicio`, `data_fim`, relatórios) são contados no fuso da pousada (`config.fuso`).
+
+| Rota | Descrição |
+|------|-----------|
+| `GET /api/financeiro/locais` | Lista todos os locais, com `ativo` e `hospedagem_padrao`. |
+| `POST /api/financeiro/locais` | `{ nome, hospedagem_padrao? }`. Cria o local (e a conta "Caixa"). |
+| `PUT /api/financeiro/locais/:id` | `{ nome?, ativo?, hospedagem_padrao? }`. Renomeia, desativa ou marca como o local que recebe a hospedagem. |
+| `GET /api/financeiro/contas?local_id=` | Contas do local com `saldo` atual. |
+| `POST /api/financeiro/contas` | `{ local_id, nome, banco, agencia, numero, tipo, saldo_inicial }`. `tipo`: corrente, poupanca, aplicacao, caixa. |
+| `GET/POST /api/financeiro/fornecedores` | Lista (`?local_id=`) e cadastra `{ local_id, razao_social, cnpj? }`. |
+| `GET /api/financeiro/clientes?local_id=` | Clientes com `contato` e `politica` de faturamento. |
+| `PUT /api/financeiro/clientes/:id` | `{ contato?: {email, telefone, endereco}, politica?: {prazo_dias, forma_cobranca, observacoes} }`. |
+| `GET /api/financeiro/lancamentos?local_id=&tipo=` | Ganhou o filtro `tipo` e os campos `descricao`, `categoria`, `vencimento`, `fornecedor_nome`. |
+| `POST /api/financeiro/contas-a-pagar` | `{ local_id, descricao, categoria, valor, vencimento, fornecedor_id? }`. `categoria`: fornecedor, servico, funcionario, contrato. Nasce `pendente`. |
+| `PUT /api/financeiro/contas-a-pagar/:id/baixar` | `{ conta_id, forma_pagamento? }`. Confirma e debita a conta. |
+| `GET /api/financeiro/faturamentos?local_id=` | Faturamentos com cliente, reserva e `fechada` (cobrança gerada). |
+| `POST /api/financeiro/faturamentos/:id/fechar` | `{ forma, data_vencimento }`. Gera o documento e envia a Contas a Receber. |
+| `GET /api/financeiro/cartao/movimentos?local_id=` | Movimentos de cartão: bandeira, tipo, bruto, taxa, líquido, previsão, status. |
+| `POST /api/financeiro/cartao/movimentos` | `{ local_id, data, bandeira, tipo, valor, informado: "bruto"\|"liquido", taxa_percentual, previsao? }`. |
+| `PUT /api/financeiro/cartao/movimentos/:id/baixar` | `{ conta_id, taxa_percentual? }`. Credita o líquido na conta. |
+
+Cancelar ou estornar um lançamento que já movimentou o Caixa/Banco grava o movimento oposto (o saldo volta).
+Checkouts faturados da hospedagem ficam em Faturamento aberto até `fechar`; só então viram Conta a Receber.
+Pagamentos em cartão da hospedagem viram movimentos de cartão a receber (taxa 0 até a baixa).

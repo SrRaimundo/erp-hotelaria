@@ -10,7 +10,7 @@
 .fin__filtros { display: flex; gap: 12px; flex-wrap: wrap; }
 .fin__suave { color: var(--texto-suave); font-size: 0.875rem; }
 .fin__destaque { font-size: 2rem; font-weight: 700; }
-.fin__rolagem { overflow-x: auto; }
+.fin__rolagem { overflow-x: auto; position: relative; }
 .fin__tabela { width: 100%; border-collapse: collapse; }
 .fin__tabela th, .fin__tabela td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
 .fin__tabela th { color: var(--texto-suave); font-size: 0.8125rem; }

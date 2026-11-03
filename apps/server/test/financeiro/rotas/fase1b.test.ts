@@ -27,6 +27,10 @@ describe("Local e cadastros", () => {
     expect(marcado.corpo).toMatchObject({ nome: "Sorveteria Centro", hospedagem_padrao: true });
     expect((await chamar("GET", "/locais")).corpo.find((l: any) => l.id === local.id).hospedagem_padrao).toBe(false);
 
+    const nascePadrao = (await chamar("POST", "/locais", { nome: "Bar", hospedagem_padrao: true })).corpo;
+    expect(nascePadrao.hospedagem_padrao).toBe(true);
+    await chamar("PUT", `/locais/${outro.id}`, { hospedagem_padrao: true });
+    expect((await chamar("GET", "/locais")).corpo.find((l: any) => l.id === nascePadrao.id).hospedagem_padrao).toBe(false);
     expect((await chamar("PUT", `/locais/${outro.id}`, { ativo: false })).corpo).toMatchObject({ ativo: false, hospedagem_padrao: true });
     expect((await chamar("PUT", `/locais/${local.id}`, { ativo: false, hospedagem_padrao: true })).status).toBe(422);
     expect((await chamar("POST", "/locais", { nome: "  " })).status).toBe(400);
@@ -160,5 +164,27 @@ describe("Cancelar e estornar com Caixa/Banco", () => {
     expect((await chamar("GET", `/contas?local_id=${local.id}`)).corpo[0].saldo).toBe(7000);
     await new LançamentoService(ctx).estornar(l.id, "Cobrança indevida", "admin", u);
     expect((await chamar("GET", `/contas?local_id=${local.id}`)).corpo[0].saldo).toBe(0);
+  });
+});
+
+describe("Dia do relatório no fuso da pousada", () => {
+  test("movimento às 22h locais (01h UTC do dia seguinte) entra no fluxo do dia local", async () => {
+    const { chamar, local, caixa, ctx } = await cenario();
+    const { LançamentoService } = await import("../../../src/financeiro/servicos/lançamentos.js");
+    const { CaixaBancoService } = await import("../../../src/financeiro/servicos/caixa-banco.js");
+    const { Dinheiro } = await import("../../../src/shared/dinheiro.js");
+    const u = { email: "a@b.c" };
+    // 2026-11-02 22:00 em São Paulo (UTC-3) = 2026-11-03 01:00 UTC
+    const l = await new LançamentoService(ctx).criar({ local_id: local.id, data: new Date("2026-11-03T01:00:00Z"), tipo: "recebimento", origem: "manual", valor: Dinheiro.de(4000), forma_pagamento: "pix", usuario: u });
+    await new CaixaBancoService(ctx).criarMovimento(l, caixa.id, u);
+    const dia2 = (await chamar("GET", `/relatorios/fluxo-caixa?local_id=${local.id}&data=2026-11-02`)).corpo;
+    expect(dia2).toMatchObject({ entradas: 4000, saldo_final: 4000 });
+    const dia3 = (await chamar("GET", `/relatorios/fluxo-caixa?local_id=${local.id}&data=2026-11-03`)).corpo;
+    expect(dia3).toMatchObject({ entradas: 0, saldo_inicial: 4000 });
+    const extrato = (await chamar("GET", `/relatorios/movimento?conta_id=${caixa.id}&data_inicio=2026-11-02&data_fim=2026-11-02`)).corpo;
+    expect(extrato.movimentos).toHaveLength(1);
+    const lista = (await chamar("GET", `/lancamentos?local_id=${local.id}&data_inicio=2026-11-02&data_fim=2026-11-02`)).corpo;
+    expect(lista).toHaveLength(1);
+    expect((await chamar("GET", `/lancamentos?local_id=${local.id}&data_inicio=2026-11-03&data_fim=2026-11-03`)).corpo).toHaveLength(0);
   });
 });

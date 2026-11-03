@@ -1,6 +1,6 @@
 import type { Contexto } from "../../shared/contexto.js";
 import type { UUID } from "../../shared/ids.js";
-import { intervalo, SINAL } from "./comum.js";
+import { limitesNoFuso, SINAL } from "./comum.js";
 
 export type ConsolidadoLocal = {
   local_id: UUID;
@@ -13,7 +13,7 @@ export type ConsolidadoLocal = {
 
 /** Comparativo por Local no período. Recebimentos = créditos; pagamentos = débitos; transferências só afetam o saldo. */
 export async function consolidadoPorLocal(ctx: Contexto, data_inicio: string, data_fim: string) {
-  const { inicio, fim } = intervalo(data_inicio, data_fim);
+  const { inicio, fim } = await limitesNoFuso(ctx, data_inicio, data_fim);
   const locais = (await ctx.db.selectFrom("fin_local").select(["id", "nome"]).orderBy("nome").execute()) as any[];
   const contas = (await ctx.db.selectFrom("fin_conta_bancaria").select(["local_id", "saldo_inicial"]).execute()) as any[];
   const movs = (await ctx.db.selectFrom("fin_movimento").select(["local_id", "tipo", "valor", "data"]).where("data", "<=", fim).execute()) as any[];

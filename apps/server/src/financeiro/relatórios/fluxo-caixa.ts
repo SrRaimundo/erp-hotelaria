@@ -1,6 +1,6 @@
 import type { Contexto } from "../../shared/contexto.js";
 import type { UUID } from "../../shared/ids.js";
-import { intervaloDia, SINAL } from "./comum.js";
+import { limitesNoFuso, SINAL } from "./comum.js";
 
 export type FluxoCaixa = {
   local_id: UUID;
@@ -15,7 +15,7 @@ export type FluxoCaixa = {
 
 /** Fluxo de caixa diário de um local (valores em centavos). Entradas = créditos; saídas = débitos. */
 export async function fluxoCaixaDiario(ctx: Contexto, local_id: UUID, data: string): Promise<FluxoCaixa> {
-  const { inicio, fim } = intervaloDia(data);
+  const { inicio, fim } = await limitesNoFuso(ctx, data, data);
   const contas = await ctx.db.selectFrom("fin_conta_bancaria").select("saldo_inicial").where("local_id", "=", local_id).execute();
   const movs = await ctx.db
     .selectFrom("fin_movimento")

@@ -16,8 +16,8 @@ export function registrarRotasLancamentos(app: FastifyInstance, ctx: Contexto): 
     exigirFinanceiro(req);
     const q = queryListar.parse(req.query);
     const lista = await new LançamentoService(ctx).listar(q.local_id, {
-      data_inicio: q.data_inicio ? inicioDoDia(q.data_inicio) : undefined,
-      data_fim: q.data_fim ? fimDoDia(q.data_fim) : undefined,
+      data_inicio: q.data_inicio ? await inicioDoDia(ctx, q.data_inicio) : undefined,
+      data_fim: q.data_fim ? await fimDoDia(ctx, q.data_fim) : undefined,
     });
     const fornecedores = new Map((await new CadastrosFinanceiroService(ctx).listarFornecedores(q.local_id)).map((f) => [f.id, f.razao_social]));
     return lista

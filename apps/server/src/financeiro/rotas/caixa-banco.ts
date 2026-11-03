@@ -12,7 +12,7 @@ export function registrarRotasCaixaBanco(app: FastifyInstance, ctx: Contexto): v
   app.get("/api/financeiro/caixa-banco/saldo", async (req) => {
     exigirFinanceiro(req);
     const q = querySaldo.parse(req.query);
-    const ate = q.data ? fimDoDia(q.data) : ctx.relogio.agora();
+    const ate = q.data ? await fimDoDia(ctx, q.data) : ctx.relogio.agora();
     const saldo = await new CaixaBancoService(ctx).obterSaldo(q.conta_id, ate);
     return { conta_id: q.conta_id, data: ate.toISOString(), saldo: saldo.centavos };
   });
