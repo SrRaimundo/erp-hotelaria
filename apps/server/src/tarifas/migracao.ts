@@ -1,8 +1,8 @@
 import type { Migracao } from "../shared/banco.js";
 
 /**
- * Número 0710, acima do 0700_financeiro: o Migrator do Kysely recusa uma migração pendente
- * que ordena antes de outra já executada (ver shared/banco.ts), então ela precisa vir depois.
+ * Número 0710, depois do 0700_financeiro na ordem natural. O Migrator roda com allowUnorderedMigrations
+ * (ver shared/banco.ts), então uma base que já executou 0710 ainda aceita o 0700 pendente.
  */
 export const migracaoTarifasCanaisComissao: Migracao = {
   nome: "0710_tarifas_canais_comissao",

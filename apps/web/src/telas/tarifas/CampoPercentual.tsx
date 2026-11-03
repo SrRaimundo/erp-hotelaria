@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 
-type Props = { rotulo: string; valor: number | null; aoMudar: (v: number | null) => void; aceitaNegativo?: boolean };
+type Props = { rotulo: string; valor: number | null; aoMudar: (v: number | null) => void; aceitaNegativo?: boolean; desabilitado?: boolean };
 
 const comoTexto = (v: number | null) => (v === null ? "" : String(v).replace(".", ","));
 /** "12,5" -> 12.5; vazio ou inválido -> null. Até duas casas. */
@@ -10,7 +10,7 @@ export function lerPercentual(t: string, aceitaNegativo: boolean): number | null
   return valido ? Number(limpo.replace(",", ".")) : null;
 }
 
-export function CampoPercentual({ rotulo, valor, aoMudar, aceitaNegativo = false }: Props) {
+export function CampoPercentual({ rotulo, valor, aoMudar, aceitaNegativo = false, desabilitado = false }: Props) {
   const id = useId();
   const [texto, setTexto] = useState(() => comoTexto(valor));
   useEffect(() => {
@@ -25,6 +25,7 @@ export function CampoPercentual({ rotulo, valor, aoMudar, aceitaNegativo = false
         inputMode="decimal"
         placeholder="0"
         value={texto}
+        disabled={desabilitado}
         aria-invalid={invalido}
         onChange={(e) => {
           setTexto(e.target.value);

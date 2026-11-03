@@ -6,7 +6,7 @@ import { data, estadiaPermitida, MSG_ESTADIA_LONGA } from "../http/validacao.js"
 import { cotar } from "./cotacao.js";
 import {
   listarCanais, listarFaixasCrianca, listarFaixasOcupacao, listarPacotes, listarPercentuaisDiaSemana,
-  listarRestricoes, listarTabelasBase, listarTemporadas, removerCanal, salvarCanal, salvarFaixasCrianca, salvarFaixasOcupacao,
+  listarRestricoes, listarTabelasBase, listarTemporadas, removerCanal, removerTemporada, salvarCanal, salvarFaixasCrianca, salvarFaixasOcupacao,
   salvarPacote, salvarPercentualDiaSemana, salvarRestricao, salvarTabelaBase, salvarTemporada, TIPOS_CANAL,
 } from "./regras.js";
 
@@ -62,7 +62,10 @@ const corpoSimular = z.object({
 export function registrarRotasTarifas(app: FastifyInstance, ctx: Contexto): void {
   const gerenciar = (req: { usuario: Parameters<typeof exigirPermissao>[0] }) => exigirPermissao(req.usuario, "tarifas.gerenciar");
 
-  app.post("/api/tarifas/simular", async (req) => cotar(ctx, corpoSimular.parse(req.body)));
+  app.post("/api/tarifas/simular", async (req) => {
+    exigirPermissao(req.usuario, "reservas.gerenciar");
+    return cotar(ctx, corpoSimular.parse(req.body));
+  });
 
   app.get("/api/tarifas/tabelas-base", async (req) => { gerenciar(req); return listarTabelasBase(ctx); });
   app.put("/api/tarifas/tabelas-base", async (req) => {
@@ -74,6 +77,12 @@ export function registrarRotasTarifas(app: FastifyInstance, ctx: Contexto): void
   app.put("/api/tarifas/temporadas", async (req) => {
     gerenciar(req);
     return salvarTemporada(ctx, corpoTemporada.parse(req.body), req.usuario.id);
+  });
+
+  app.delete("/api/tarifas/temporadas/:id", async (req) => {
+    gerenciar(req);
+    await removerTemporada(ctx, z.object({ id: texto }).parse(req.params).id, req.usuario.id);
+    return { ok: true };
   });
 
   app.get("/api/tarifas/dias-semana", async (req) => { gerenciar(req); return listarPercentuaisDiaSemana(ctx); });

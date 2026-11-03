@@ -18,7 +18,7 @@ export function LayoutTarifas() {
         ))}
       </nav>
       <div className="tarifas__conteudo">
-        <Outlet />
+        {abas.length === 0 ? <p role="alert" className="reserva-suave">Você não tem permissão para abrir esta tela.</p> : <Outlet />}
       </div>
     </div>
   );

@@ -237,3 +237,42 @@ describe("rotas e permissões das abas", () => {
     expect(screen.getByTestId("local")).toHaveTextContent("/reservas/tarifas/simulador");
   });
 });
+
+describe("correções da revisão", () => {
+  test("restrição nova numa data que já tem regra não salva", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({
+      "GET /api/categorias": [STD],
+      "GET /api/tarifas/restricoes": [{ categoriaId: "c1", data: "2027-02-06", minNoites: 3, fechadoChegada: false, fechadoSaida: false, fechadoVenda: false }],
+    });
+    renderizar(<TelaRestricoes />, { usuario: ADMIN });
+    await screen.findByText("mínimo 3 noites");
+    await u.click(screen.getByRole("button", { name: "+ Nova restrição" }));
+    const painel = await screen.findByRole("dialog");
+    await u.type(within(painel).getByLabelText("Data"), "2027-02-06");
+    expect(within(painel).getByText("Essa data já tem restrição. Edite a existente.")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
+  });
+
+  test("simulador: mexer num campo apaga o resultado antigo", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({
+      "GET /api/categorias": [STD], "GET /api/tarifas/canais": CANAIS,
+      "POST /api/tarifas/simular": { total: 28000, violacoes: [], noites: [{ data: "2027-02-05", valor: 28000, passos: [{ rotulo: "Base", valor: 28000 }] }] },
+    });
+    renderizar(<TelaSimulador />, { usuario: RECEPCAO });
+    await waitFor(() => expect(screen.getByLabelText("Canal")).toHaveValue("Balcão"));
+    await u.type(screen.getByLabelText("Chegada"), "2027-02-05");
+    await u.type(screen.getByLabelText("Saída"), "2027-02-06");
+    await u.click(screen.getByRole("button", { name: "Simular" }));
+    expect(await screen.findByText("Total: R$ 280,00")).toBeInTheDocument();
+    await u.selectOptions(screen.getByLabelText("Canal"), "Booking");
+    expect(screen.queryByText("Total: R$ 280,00")).not.toBeInTheDocument();
+  });
+
+  test("sem nenhuma das duas permissões, a página de Tarifas avisa em vez de ficar em branco", async () => {
+    instalarApiFalsa({ "GET /api/painel": criarPainel() });
+    renderizar(<AppRotas />, { rota: "/reservas/tarifas", usuario: { permissoes: ["caixa.operar"] } });
+    expect(await screen.findByText("Você não tem permissão para abrir esta tela.")).toBeInTheDocument();
+  });
+});

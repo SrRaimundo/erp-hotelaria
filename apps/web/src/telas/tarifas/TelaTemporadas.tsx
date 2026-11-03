@@ -10,6 +10,7 @@ import { Dicas } from "../configuracoes/Dicas";
 import { ListaCadastro } from "../configuracoes/ListaCadastro";
 import { dataValida } from "../nova-reserva/CamposAcomodacao";
 import { CampoPercentual } from "./CampoPercentual";
+import { ConfirmarRemocao } from "./ConfirmarRemocao";
 import { aposSalvarTarifa, useCategoriasTarifa, useRegra, type Temporada } from "./consultas";
 
 type Precos = { p1: number | null; p2: number | null; p3: number | null; extra: number | null };
@@ -58,11 +59,20 @@ function Painel({ item, todas, fechar }: { item: Temporada | null; todas: Tempor
       chamarApi("PUT", "/api/tarifas/temporadas", {
         ...(item ? { id: item.id } : {}),
         nome: nome.trim(), inicio, fim, prioridade: nPrioridade!,
-        percentual: modo === "percentual" ? percentual : null,
+        // Em modo tabela o percentual que a temporada já tinha (o servidor aceita os dois) segue como estava.
+        percentual: modo === "percentual" ? percentual : (item && item.tabelas.length > 0 ? item.percentual : null),
         tabelas: modo === "tabela"
           ? escolhidas.map(([categoriaId, t]) => ({ categoriaId, porAdultos: { 1: t.p1!, 2: t.p2!, 3: t.p3! }, adultoExtra: t.extra! }))
           : [],
       }),
+    onSuccess: async () => {
+      await aposSalvarTarifa(cliente);
+      fechar();
+    },
+  });
+
+  const remover = useMutation<unknown, Error, void>({
+    mutationFn: () => chamarApi<unknown>("DELETE", `/api/tarifas/temporadas/${encodeURIComponent(item!.id)}`),
     onSuccess: async () => {
       await aposSalvarTarifa(cliente);
       fechar();
@@ -133,6 +143,13 @@ function Painel({ item, todas, fechar }: { item: Temporada | null; todas: Tempor
       <div className="formulario__acoes">
         <Botao type="submit" disabled={motivos.length > 0 || salvar.isPending}>Salvar</Botao>
       </div>
+      {item && (
+        <ConfirmarRemocao
+          rotulo="Remover temporada"
+          aviso={`Remover a temporada ${item.nome}? Reservas já feitas mantêm os preços que têm; só cotações futuras mudam.`}
+          remocao={remover}
+        />
+      )}
     </form>
   );
 }

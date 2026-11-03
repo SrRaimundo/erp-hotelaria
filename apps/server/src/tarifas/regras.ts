@@ -96,6 +96,17 @@ export async function salvarTemporada(
   });
 }
 
+/** Remove a temporada e as tabelas dela. Reservas existentes guardam as noites já calculadas (reserva_noites): seus preços não mudam. */
+export async function removerTemporada(ctx: Contexto, id: string, ator: string): Promise<void> {
+  await emTransacao(ctx, async (tx) => {
+    const t = (await listarTemporadas(tx)).find((x) => x.id === id);
+    if (!t) throw new ErroDominio("TEMPORADA_NAO_ENCONTRADA", "Temporada não encontrada.", { id });
+    await tx.db.deleteFrom("temporada_tabelas").where("temporada_id", "=", id).execute();
+    await tx.db.deleteFrom("temporadas").where("id", "=", id).execute();
+    await registrar(tx, ator, "temporada_removida", id, t);
+  });
+}
+
 export async function listarTemporadas(ctx: Contexto): Promise<Temporada[]> {
   const ts = await ctx.db.selectFrom("temporadas").selectAll().orderBy("inicio").orderBy("id").execute();
   const tabs = await ctx.db.selectFrom("temporada_tabelas").selectAll().orderBy("categoria_id").execute();
@@ -154,6 +165,11 @@ export async function salvarCanal(
       .selectAll()
       .where(d.id ? "id" : "nome", "=", (d.id ?? d.nome) as string)
       .executeTakeFirst();
+    const homonimo = (await tx.db.selectFrom("canais").select(["id", "nome"]).execute())
+      .find((x) => x.id !== atual?.id && x.nome.toLowerCase() === d.nome.toLowerCase());
+    if (homonimo) {
+      throw new ErroDominio("CANAL_DUPLICADO", `Já existe o canal "${homonimo.nome}". Escolha outro nome ou edite o existente.`, { canais: [homonimo.nome] });
+    }
     if (atual && atual.nome !== d.nome) {
       if (atual.nome === CANAL_REFERENCIA) {
         throw new ErroDominio("CANAL_BALCAO_FIXO", `O canal ${CANAL_REFERENCIA} é a referência de preço e não pode ser renomeado.`, { canais: [atual.nome] });

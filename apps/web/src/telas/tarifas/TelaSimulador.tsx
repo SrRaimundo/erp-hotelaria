@@ -8,8 +8,7 @@ import { formatarData, nomeDiaCurto } from "../../lib/datas";
 import { formatarReais } from "../../lib/dinheiro";
 import { Dicas } from "../configuracoes/Dicas";
 import { adultosValidos, dataValida } from "../nova-reserva/CamposAcomodacao";
-import { CANAL_REFERENCIA } from "./TelaCanais";
-import { useCanais, useCategoriasTarifa } from "./consultas";
+import { CANAL_REFERENCIA, useCanais, useCategoriasTarifa } from "./consultas";
 
 type Pedido = { categoriaId: string; chegada: string; saida: string; hospedes: { adultos: number; criancasNascimento: string[] }; canal: string };
 
@@ -39,7 +38,9 @@ export function TelaSimulador() {
   ];
 
   const simular = useMutation<Cotacao, Error, Pedido>({ mutationFn: (p) => chamarApi<Cotacao>("POST", "/api/tarifas/simular", p) });
+  // Mexer em qualquer campo invalida o resultado na tela: ele só vale para os dados com que foi calculado.
   const resultado = simular.data;
+  const limpar = () => { if (simular.data || simular.error) simular.reset(); };
 
   return (
     <section className="tarifas__form" aria-label="Simulador">
@@ -55,39 +56,39 @@ export function TelaSimulador() {
       >
         <label className="campo">
           Categoria
-          <select value={categoriaId} onChange={(e) => setCategoriaEsc(e.target.value)}>
+          <select value={categoriaId} onChange={(e) => { limpar(); setCategoriaEsc(e.target.value); }}>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </label>
         <div className="tarifas__grade">
           <label className="campo">
             Chegada
-            <input type="date" value={chegada} onChange={(e) => setChegada(e.target.value)} />
+            <input type="date" value={chegada} onChange={(e) => { limpar(); setChegada(e.target.value); }} />
           </label>
           <label className="campo">
             Saída
-            <input type="date" value={saida} onChange={(e) => setSaida(e.target.value)} />
+            <input type="date" value={saida} onChange={(e) => { limpar(); setSaida(e.target.value); }} />
           </label>
         </div>
         <label className="campo">
           Adultos
-          <input type="number" min={1} value={adultos} onChange={(e) => setAdultos(e.target.value)} />
+          <input type="number" min={1} value={adultos} onChange={(e) => { limpar(); setAdultos(e.target.value); }} />
         </label>
         {criancas.map((nasc, i) => (
           <div className="campo" key={i}>
             <label htmlFor={`sim-crianca-${i}`}>{`Nascimento da criança ${i + 1}`}</label>
-            <input id={`sim-crianca-${i}`} type="date" value={nasc} onChange={(e) => setCriancas((c) => c.map((x, j) => (j === i ? e.target.value : x)))} />
-            <Botao variante="contorno" tamanho="pequeno" aria-label={`Remover criança ${i + 1}`} onClick={() => setCriancas((c) => c.filter((_, j) => j !== i))}>
+            <input id={`sim-crianca-${i}`} type="date" value={nasc} onChange={(e) => { limpar(); setCriancas((c) => c.map((x, j) => (j === i ? e.target.value : x))); }} />
+            <Botao variante="contorno" tamanho="pequeno" aria-label={`Remover criança ${i + 1}`} onClick={() => { limpar(); setCriancas((c) => c.filter((_, j) => j !== i)); }}>
               Remover
             </Botao>
           </div>
         ))}
         <div>
-          <Botao variante="contorno" tamanho="pequeno" onClick={() => setCriancas((c) => [...c, ""])}>+ criança</Botao>
+          <Botao variante="contorno" tamanho="pequeno" onClick={() => { limpar(); setCriancas((c) => [...c, ""]); }}>+ criança</Botao>
         </div>
         <label className="campo">
           Canal
-          <select value={canal} onChange={(e) => setCanalEsc(e.target.value)}>
+          <select value={canal} onChange={(e) => { limpar(); setCanalEsc(e.target.value); }}>
             {canais.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select>
         </label>

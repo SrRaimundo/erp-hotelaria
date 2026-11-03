@@ -63,6 +63,11 @@ export function JanelaAlterarReserva({ reserva, aoFechar }: Props) {
             {(canaisQ.data ?? []).map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select>
         </div>
+        {canal !== reserva.canal && (
+          <p className="reserva-suave" role="status">
+            Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada passam a ser os do novo canal.
+          </p>
+        )}
         {criancas.map((nasc, i) => (
           <div className="campo" key={i}>
             <label htmlFor={`alt-crianca-${i}`}>{`Nascimento da criança ${i + 1}`}</label>

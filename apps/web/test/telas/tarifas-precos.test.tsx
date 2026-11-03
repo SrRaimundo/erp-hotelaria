@@ -187,3 +187,58 @@ describe("aba Dias da semana", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("O percentual deve ser maior que −100");
   });
 });
+
+describe("remover temporada e outras correções", () => {
+  const ALTA = { id: "t1", nome: "Alta", inicio: "2026-12-20", fim: "2027-01-10", prioridade: 1, percentual: 20, tabelas: [] };
+  const MISTA = { id: "t3", nome: "Mista", inicio: "2027-03-01", fim: "2027-03-05", prioridade: 1, percentual: 10, tabelas: [{ categoriaId: "c1", porAdultos: { 1: 1, 2: 2, 3: 3 }, adultoExtra: 4 }] };
+  const apagadas = (caminho: string) => chamadas.filter((c) => c.metodo === "DELETE" && c.caminho === caminho);
+
+  test("Remover temporada pergunta antes, depois usa DELETE e fecha o painel", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/tarifas/temporadas": [ALTA], "GET /api/categorias": [STD], "DELETE /api/tarifas/temporadas/t1": { ok: true } });
+    renderizar(<TelaTemporadas />, { usuario: USUARIO });
+    await u.click(await screen.findByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog");
+    await u.click(within(painel).getByRole("button", { name: "Remover temporada" }));
+    expect(apagadas("/api/tarifas/temporadas/t1")).toHaveLength(0);
+    expect(within(painel).getByText(/Reservas já feitas mantêm os preços que têm/)).toBeInTheDocument();
+    await u.click(within(painel).getByRole("button", { name: "Cancelar" }));
+    expect(within(painel).getByRole("button", { name: "Remover temporada" })).toBeInTheDocument();
+    await u.click(within(painel).getByRole("button", { name: "Remover temporada" }));
+    await u.click(within(painel).getByRole("button", { name: "Confirmar remoção" }));
+    await vi.waitFor(() => expect(apagadas("/api/tarifas/temporadas/t1")).toHaveLength(1));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("erro ao remover aparece junto do botão de confirmar", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/tarifas/temporadas": [ALTA], "GET /api/categorias": [STD], "DELETE /api/tarifas/temporadas/t1": { __status: 422, codigo: "TEMPORADA_NAO_ENCONTRADA", mensagem: "Temporada não encontrada." } });
+    renderizar(<TelaTemporadas />, { usuario: USUARIO });
+    await u.click(await screen.findByRole("button", { name: "Editar" }));
+    const painel = await screen.findByRole("dialog");
+    await u.click(within(painel).getByRole("button", { name: "Remover temporada" }));
+    await u.click(within(painel).getByRole("button", { name: "Confirmar remoção" }));
+    expect(await within(painel).findByRole("alert")).toHaveTextContent("Temporada não encontrada.");
+  });
+
+  test("temporada com percentual e tabela salva em modo tabela sem perder o percentual", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/tarifas/temporadas": [MISTA], "GET /api/categorias": [STD], "PUT /api/tarifas/temporadas": MISTA });
+    renderizar(<TelaTemporadas />, { usuario: USUARIO });
+    await u.click(await screen.findByRole("button", { name: "Editar" }));
+    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(puts("/api/tarifas/temporadas")).toHaveLength(1));
+    expect(puts("/api/tarifas/temporadas")[0]!.corpo).toMatchObject({ id: "t3", percentual: 10 });
+  });
+
+  test("dias da semana: -100 desliga o salvar", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/tarifas/dias-semana": [] });
+    renderizar(<TelaDiasSemana />, { usuario: USUARIO });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled());
+    await u.clear(screen.getByLabelText("Domingo (%)"));
+    await u.type(screen.getByLabelText("Domingo (%)"), "-100");
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
+    expect(screen.getByText("O percentual deve ser maior que -100.")).toBeInTheDocument();
+  });
+});

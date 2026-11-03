@@ -39,7 +39,11 @@ type Plano = {
   valorNovo: Centavos;
   violacoes: Violacao[];
   ajusteManual: boolean;
+  /** Só quando o canal muda: o preço não muda, apenas o canal e a comissão guardada. */
+  trocaCanal?: { de: string; para: string; comissaoAntiga: number; comissaoNova: number; mensagem: string };
 };
+
+const pct = (n: number) => `${String(n).replace(".", ",")}%`;
 
 const mesmasCriancas = (a: Data[], b: Data[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
@@ -51,8 +55,14 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   }
   const categoriaId = m.categoriaId ?? atual.categoriaId;
   const canal = m.canal ?? atual.canal;
-  if (canal !== atual.canal && !(await listarCanais(c)).some((x) => x.nome === canal)) {
-    throw new ErroDominio("CANAL_INEXISTENTE", `O canal "${canal}" não está cadastrado. Escolha um canal existente.`, { canal });
+  let trocaCanal: Plano["trocaCanal"];
+  if (canal !== atual.canal) {
+    const novoCanal = (await listarCanais(c)).find((x) => x.nome === canal);
+    if (!novoCanal) throw new ErroDominio("CANAL_INEXISTENTE", `O canal "${canal}" não está cadastrado. Escolha um canal existente.`, { canal });
+    trocaCanal = {
+      de: atual.canal, para: canal, comissaoAntiga: atual.comissaoPercentual, comissaoNova: novoCanal.comissaoPercentual,
+      mensagem: `Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada (de ${pct(atual.comissaoPercentual)} para ${pct(novoCanal.comissaoPercentual)}).`,
+    };
   }
   const chegada = m.chegada ?? atual.chegada;
   const saida = m.saida ?? atual.saida;
@@ -98,9 +108,10 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
   }
 
   const recotarTudo =
-    categoriaId !== atual.categoriaId || canal !== atual.canal || adultos !== atual.adultos || !mesmasCriancas(criancasNascimento, atual.criancasNascimento);
+    categoriaId !== atual.categoriaId || adultos !== atual.adultos || !mesmasCriancas(criancasNascimento, atual.criancasNascimento);
   const hospedes = { adultos, criancasNascimento };
-  const pedido = { categoriaId, chegada, saida, canal, hospedes, ignorarReservaId: atual.id };
+  // O canal não entra no preço: noites novas (período maior) seguem o canal em que a reserva foi vendida.
+  const pedido = { categoriaId, chegada, saida, canal: atual.canal, hospedes, ignorarReservaId: atual.id };
   const fixa = (d: Data) => (lancadas.has(d) ? congeladas.get(d) : undefined);
   const precisaCotar = periodo.some((d) => !fixa(d) && (recotarTudo || !congeladas.has(d)));
   const cotacao = precisaCotar ? await cotar(c, pedido) : undefined;
@@ -129,6 +140,7 @@ async function planejar(c: Contexto, reservaId: string, m: Mudanca): Promise<Pla
     valorNovo: noites.reduce((s, n) => s + n.valor, 0),
     violacoes,
     ajusteManual: manuais.length > 0,
+    ...(trocaCanal ? { trocaCanal } : {}),
   };
 }
 
@@ -136,9 +148,9 @@ export async function previaAlteracao(
   ctx: Contexto,
   reservaId: string,
   mudanca: Mudanca,
-): Promise<{ valorAntigo: Centavos; valorNovo: Centavos; noites: ValorNoite[] }> {
+): Promise<{ valorAntigo: Centavos; valorNovo: Centavos; noites: ValorNoite[]; trocaCanal?: NonNullable<Plano["trocaCanal"]> }> {
   const p = await planejar(ctx, reservaId, mudanca);
-  return { valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, noites: p.noites };
+  return { valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, noites: p.noites, ...(p.trocaCanal ? { trocaCanal: p.trocaCanal } : {}) };
 }
 
 const MSG_RESTRICAO = "Estas datas têm restrição de venda. Peça a autorização de um supervisor para continuar.";
@@ -183,9 +195,7 @@ export async function alterarReserva(
     }
 
     // Trocar de canal guarda a comissão atual do novo canal; sem troca, o percentual guardado não muda.
-    const comissao = novo.canal !== atual.canal
-      ? { canal: novo.canal, comissao_percentual: (await listarCanais(tx)).find((x) => x.nome === novo.canal)!.comissaoPercentual }
-      : {};
+    const comissao = p.trocaCanal ? { canal: novo.canal, comissao_percentual: p.trocaCanal.comissaoNova } : {};
     await tx.db.updateTable("reservas").set({
       ...comissao, quarto_id: novo.quartoId, categoria_id: novo.categoriaId, chegada: novo.chegada, saida: novo.saida,
       adultos: novo.adultos, criancas: JSON.stringify(novo.criancasNascimento), valor_sinal: valorSinal,
@@ -195,13 +205,15 @@ export async function alterarReserva(
       await tx.db.insertInto("reserva_noites").values({ reserva_id: atual.id, data: n.data, valor: n.valor, passos: JSON.stringify(n.passos) }).execute();
     }
 
-    const antes = { canal: atual.canal, quartoId: atual.quartoId, categoriaId: atual.categoriaId, chegada: atual.chegada, saida: atual.saida, adultos: atual.adultos, criancasNascimento: atual.criancasNascimento };
+    const antes = { canal: atual.canal, comissaoPercentual: atual.comissaoPercentual, quartoId: atual.quartoId, categoriaId: atual.categoriaId, chegada: atual.chegada, saida: atual.saida, adultos: atual.adultos, criancasNascimento: atual.criancasNascimento };
+    // O que fica gravado na reserva depois: com troca de canal, a comissão do novo canal; sem troca, a que já estava.
+    const depois = { ...novo, comissaoPercentual: p.trocaCanal ? p.trocaCanal.comissaoNova : atual.comissaoPercentual };
     await auditar(tx, {
       ator: usuario.id, acao: "reserva.alterar", alvoTipo: "reserva", alvoId: atual.id,
       ...(autorizado ? { motivo: autorizado.motivo, supervisorId: autorizado.supervisorId } : {}),
-      dados: { antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, valorSinal, ajusteManual: mudanca.precosManuais ?? [] },
+      dados: { antes, depois, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo, valorSinal, ajusteManual: mudanca.precosManuais ?? [] },
     });
-    await registrarEvento(tx, "hospedagem.ReservaAlterada", { reservaId: atual.id, antes, depois: novo, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo });
+    await registrarEvento(tx, "hospedagem.ReservaAlterada", { reservaId: atual.id, antes, depois, valorAntigo: p.valorAntigo, valorNovo: p.valorNovo });
     // Sinal recalculado pode já estar coberto pelo que foi pago.
     if (atual.estado === "pre_reserva") await confirmarSeSinalPago(tx, atual.id, usuario.id, { alteracao: true });
     const { noites: _n, total: _t, pago: _p, quartoNumero: _q, titular: _ti, acompanhantes: _a, ...reserva } = await obterReserva(tx, atual.id);

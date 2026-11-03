@@ -7,15 +7,15 @@ import { ErroAcao } from "../../componentes/ErroAcao";
 import { Dicas } from "../configuracoes/Dicas";
 import { ListaCadastro } from "../configuracoes/ListaCadastro";
 import { CampoPercentual } from "./CampoPercentual";
-import { aposSalvarTarifa, useCanais } from "./consultas";
+import { aposSalvarTarifa, CANAL_REFERENCIA, useCanais } from "./consultas";
+import { ConfirmarRemocao } from "./ConfirmarRemocao";
 
-export const CANAL_REFERENCIA = "Balcão";
 type Tipo = Canal["tipo"];
 export const ROTULO_TIPO_CANAL: Record<Tipo, string> = { direta: "Reserva direta", ota: "OTA", agencia: "Agência", passante: "Passante" };
 const TIPOS: Tipo[] = ["direta", "ota", "agencia", "passante"];
 const pct = (n: number) => `${String(n).replace(".", ",")}%`;
 
-function Painel({ item, fechar }: { item: Canal | null; fechar: () => void }) {
+function Painel({ item, todos, fechar }: { item: Canal | null; todos: Canal[]; fechar: () => void }) {
   const cliente = useQueryClient();
   const balcao = item?.nome === CANAL_REFERENCIA;
   const [nome, setNome] = useState(item?.nome ?? "");
@@ -25,7 +25,7 @@ function Painel({ item, fechar }: { item: Canal | null; fechar: () => void }) {
   const [comissao, setComissao] = useState<number | null>(item?.comissaoPercentual ?? 0);
 
   const motivos = [
-    ...(nome.trim() === "" ? ["Informe o nome do canal."] : []),
+    ...(nome.trim() === "" ? ["Informe o nome do canal."] : todos.some((c) => c.id !== item?.id && c.nome.toLowerCase() === nome.trim().toLowerCase()) ? ["Já existe um canal com esse nome. Edite o existente."] : []),
     ...(percentual === null ? ["Informe o percentual sobre o Balcão (use 0 para o mesmo preço)."] : []),
     ...(comissao === null ? ["Informe a comissão (use 0 se não houver)."] : comissao > 100 ? ["A comissão deve ficar entre 0 e 100."] : []),
     ...(percentual !== null && percentual <= -100 ? ["O percentual deve ser maior que -100."] : []),
@@ -42,8 +42,8 @@ function Painel({ item, fechar }: { item: Canal | null; fechar: () => void }) {
       }),
     onSuccess: aposMudar,
   });
-  const remover = useMutation<unknown, Error>({
-    mutationFn: () => chamarApi("DELETE", `/api/tarifas/canais/${encodeURIComponent(item!.id)}`),
+  const remover = useMutation<unknown, Error, void>({
+    mutationFn: () => chamarApi<unknown>("DELETE", `/api/tarifas/canais/${encodeURIComponent(item!.id)}`),
     onSuccess: aposMudar,
   });
 
@@ -54,7 +54,7 @@ function Painel({ item, fechar }: { item: Canal | null; fechar: () => void }) {
         <input value={nome} disabled={balcao} onChange={(e) => setNome(e.target.value)} />
       </label>
       {balcao && <p className="tarifas__aviso">O Balcão é a referência de preço: não pode ser renomeado nem removido.</p>}
-      <CampoPercentual rotulo="Percentual sobre o Balcão (%)" aceitaNegativo valor={percentual} aoMudar={setPercentual} />
+      <CampoPercentual rotulo="Percentual sobre o Balcão (%)" aceitaNegativo desabilitado={balcao} valor={percentual} aoMudar={setPercentual} />
       <label className="pousada__marcar">
         <input type="checkbox" checked={exigeSinal} onChange={(e) => setExigeSinal(e.target.checked)} />
         Exige sinal
@@ -73,13 +73,10 @@ function Painel({ item, fechar }: { item: Canal | null; fechar: () => void }) {
         <Botao type="submit" disabled={motivos.length > 0 || salvar.isPending}>Salvar</Botao>
       </div>
       {item && (
-        <div className="cq__ativo">
-          <ErroAcao erro={remover.error} />
-          <Botao variante="contorno" disabled={balcao || remover.isPending} onClick={() => remover.mutate()}>
-            Remover canal
-          </Botao>
+        <>
+          <ConfirmarRemocao rotulo="Remover canal" aviso={`Remover o canal ${item.nome}? Isso não pode ser desfeito.`} remocao={remover} desabilitado={balcao} />
           {balcao && <p className="tarifas__aviso">O Balcão não pode ser removido.</p>}
-        </div>
+        </>
       )}
     </form>
   );
@@ -101,7 +98,7 @@ export function TelaCanais() {
           { titulo: "Comissão", celula: (c) => pct(c.comissaoPercentual) },
           { titulo: "Sinal", celula: (c) => (c.exigeSinal ? "Exige" : "Não exige") },
         ]}
-        renderPainel={(p) => <Painel item={p.item} fechar={p.fechar} />}
+        renderPainel={(p) => <Painel item={p.item} todos={q.data ?? []} fechar={p.fechar} />}
       />
     </>
   );

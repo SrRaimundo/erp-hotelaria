@@ -112,3 +112,20 @@ describe("alterar reserva pela gaveta", () => {
     expect(screen.queryByRole("button", { name: "Alterar" })).not.toBeInTheDocument();
   });
 });
+
+describe("trocar o canal não muda preços", () => {
+  test("a janela avisa ao escolher outro canal e a prévia mostra a mensagem do servidor", async () => {
+    const u = userEvent.setup();
+    const mensagem = "Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada (de 0% para 12%).";
+    montar(criarReserva(), { "GET /api/reservas/r1/previa": { ...previa, valorNovo: previa.valorAntigo, trocaCanal: { mensagem } } });
+    const form = await abrirForm(u);
+    expect(within(form).queryByText(/Trocar o canal não muda os preços/)).not.toBeInTheDocument();
+    const canal = within(form).getByLabelText("Canal");
+    await within(form).findByRole("option", { name: "Booking" });
+    await u.selectOptions(canal, "Booking");
+    expect(within(form).getByText(/Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada passam a ser os do novo canal/)).toBeInTheDocument();
+    await u.click(within(form).getByRole("button", { name: "Ver prévia" }));
+    const janela = await screen.findByRole("dialog", { name: "Alterar reserva" });
+    expect(await within(janela).findByText(mensagem)).toBeInTheDocument();
+  });
+});

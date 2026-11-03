@@ -15,7 +15,8 @@ A tela tem abas, cada uma com rota própria (`/reservas/tarifas/<aba>`): Tabela 
 - Campos novos: `tipo` (`direta`, `ota`, `agencia`, `passante`) e `comissaoPercentual` (0 a 100, até duas casas).
 - Canais existentes ficam com tipo `direta` e comissão 0; o dono ajusta na tela. `Balcão` continua a referência de preço e não pode ser removido.
 - A reserva guarda `comissao_percentual` no momento em que é criada. Mudar o percentual do canal depois não altera reservas existentes. Reservas anteriores à migração ficam com 0.
-- Alterar o canal da reserva recalcula a comissão guardada com o percentual atual do novo canal.
+- Alterar o canal da reserva troca o canal e recalcula a comissão guardada com o percentual atual do novo canal. Os preços da reserva não mudam (descontos, ajustes manuais e noites já lançadas ficam como estão); a prévia e a janela de alteração avisam disso. A auditoria registra canal e comissão antes e depois.
+- O simulador exige `reservas.gerenciar`. Temporadas podem ser removidas (DELETE, com auditoria); reservas existentes guardam as noites já calculadas e não mudam de preço.
 - Comissão incide sobre a receita de hospedagem da reserva.
 
 ## 4. Relatório Reservas por canal
@@ -30,7 +31,7 @@ Todas seguem o padrão de Configurações: lista, `Gaveta` para editar, mensagen
 - **Temporadas:** nome, período, tabela própria ou percentual; aviso de sobreposição, se o servidor recusar.
 - **Dias da semana:** sete percentuais.
 - **Canais:** nome, percentual sobre o Balcão, tipo, comissão.
-- **Ocupação:** faixas (a partir de x%, ajuste y%).
+- **Ocupação:** faixas (acima de x%, ajuste y%): a faixa vale quando a ocupação ultrapassa x.
 - **Crianças:** faixas de idade e cobrança.
 - **Pacotes:** nome, período, categoria, mínimo de noites, preço.
 - **Restrições:** por data e categoria, conforme a rota existente.

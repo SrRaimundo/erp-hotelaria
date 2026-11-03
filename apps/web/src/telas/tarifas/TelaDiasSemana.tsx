@@ -18,7 +18,9 @@ export function TelaDiasSemana() {
     if (q.data) setValores(DIAS.map((_, d) => q.data!.find((x) => x.dia === d)?.percentual ?? 0));
   }, [q.data]);
 
-  const motivos = valores.some((v) => v === null) ? ["Informe um percentual válido para todos os dias (use 0 para nenhum ajuste)."] : [];
+  const motivos = valores.some((v) => v === null)
+    ? ["Informe um percentual válido para todos os dias (use 0 para nenhum ajuste)."]
+    : valores.some((v) => v! <= -100) ? ["O percentual deve ser maior que -100."] : [];
   const salvar = useMutation<unknown, Error>({
     // A rota guarda um dia por vez: vão os sete, sempre, para a tela e o servidor ficarem iguais.
     mutationFn: async () => {

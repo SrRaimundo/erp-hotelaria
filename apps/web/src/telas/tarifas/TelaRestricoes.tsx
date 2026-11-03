@@ -9,7 +9,7 @@ import { ListaCadastro } from "../configuracoes/ListaCadastro";
 import { dataValida } from "../nova-reserva/CamposAcomodacao";
 import { aposSalvarTarifa, useCategoriasTarifa, useRegra, type Restricao } from "./consultas";
 
-function Painel({ item, categoriaId, fechar }: { item: Restricao | null; categoriaId: string; fechar: () => void }) {
+function Painel({ item, categoriaId, existentes, fechar }: { item: Restricao | null; categoriaId: string; existentes: Restricao[]; fechar: () => void }) {
   const cliente = useQueryClient();
   const [data, setData] = useState(item?.data ?? "");
   const [min, setMin] = useState(item?.minNoites == null ? "" : String(item.minNoites));
@@ -18,7 +18,7 @@ function Painel({ item, categoriaId, fechar }: { item: Restricao | null; categor
   const [venda, setVenda] = useState(item?.fechadoVenda ?? false);
   const nMin = min.trim() === "" ? null : /^\d+$/.test(min.trim()) && Number(min) >= 1 ? Number(min) : undefined;
   const motivos = [
-    ...(!dataValida(data) ? ["Informe a data."] : []),
+    ...(!dataValida(data) ? ["Informe a data."] : !item && existentes.some((r) => r.data === data) ? ["Essa data já tem restrição. Edite a existente."] : []),
     ...(nMin === undefined ? ["O mínimo de noites deve ser 1 ou mais (ou deixe vazio)."] : []),
   ];
   const salvar = useMutation<unknown, Error>({
@@ -95,7 +95,7 @@ export function TelaRestricoes() {
             { titulo: "Data", celula: (r) => formatarData(r.data, true) },
             { titulo: "Regra", celula: resumo },
           ]}
-          renderPainel={(p) => <Painel item={p.item} categoriaId={categoriaId} fechar={p.fechar} />}
+          renderPainel={(p) => <Painel item={p.item} categoriaId={categoriaId} existentes={q.data ?? []} fechar={p.fechar} />}
         />
       )}
     </>

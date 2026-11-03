@@ -77,13 +77,20 @@ export function TelaCriancas() {
   const lista = q.data ?? [];
   return (
     <>
-      <ErroAcao erro={q.error} />
+      {q.isError && (
+        <div className="cq__ativo">
+          <ErroAcao erro={q.error} />
+          <p className="tarifas__aviso">Enquanto a lista não carregar, não dá para criar nem editar faixas: salvar apagaria as que já existem.</p>
+          <Botao variante="contorno" disabled={q.isFetching} onClick={() => void q.refetch()}>Tentar de novo</Botao>
+        </div>
+      )}
       <p className="tarifas__aviso">Sem faixa para a idade da criança, a cotação é recusada. Quem tem a idade de adulto da pousada ou mais conta como adulto.</p>
       <ListaCadastro<FaixaCrianca>
         titulo="Crianças"
         itens={lista}
         chave={(f) => `${f.idadeMin}-${f.idadeMax}`}
         rotuloNovo="+ Nova faixa"
+        bloqueado={!q.isSuccess}
         colunas={[
           { titulo: "Idade", celula: (f) => `${f.idadeMin} a ${f.idadeMax} anos` },
           { titulo: "Cobrança", celula: cobranca },

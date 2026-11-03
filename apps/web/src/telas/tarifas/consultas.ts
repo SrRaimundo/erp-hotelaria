@@ -2,6 +2,8 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { chamarApi } from "../../api/cliente";
 import type { Canal, Categoria } from "../../api/tipos";
 
+export const CANAL_REFERENCIA = "Balcão";
+
 export type PorAdultos = { 1: number; 2: number; 3: number };
 export type TabelaPreco = { porAdultos: PorAdultos; adultoExtra: number };
 export type TabelaBaseCat = TabelaPreco & { categoriaId: string; piso: number | null; teto: number | null };

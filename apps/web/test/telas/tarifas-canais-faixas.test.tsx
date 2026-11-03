@@ -77,6 +77,9 @@ describe("aba Canais", () => {
     renderizar(<TelaCanais />, { usuario: USUARIO });
     const painel = await editar(u, "Booking");
     await u.click(within(painel).getByRole("button", { name: "Remover canal" }));
+    expect(feitas("DELETE", "/api/tarifas/canais/k2")).toHaveLength(0);
+    expect(within(painel).getByText("Remover o canal Booking? Isso não pode ser desfeito.")).toBeInTheDocument();
+    await u.click(within(painel).getByRole("button", { name: "Confirmar remoção" }));
     await vi.waitFor(() => expect(feitas("DELETE", "/api/tarifas/canais/k2")).toHaveLength(1));
     await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -88,6 +91,7 @@ describe("aba Canais", () => {
     renderizar(<TelaCanais />, { usuario: USUARIO });
     const painel = await editar(u, "Booking");
     await u.click(within(painel).getByRole("button", { name: "Remover canal" }));
+    await u.click(within(painel).getByRole("button", { name: "Confirmar remoção" }));
     expect(await within(painel).findByRole("alert")).toHaveTextContent(mensagem);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
@@ -111,6 +115,7 @@ describe("aba Canais", () => {
     expect(within(painel).getByLabelText("Nome")).toBeDisabled();
     expect(within(painel).getByRole("button", { name: "Remover canal" })).toBeDisabled();
     expect(within(painel).getByText("O Balcão não pode ser removido.")).toBeInTheDocument();
+    expect(within(painel).getByLabelText("Percentual sobre o Balcão (%)")).toBeDisabled();
     await u.type(within(painel).getByLabelText("Comissão (%)"), "3");
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     await vi.waitFor(() => expect(feitas("PUT", "/api/tarifas/canais")).toHaveLength(1));
@@ -125,6 +130,20 @@ describe("aba Canais", () => {
     const painel = await editar(u, "Balcão");
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     expect(await within(painel).findByRole("alert")).toHaveTextContent(mensagem);
+  });
+});
+
+describe("aba Canais: nome repetido", () => {
+  test("novo canal com nome já existente (mesmo em outra caixa) não salva e explica", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa({ "GET /api/tarifas/canais": [{ id: "k1", nome: "Balcão", percentual: 0, exigeSinal: false, tipo: "direta", comissaoPercentual: 0 }] });
+    renderizar(<TelaCanais />, { usuario: USUARIO });
+    await screen.findByText("Balcão");
+    await u.click(screen.getByRole("button", { name: "+ Novo" }));
+    const painel = await screen.findByRole("dialog");
+    await u.type(within(painel).getByLabelText("Nome"), "balcão");
+    expect(within(painel).getByText("Já existe um canal com esse nome. Edite o existente.")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
   });
 });
 
@@ -146,7 +165,7 @@ describe("aba Ocupação", () => {
     await screen.findByText("80%");
     await u.click(screen.getByRole("button", { name: "+ Nova faixa" }));
     const painel = await screen.findByRole("dialog");
-    await u.type(within(painel).getByLabelText("A partir de (% de ocupação)"), "65");
+    await u.type(within(painel).getByLabelText("Acima de (% de ocupação)"), "65");
     await u.type(within(painel).getByLabelText("Ajuste (%)"), "-5");
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     await vi.waitFor(() => expect(feitas("PUT", "/api/tarifas/faixas-ocupacao")).toHaveLength(1));
@@ -182,14 +201,48 @@ describe("aba Ocupação", () => {
     await screen.findByText("80%");
     await u.click(screen.getByRole("button", { name: "+ Nova faixa" }));
     const painel = await screen.findByRole("dialog");
-    await u.type(within(painel).getByLabelText("A partir de (% de ocupação)"), "80");
+    await u.type(within(painel).getByLabelText("Acima de (% de ocupação)"), "80");
     await u.type(within(painel).getByLabelText("Ajuste (%)"), "1");
     expect(within(painel).getByText("Já existe uma faixa que começa nessa ocupação.")).toBeInTheDocument();
     expect(within(painel).getByRole("button", { name: "Salvar" })).toBeDisabled();
-    await u.clear(within(painel).getByLabelText("A partir de (% de ocupação)"));
-    await u.type(within(painel).getByLabelText("A partir de (% de ocupação)"), "90");
+    await u.clear(within(painel).getByLabelText("Acima de (% de ocupação)"));
+    await u.type(within(painel).getByLabelText("Acima de (% de ocupação)"), "90");
     await u.click(within(painel).getByRole("button", { name: "Salvar" }));
     expect(await within(painel).findByRole("alert")).toHaveTextContent("Faixas inválidas.");
+  });
+});
+
+describe("listas que substituem tudo ficam bloqueadas até a leitura dar certo", () => {
+  test.each([
+    ["Ocupação", TelaOcupacao, "/api/tarifas/faixas-ocupacao", "+ Nova faixa"],
+    ["Crianças", TelaCriancas, "/api/tarifas/faixas-crianca", "+ Nova faixa"],
+  ] as const)("%s: enquanto carrega o botão fica desligado; se falhar, mostra o erro e Tentar de novo libera", async (_nome, Tela, rota, novo) => {
+    const u = userEvent.setup();
+    let tentativas = 0;
+    instalarApiFalsa({
+      [`GET ${rota}`]: () => {
+        tentativas++;
+        return tentativas === 1 ? { __status: 500, codigo: "ERRO_INTERNO", mensagem: "Falha ao ler as faixas." } : [];
+      },
+      [`PUT ${rota}`]: [],
+    });
+    renderizar(<Tela />, { usuario: USUARIO });
+    expect(screen.getByRole("button", { name: novo })).toBeDisabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao ler as faixas.");
+    expect(screen.getByRole("button", { name: novo })).toBeDisabled();
+    expect(chamadas.filter((c) => c.metodo === "PUT")).toHaveLength(0);
+    await u.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: novo })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
+    expect(tentativas).toBe(2);
+  });
+
+  test("Ocupação diz 'acima de' (a faixa vale só acima do limite)", async () => {
+    instalarApiFalsa({ "GET /api/tarifas/faixas-ocupacao": [{ acimaDe: 80, percentual: 25 }] });
+    renderizar(<TelaOcupacao />, { usuario: USUARIO });
+    expect(await screen.findByRole("columnheader", { name: "Acima de" })).toBeInTheDocument();
+    expect(screen.getByText(/uma noite com exatamente 80% de ocupação não recebe o ajuste/)).toBeInTheDocument();
+    expect(screen.queryByText(/a partir de/i)).not.toBeInTheDocument();
   });
 });
 

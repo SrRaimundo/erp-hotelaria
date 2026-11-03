@@ -19,7 +19,7 @@ function Painel({ item, todas, fechar }: { item: FaixaOcupacao | null; todas: Fa
   const [percentual, setPercentual] = useState<number | null>(item?.percentual ?? null);
   const outras = item ? todas.filter((f) => f.acimaDe !== item.acimaDe) : todas;
   const motivos = [
-    ...(acimaDe === null ? ["Informe a partir de quanto de ocupação a faixa vale."] : acimaDe > 100 ? ["A ocupação vai de 0 a 100%."] : outras.some((f) => f.acimaDe === acimaDe) ? ["Já existe uma faixa que começa nessa ocupação."] : []),
+    ...(acimaDe === null ? ["Informe acima de quanto de ocupação a faixa vale."] : acimaDe > 100 ? ["A ocupação vai de 0 a 100%."] : outras.some((f) => f.acimaDe === acimaDe) ? ["Já existe uma faixa que começa nessa ocupação."] : []),
     ...(percentual === null ? ["Informe o ajuste."] : []),
   ];
   const enviar = useMutation<unknown, Error, FaixaOcupacao[]>({
@@ -31,7 +31,7 @@ function Painel({ item, todas, fechar }: { item: FaixaOcupacao | null; todas: Fa
   });
   return (
     <form className="formulario" onSubmit={(e) => { e.preventDefault(); if (motivos.length === 0) enviar.mutate(ordenar([...outras, { acimaDe: acimaDe!, percentual: percentual! }])); }}>
-      <CampoPercentual rotulo="A partir de (% de ocupação)" valor={acimaDe} aoMudar={setAcimaDe} />
+      <CampoPercentual rotulo="Acima de (% de ocupação)" valor={acimaDe} aoMudar={setAcimaDe} />
       <CampoPercentual rotulo="Ajuste (%)" aceitaNegativo valor={percentual} aoMudar={setPercentual} />
       <Dicas motivos={motivos} />
       <ErroAcao erro={enviar.error} />
@@ -52,15 +52,22 @@ export function TelaOcupacao() {
   const lista = q.data ?? [];
   return (
     <>
-      <ErroAcao erro={q.error} />
-      <p className="tarifas__aviso">Quanto mais cheia a categoria na noite, maior o ajuste. Vale a faixa mais alta que a ocupação alcançou.</p>
+      {q.isError && (
+        <div className="cq__ativo">
+          <ErroAcao erro={q.error} />
+          <p className="tarifas__aviso">Enquanto a lista não carregar, não dá para criar nem editar faixas: salvar apagaria as que já existem.</p>
+          <Botao variante="contorno" disabled={q.isFetching} onClick={() => void q.refetch()}>Tentar de novo</Botao>
+        </div>
+      )}
+      <p className="tarifas__aviso">Quanto mais cheia a categoria na noite, maior o ajuste. Vale a faixa mais alta que a ocupação ultrapassou: com a faixa "acima de 80%", uma noite com exatamente 80% de ocupação não recebe o ajuste.</p>
       <ListaCadastro<FaixaOcupacao>
         titulo="Ocupação"
         itens={lista}
         chave={(f) => String(f.acimaDe)}
         rotuloNovo="+ Nova faixa"
+        bloqueado={!q.isSuccess}
         colunas={[
-          { titulo: "A partir de", celula: (f) => pct(f.acimaDe) },
+          { titulo: "Acima de", celula: (f) => pct(f.acimaDe) },
           { titulo: "Ajuste", celula: (f) => pct(f.percentual) },
         ]}
         renderPainel={(p) => <Painel item={p.item} todas={lista} fechar={p.fechar} />}

@@ -8,7 +8,8 @@ import { salvarHospede } from "../../src/nucleo/hospedes.js";
 import type { UsuarioSessao } from "../../src/nucleo/permissoes.js";
 import { carregarUsuarioSessao } from "../../src/nucleo/sessoes.js";
 import { calcularComissao } from "../../src/tarifas/comissao.js";
-import { listarCanais, salvarCanal, salvarTabelaBase } from "../../src/tarifas/regras.js";
+import { previaAlteracao } from "../../src/hospedagem/alteracao.js";
+import { listarCanais, listarTemporadas, salvarCanal, salvarTabelaBase, salvarTemporada } from "../../src/tarifas/regras.js";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 let ctx: Awaited<ReturnType<typeof criarContextoTeste>>;
@@ -135,5 +136,74 @@ describe("canal em uso", () => {
   test("remover exige tarifas.gerenciar", async () => {
     const rec = await entrarComo(ctx, "recepcao");
     expect((await app.inject({ method: "DELETE", url: "/api/tarifas/canais/x", headers: rec })).statusCode).toBe(403);
+  });
+});
+
+describe("trocar o canal não mexe nos preços", () => {
+  test("noites negociadas ficam como estão, a prévia avisa e a auditoria guarda canal e comissão antigos e novos", async () => {
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false, tipo: "ota", comissaoPercentual: 15 }, "u1");
+    await salvarCanal(ctx, { nome: "Site", percentual: 20, exigeSinal: false, comissaoPercentual: 3 }, "u1");
+    const r = await criarReserva(ctx, { ...dados, canal: "Booking" }, usuario);
+    // Preço negociado na criação (desconto, ajuste manual...): fica nas noites guardadas.
+    await ctx.db.updateTable("reserva_noites").set({ valor: 12345 }).where("reserva_id", "=", r.id).execute();
+
+    const previa = await previaAlteracao(ctx, r.id, { canal: "Site" });
+    expect(previa.valorNovo).toBe(previa.valorAntigo);
+    expect(previa.noites.map((n) => n.valor)).toEqual([12345, 12345]);
+    expect(previa.trocaCanal).toMatchObject({ de: "Booking", para: "Site", comissaoAntiga: 15, comissaoNova: 3 });
+    expect(previa.trocaCanal!.mensagem).toBe("Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada (de 15% para 3%).");
+    expect((await previaAlteracao(ctx, r.id, { adultos: 1 })).trocaCanal).toBeUndefined();
+
+    await alterarReserva(ctx, r.id, { canal: "Site" }, usuario);
+    const depois = await obterReserva(ctx, r.id);
+    expect(depois).toMatchObject({ canal: "Site", comissaoPercentual: 3, total: 24690 });
+    expect(depois.noites.map((n) => n.valor)).toEqual([12345, 12345]);
+
+    const aud = await ctx.db.selectFrom("auditoria").select("dados").where("acao", "=", "reserva.alterar").where("alvo_id", "=", r.id).executeTakeFirstOrThrow();
+    const dadosAud = JSON.parse(aud.dados);
+    expect(dadosAud.antes).toMatchObject({ canal: "Booking", comissaoPercentual: 15 });
+    expect(dadosAud.depois).toMatchObject({ canal: "Site", comissaoPercentual: 3 });
+  });
+});
+
+describe("remover temporada", () => {
+  test("DELETE remove a temporada com auditoria, exige tarifas.gerenciar e não mexe em reservas existentes", async () => {
+    const t = await salvarTemporada(ctx, { nome: "Alta", inicio: "2026-11-01", fim: "2026-11-30", prioridade: 1, percentual: 50 }, "u1");
+    const r = await criarReserva(ctx, dados, usuario);
+    const antes = (await obterReserva(ctx, r.id)).noites.map((n) => n.valor);
+    expect(antes).toEqual([45000, 45000]);
+    const rec = await entrarComo(ctx, "recepcao");
+    expect((await app.inject({ method: "DELETE", url: `/api/tarifas/temporadas/${t.id}`, headers: rec })).statusCode).toBe(403);
+    expect((await app.inject({ method: "DELETE", url: `/api/tarifas/temporadas/${t.id}`, headers: adm })).statusCode).toBe(200);
+    expect(await listarTemporadas(ctx)).toEqual([]);
+    expect((await obterReserva(ctx, r.id)).noites.map((n) => n.valor)).toEqual(antes);
+    const aud = await ctx.db.selectFrom("auditoria").select("alvo_id").where("acao", "=", "tarifas.temporada_removida").execute();
+    expect(aud).toEqual([{ alvo_id: t.id }]);
+    const de_novo = await app.inject({ method: "DELETE", url: `/api/tarifas/temporadas/${t.id}`, headers: adm });
+    expect(de_novo.statusCode).toBe(422);
+    expect(de_novo.json()).toMatchObject({ codigo: "TEMPORADA_NAO_ENCONTRADA" });
+  });
+});
+
+describe("nome de canal e simulação", () => {
+  test("nome repetido (inclusive só em caixa diferente) vira CANAL_DUPLICADO, em criação e em renomeação", async () => {
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false }, "u1");
+    const site = await salvarCanal(ctx, { nome: "Site", percentual: 0, exigeSinal: false }, "u1");
+    const novo = await put({ nome: "booking", percentual: 0, exigeSinal: false });
+    expect(novo.statusCode).toBe(422);
+    expect(novo.json()).toMatchObject({ codigo: "CANAL_DUPLICADO" });
+    const renomear = await put({ id: site.id, nome: "Booking", percentual: 0, exigeSinal: false });
+    expect(renomear.statusCode).toBe(422);
+    expect(renomear.json()).toMatchObject({ codigo: "CANAL_DUPLICADO" });
+    expect((await listarCanais(ctx)).map((c) => c.nome)).toEqual(["Balcão", "Booking", "Site"]);
+  });
+
+  test("simular exige reservas.gerenciar", async () => {
+    const gov = await entrarComo(ctx, "governanca");
+    const r = await app.inject({
+      method: "POST", url: "/api/tarifas/simular", headers: gov,
+      payload: { categoriaId: dados.categoriaId, chegada: "2026-11-12", saida: "2026-11-13", hospedes: { adultos: 2 }, canal: "Balcão" },
+    });
+    expect(r.statusCode).toBe(403);
   });
 });
