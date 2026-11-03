@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCanais } from "../tarifas/consultas";
 import type { ReservaDetalhe } from "../../api/tipos";
 import { Botao } from "../../componentes/Botao";
 import { ErroAcao } from "../../componentes/ErroAcao";
@@ -16,6 +17,8 @@ export function JanelaAlterarReserva({ reserva, aoFechar }: Props) {
   const [saida, setSaida] = useState(reserva.saida);
   const [adultos, setAdultos] = useState(String(reserva.adultos));
   const [criancas, setCriancas] = useState<string[]>(reserva.criancasNascimento);
+  const [canal, setCanal] = useState(reserva.canal);
+  const canaisQ = useCanais();
   const [movimento, setMovimento] = useState<Movimento | null>(null);
 
   const nAdultos = adultosValidos(adultos);
@@ -32,6 +35,7 @@ export function JanelaAlterarReserva({ reserva, aoFechar }: Props) {
   if (saida !== reserva.saida) mudou.saida = saida;
   if (nAdultos !== null && nAdultos !== reserva.adultos) mudou.adultos = nAdultos;
   if (criancas.join(",") !== reserva.criancasNascimento.join(",")) mudou.criancasNascimento = criancas;
+  if (canal !== reserva.canal) mudou.canal = canal;
   const semMudanca = Object.keys(mudou).length === 0;
 
   if (movimento) return <JanelaPreviaAlteracao movimento={movimento} aoFechar={aoFechar} />;
@@ -51,6 +55,19 @@ export function JanelaAlterarReserva({ reserva, aoFechar }: Props) {
           <label htmlFor="alt-adultos">Adultos</label>
           <input id="alt-adultos" type="number" min={1} value={adultos} onChange={(e) => setAdultos(e.target.value)} />
         </div>
+        <div className="campo">
+          <label htmlFor="alt-canal">Canal</label>
+          <select id="alt-canal" value={canal} onChange={(e) => setCanal(e.target.value)}>
+            {/* O canal atual aparece mesmo que a lista ainda não tenha chegado. */}
+            {!(canaisQ.data ?? []).some((c) => c.nome === reserva.canal) && <option value={reserva.canal}>{reserva.canal}</option>}
+            {(canaisQ.data ?? []).map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+          </select>
+        </div>
+        {canal !== reserva.canal && (
+          <p className="reserva-suave" role="status">
+            Trocar o canal não muda os preços da reserva: só o canal e a comissão guardada passam a ser os do novo canal.
+          </p>
+        )}
         {criancas.map((nasc, i) => (
           <div className="campo" key={i}>
             <label htmlFor={`alt-crianca-${i}`}>{`Nascimento da criança ${i + 1}`}</label>

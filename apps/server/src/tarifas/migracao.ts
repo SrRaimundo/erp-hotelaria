@@ -1,5 +1,18 @@
 import type { Migracao } from "../shared/banco.js";
 
+/**
+ * Número 0710, depois do 0700_financeiro na ordem natural. O Migrator roda com allowUnorderedMigrations
+ * (ver shared/banco.ts), então uma base que já executou 0710 ainda aceita o 0700 pendente.
+ */
+export const migracaoTarifasCanaisComissao: Migracao = {
+  nome: "0710_tarifas_canais_comissao",
+  async up(db) {
+    await db.schema.alterTable("canais").addColumn("tipo", "text", (c) => c.notNull().defaultTo("direta")).execute();
+    await db.schema.alterTable("canais").addColumn("comissao_percentual", "real", (c) => c.notNull().defaultTo(0)).execute();
+    await db.schema.alterTable("reservas").addColumn("comissao_percentual", "real", (c) => c.notNull().defaultTo(0)).execute();
+  },
+};
+
 export const migracaoTarifas: Migracao = {
   nome: "0300_tarifas",
   async up(db) {

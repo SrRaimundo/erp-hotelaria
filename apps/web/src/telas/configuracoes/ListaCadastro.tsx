@@ -18,6 +18,8 @@ type Props<T> = {
   aoMostrarInativos?: (mostrar: boolean) => void;
   /** Marca a linha como desativada (e mostra a etiqueta); sem ela nenhuma linha é desativada. */
   inativo?: (item: T) => boolean;
+  /** Desliga criar e editar (ex.: a lista ainda não carregou e salvar apagaria o que há no servidor). */
+  bloqueado?: boolean;
   /** Texto do botão de criação (padrão "+ Novo"). */
   rotuloNovo?: string;
   /** `item` é null ao criar; `fechar` fecha o painel (chamar depois de salvar). */
@@ -26,7 +28,7 @@ type Props<T> = {
 
 /** Padrão das telas de cadastro: tabela, "+ Novo", filtro de desativados e edição na Gaveta. */
 export function ListaCadastro<T>({
-  titulo, itens, colunas, chave, aoNovo, aoEditar, mostrarInativos = false, aoMostrarInativos, rotuloNovo = "+ Novo", inativo, renderPainel,
+  titulo, itens, colunas, chave, aoNovo, aoEditar, mostrarInativos = false, aoMostrarInativos, rotuloNovo = "+ Novo", inativo, bloqueado = false, renderPainel,
 }: Props<T>) {
   // `aberto` guarda o item em edição; `{ item: null }` é o painel de criação.
   const [aberto, setAberto] = useState<{ item: T | null } | null>(null);
@@ -42,6 +44,7 @@ export function ListaCadastro<T>({
           </label>
         )}
         <Botao
+          disabled={bloqueado}
           onClick={() => {
             aoNovo?.();
             setAberto({ item: null });
@@ -75,6 +78,7 @@ export function ListaCadastro<T>({
                     <Botao
                       variante="contorno"
                       tamanho="pequeno"
+                      disabled={bloqueado}
                       onClick={() => {
                         aoEditar?.(item);
                         setAberto({ item });

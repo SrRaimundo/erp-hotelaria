@@ -65,13 +65,35 @@ describe("catálogo", () => {
     expect(screen.getByRole("link", { name: /Lista de check-in/ })).toHaveAttribute("href", "/relatorios/check-in");
     expect(screen.getByText(/Chegadas do dia/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Fechamento de caixa/ })).not.toBeInTheDocument();
-    for (const nome of ["Resumo do dia", "Previsão de ocupação", "Desempenho", "Reservas por canal"]) expect(screen.getByText(nome)).toBeInTheDocument();
+    for (const nome of ["Resumo do dia", "Previsão de ocupação", "Desempenho"]) expect(screen.getByText(nome)).toBeInTheDocument();
+    // Reservas por canal saiu do "Em breve" e virou cartão
+    expect(screen.getByRole("link", { name: /Reservas por canal/ })).toHaveAttribute("href", "/relatorios/canais");
+    expect(screen.getAllByText("Reservas por canal")).toHaveLength(1);
     await aguardarConsultas(r.cliente);
   });
 
   test("com caixa.operar aparece o cartão de caixa", async () => {
     const r = renderizar(<Rotas />, { rota: "/relatorios", usuario: { permissoes: ["reservas.gerenciar", "caixa.operar"] } });
     expect(screen.getByRole("link", { name: /Fechamento de caixa/ })).toBeInTheDocument();
+    await aguardarConsultas(r.cliente);
+  });
+});
+
+describe("relatório por canal", () => {
+  test("filtro de período sem turno; datas viram consulta ao servidor", async () => {
+    instalarApiFalsa({ "GET /api/relatorios/canais": completo });
+    const r = renderizar(<Rotas />, { rota: "/relatorios/canais", usuario: { permissoes: ["reservas.gerenciar"] } });
+    await screen.findByRole("table");
+    expect(screen.queryByLabelText("Turno")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("De"), { target: { value: "2026-11-01" } });
+    fireEvent.change(screen.getByLabelText("Até"), { target: { value: "2026-11-15" } });
+    await waitFor(() => expect(chamadas.some((c) => c.caminho === "/api/relatorios/canais?inicio=2026-11-01&fim=2026-11-15")).toBe(true));
+    await aguardarConsultas(r.cliente);
+  });
+
+  test("sem reservas.gerenciar o cartão não aparece", async () => {
+    const r = renderizar(<Rotas />, { rota: "/relatorios", usuario: { permissoes: ["caixa.operar"] } });
+    expect(screen.queryByRole("link", { name: /Reservas por canal/ })).not.toBeInTheDocument();
     await aguardarConsultas(r.cliente);
   });
 });

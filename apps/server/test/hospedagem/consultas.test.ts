@@ -11,7 +11,7 @@ import type { UsuarioSessao } from "../../src/nucleo/permissoes.js";
 import { salvarConfig } from "../../src/nucleo/pousada.js";
 import { criarQuarto, mudarSituacaoQuarto } from "../../src/nucleo/quartos.js";
 import { carregarUsuarioSessao } from "../../src/nucleo/sessoes.js";
-import { salvarTabelaBase } from "../../src/tarifas/regras.js";
+import { salvarCanal, salvarTabelaBase } from "../../src/tarifas/regras.js";
 import { criarContextoTeste, entrarComo } from "../ajuda.js";
 
 let ctx: Awaited<ReturnType<typeof criarContextoTeste>>;
@@ -132,8 +132,29 @@ describe("painel do dia ampliado", () => {
       chegadas: 2, chegadasJaHospedadas: 1, saidas: 0, hospedados: 4, pessoasHospedadas: 9,
       quartosSujos: 0, quartosManutencao: 1, livresHoje: 3, ocupadosSemArrumacao: 0, defeitosAbertos: 0,
     });
+    // por canal: a soma é "hospedados" (só hospedadas), enquanto "ocupacao.ocupados" também conta pré-reservas e confirmadas do dia
+    expect(p.ocupadosPorCanal).toEqual([{ canal: "Balcão", quartos: 4 }]);
+    expect(p.ocupadosPorCanal.reduce((t, c) => t + c.quartos, 0)).toBe(p.numeros.hospedados);
+    expect(p.ocupacao.ocupados).toBeGreaterThan(p.numeros.hospedados);
     expect(p.chegadas).toHaveLength(2); // confirmada + já hospedada
     expect(p.chegadas.map((c) => c.estado).sort()).toEqual(["confirmada", "hospedada"]);
+  });
+
+  test("ocupados por canal: maior primeiro, empate por nome, canal vazio como 'Sem canal', outros estados fora", async () => {
+    await salvarCanal(ctx, { nome: "Booking", percentual: 0, exigeSinal: false }, "u1");
+    const h = async (canal: string) => reserva({ chegada: "2026-11-09", saida: "2026-11-12", canal }, "hospedada");
+    await h("Booking"); await h("Booking"); await h("Balcão");
+    const vazio = await h("Balcão");
+    await ctx.db.updateTable("reservas").set({ canal: "" }).where("id", "=", vazio.id).execute();
+    await reserva({ chegada: "2026-11-09", saida: "2026-11-12", canal: "Booking" }, "finalizada");
+    await reserva({ chegada: "2026-11-10", saida: "2026-11-12", canal: "Booking" }, "confirmada");
+    const p = await painelDoDia(ctx);
+    expect(p.ocupadosPorCanal).toEqual([{ canal: "Booking", quartos: 2 }, { canal: "Balcão", quartos: 1 }, { canal: "Sem canal", quartos: 1 }]);
+    expect(p.numeros.hospedados).toBe(4);
+  });
+
+  test("ocupados por canal vazio sem hospedados", async () => {
+    expect((await painelDoDia(ctx)).ocupadosPorCanal).toEqual([]);
   });
 
   test("chegada mostra sinal pendente e pendência de FNRH", async () => {

@@ -1,5 +1,5 @@
 /** Estrutura única do menu lateral: o MenuLateral e as rotas de "em breve" leem daqui. */
-export type ItemMenu = { para: string; rotulo: string; permissao: string };
+export type ItemMenu = { para: string; rotulo: string; permissao: string; /** Recuado logo abaixo do item anterior. */ subitem?: boolean };
 export type GrupoMenu = { id: string; rotulo: string; itens: ItemMenu[] };
 
 const CONFIG = "config.gerenciar";
@@ -17,6 +17,7 @@ export const GRUPOS_MENU: GrupoMenu[] = [
       { para: "/", rotulo: "Hoje", permissao: "reservas.gerenciar" },
       { para: "/mapa", rotulo: "Mapa", permissao: "reservas.gerenciar" },
       { para: "/reservas", rotulo: "Reservas", permissao: "reservas.gerenciar" },
+      { para: "/reservas/tarifas", rotulo: "Tarifas", permissao: "tarifas.gerenciar", subitem: true },
       { para: "/caixa", rotulo: "Caixa", permissao: "caixa.operar" },
       { para: "/governanca", rotulo: "Governança", permissao: "quartos.situacao" },
       { para: "/relatorios", rotulo: "Relatórios", permissao: "reservas.gerenciar" },
@@ -67,6 +68,11 @@ export const GRUPOS_MENU: GrupoMenu[] = [
     ],
   },
 ];
+
+/** O caminho está num subitem do `pai` (/reservas/tarifas sob Reservas): o pai não deve parecer ativo. */
+export function emSubitemDe(pai: string, caminho: string): boolean {
+  return GRUPOS_MENU.some((g) => g.itens.some((i) => i.subitem && i.para.startsWith(`${pai}/`) && rotaDoItem(i.para, caminho)));
+}
 
 /** O item cuja rota contém o caminho atual (`/reservas/nova` pertence a `/reservas`). */
 export function rotaDoItem(para: string, caminho: string): boolean {

@@ -14,7 +14,7 @@ import { VisorRelatorio } from "./VisorRelatorio";
 import "./relatorios.css";
 
 /** Chaves da URL que viram filtro do servidor, por tipo de filtro do catálogo. */
-const CHAVES: Record<string, string[]> = { data: ["data"], reserva: ["reserva"], periodo: ["inicio", "fim", "turno"] };
+const CHAVES: Record<string, string[]> = { data: ["data"], reserva: ["reserva"], periodo: ["inicio", "fim", "turno"], intervalo: ["inicio", "fim"] };
 
 function Corpo({ item }: { item: ItemCatalogo }) {
   const [params, setParams] = useSearchParams();

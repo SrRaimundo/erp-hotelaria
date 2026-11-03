@@ -10,7 +10,7 @@ const titular = {
 export function criarReserva(extras: Partial<ReservaDetalhe> = {}): ReservaDetalhe {
   return {
     id: "r1", codigo: 128, estado: "hospedada", titularId: "h1", categoriaId: "c1", quartoId: "q101", chegada: "2026-11-20", saida: "2026-11-23",
-    adultos: 2, criancasNascimento: ["2020-01-01"], canal: "Balcão", observacoes: "Chegada tarde", grupoId: null, contaId: "ct1",
+    adultos: 2, criancasNascimento: ["2020-01-01"], canal: "Balcão", comissaoPercentual: 0, observacoes: "Chegada tarde", grupoId: null, contaId: "ct1",
     valorSinal: 27000, prazoSinal: null, avisoSinalEm: null, criadaEm: "2026-11-01T10:00:00.000Z",
     noites: [
       { data: "2026-11-20", valor: 30000, passos: [{ rotulo: "Base", valor: 28000 }, { rotulo: "Sexta +7%", valor: 2000 }] },

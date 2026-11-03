@@ -65,6 +65,8 @@ export type Painel = {
   chegadas: ItemChegada[];
   saidas: ItemSaida[];
   hospedados: number;
+  /** Quartos hospedados agora por canal (a soma é `hospedados`), do maior para o menor; canal vazio vira "Sem canal". */
+  ocupadosPorCanal: { canal: string; quartos: number }[];
   quartosSujos: { quartoId: string; numero: string }[];
   sinaisVencendo: ItemReserva[];
   chegadasVencidas: ItemReserva[];
@@ -168,6 +170,16 @@ const semCampoExtra = (x: ItemReserva): ItemReserva => ({
   reservaId: x.reservaId, codigo: x.codigo, titular: x.titular, quartoNumero: x.quartoNumero, chegada: x.chegada, saida: x.saida,
 });
 
+/** Contagem por canal, maior primeiro (empate por nome); canal vazio agrupa como "Sem canal". */
+function contarPorCanal(canais: (string | null)[]): { canal: string; quartos: number }[] {
+  const mapa = new Map<string, number>();
+  for (const c of canais) {
+    const nome = c?.trim() || "Sem canal";
+    mapa.set(nome, (mapa.get(nome) ?? 0) + 1);
+  }
+  return [...mapa].map(([canal, quartos]) => ({ canal, quartos })).sort((a, b) => b.quartos - a.quartos || a.canal.localeCompare(b.canal, "pt-BR"));
+}
+
 export async function painelDoDia(ctx: Contexto): Promise<Painel> {
   const agora = ctx.relogio.agora();
   const config = await obterConfig(ctx);
@@ -180,7 +192,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     .where("r.chegada", "=", dia)
     .execute();
   const linhasSaidas = await reservasComTitular(ctx).select([...campos, "r.conta_id"]).where("r.estado", "=", "hospedada").where("r.saida", "=", dia).execute();
-  const hospedadas = await ctx.db.selectFrom("reservas").select(["adultos", "criancas", "quarto_id"]).where("estado", "=", "hospedada").execute();
+  const hospedadas = await ctx.db.selectFrom("reservas").select(["adultos", "criancas", "quarto_id", "canal"]).where("estado", "=", "hospedada").execute();
   const sujos = await ctx.db.selectFrom("quartos").select(["id", "numero"]).where("ativo", "=", 1).where("situacao", "=", "sujo").orderBy("numero").execute();
   const sinais = await reservasComTitular(ctx)
     .clearOrderBy()
@@ -297,6 +309,7 @@ export async function painelDoDia(ctx: Contexto): Promise<Painel> {
     chegadas,
     saidas,
     hospedados: hospedadas.length,
+    ocupadosPorCanal: contarPorCanal(hospedadas.map((h) => h.canal)),
     quartosSujos: sujos.map((q) => ({ quartoId: q.id, numero: q.numero })),
     sinaisVencendo: sinais.map(semCampoExtra),
     chegadasVencidas: vencidas.map(semCampoExtra),

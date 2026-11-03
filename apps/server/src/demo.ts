@@ -104,7 +104,7 @@ export async function semearDemonstracao(ctx: Contexto): Promise<{ quartos: numb
 
     await salvarTemporada(tx, { nome: "Alta", inicio: dia(20), fim: dia(40), prioridade: 1, percentual: 20 }, ator);
     await salvarCanal(tx, { nome: "Balcão", percentual: 0, exigeSinal: false }, ator);
-    await salvarCanal(tx, { nome: "Site", percentual: -5, exigeSinal: true }, ator);
+    await salvarCanal(tx, { nome: "Site", percentual: -5, exigeSinal: true, tipo: "ota", comissaoPercentual: 12 }, ator);
     for (const diaSemana of [5, 6]) await salvarPercentualDiaSemana(tx, { dia: diaSemana, percentual: 15 }, ator);
 
     // Usuários (o admin já existe e mantém a troca de senha obrigatória)

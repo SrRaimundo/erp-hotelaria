@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { chamarApi } from "../../api/cliente";
 import { usePainel, useReservas } from "../../api/consultas";
 import type { Canal } from "../../api/tipos";
@@ -68,7 +68,10 @@ export function TelaReservas() {
 
   return (
     <div className="reservas">
-      <h1>Reservas</h1>
+      <div className="reservas-topo">
+        <h1>Reservas</h1>
+        <Link to="/reservas/tarifas/simulador" className="botao botao--contorno botao--normal">Simular</Link>
+      </div>
       <div className="reservas-filtros">
         <div className="campo">
           <label htmlFor="res-de">De</label>

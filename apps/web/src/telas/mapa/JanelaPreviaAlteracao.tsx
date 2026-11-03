@@ -10,7 +10,7 @@ import { formatarData } from "../../lib/datas";
 import { formatarReais } from "../../lib/dinheiro";
 import type { Movimento } from "./usoArrastar";
 
-type Previa = { valorAntigo: number; valorNovo: number; noites: { data: string; valor: number }[] };
+type Previa = { valorAntigo: number; valorNovo: number; noites: { data: string; valor: number }[]; trocaCanal?: { mensagem: string } };
 type Props = { movimento: Movimento; aoFechar: () => void };
 
 const EXIGEM_SUPERVISOR = ["RESTRICAO_TARIFARIA", "SUPERVISOR_NECESSARIO"];
@@ -69,6 +69,7 @@ export function JanelaPreviaAlteracao({ movimento, aoFechar }: Props) {
       {dados && (
         <>
           <p>{`De ${formatarReais(dados.valorAntigo)} para ${formatarReais(dados.valorNovo)}`}</p>
+          {dados.trocaCanal && <p role="status">{dados.trocaCanal.mensagem}</p>}
           <ul>
             {dados.noites.map((n) => (
               <li key={n.data}>

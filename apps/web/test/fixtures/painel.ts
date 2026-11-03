@@ -16,6 +16,7 @@ export function criarPainel(extras: Partial<Painel> = {}): Painel {
       { ...base, reservaId: "r5", titular: "Eva Nunes", quartoNumero: "202", contaId: "c5", saldo: 0 },
     ],
     hospedados: 5,
+    ocupadosPorCanal: [{ canal: "Booking", quartos: 3 }, { canal: "Balcão", quartos: 2 }],
     quartosSujos: [{ quartoId: "q103", numero: "103" }],
     sinaisVencendo: [],
     chegadasVencidas: [],

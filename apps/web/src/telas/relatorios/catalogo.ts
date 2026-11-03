@@ -1,4 +1,4 @@
-export type FiltroId = "data" | "reserva" | "busca" | "periodo";
+export type FiltroId = "data" | "reserva" | "busca" | "periodo" | "intervalo";
 export type ItemCatalogo = { id: string; nome: string; descricao: string; permissao: string; filtros: FiltroId[] };
 
 export const PERM_RELATORIOS = "reservas.gerenciar";
@@ -13,8 +13,9 @@ export const CATALOGO: ItemCatalogo[] = [
   { id: "conta", nome: "Conta do hóspede", descricao: "Estadia e extrato da conta de uma reserva, com débitos, créditos e saldo.", permissao: PERM_RELATORIOS, filtros: ["reserva"] },
   { id: "hospedes", nome: "Hóspedes cadastrados", descricao: "Cadastro de hóspedes com documento, contato e número de estadias.", permissao: PERM_RELATORIOS, filtros: ["busca"] },
   { id: "caixa", nome: "Fechamento de caixa", descricao: "Turnos do período e, no turno escolhido, esperado, contado e diferença por forma.", permissao: "caixa.operar", filtros: ["periodo"] },
+  { id: "canais", nome: "Reservas por canal", descricao: "Hospedados agora e, no período, reservas, noites, receita, cancelamentos e no-shows de cada canal.", permissao: PERM_RELATORIOS, filtros: ["intervalo"] },
 ];
 
-export const EM_BREVE = ["Resumo do dia", "Previsão de ocupação", "Desempenho", "Reservas por canal"];
+export const EM_BREVE = ["Resumo do dia", "Previsão de ocupação", "Desempenho"];
 
 export const buscarNoCatalogo = (id: string) => CATALOGO.find((r) => r.id === id);

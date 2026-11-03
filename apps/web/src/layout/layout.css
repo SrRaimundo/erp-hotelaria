@@ -12,6 +12,7 @@
 .menu__grupo-cabecalho[aria-expanded="true"]::after { transform: rotate(90deg); }
 .menu__grupo-itens { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; }
 .menu__item { display: flex; align-items: center; justify-content: space-between; color: var(--superficie); text-decoration: none; border-radius: var(--raio-controle); padding: 9px 10px; }
+.menu__item--sub { padding-left: 24px; }
 .menu__item:hover { background: color-mix(in srgb, var(--superficie) 12%, transparent); }
 .menu__item.active { background: color-mix(in srgb, var(--superficie) 22%, transparent); font-weight: 600; }
 .menu__contador { background: var(--terracota); color: var(--superficie); border-radius: 999px; padding: 0 8px; font-size: 0.8125rem; font-weight: 700; }
