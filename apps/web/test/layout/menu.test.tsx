@@ -16,7 +16,7 @@ function Sonda() {
 
 const painel = { "GET /api/painel": criarPainel() };
 
-const tudo = ["reservas.gerenciar", "caixa.operar", "quartos.situacao", "config.gerenciar", "cadastros.gerenciar"];
+const tudo = ["reservas.gerenciar", "caixa.operar", "financeiro.gerenciar", "quartos.situacao", "config.gerenciar", "cadastros.gerenciar"];
 const nomesLinks = (el: HTMLElement) => within(el).queryAllByRole("link").map((a) => a.textContent);
 const cabecalhos = () => within(screen.getByRole("navigation", { name: "Menu principal" })).getAllByRole("button").map((b) => b.textContent);
 
@@ -74,12 +74,25 @@ describe("menu em grupos", () => {
   });
 
   test("itens sem permissão somem e grupo sem itens visíveis também", async () => {
-    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "config.gerenciar"] } });
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "financeiro.gerenciar", "config.gerenciar"] } });
     await aguardarConsultas(cliente);
     expect(cabecalhos()).toEqual(["Hotel", "Financeiro", "Estoque"]);
     expect(screen.queryByRole("button", { name: "Cadastros" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Governança" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Caixa" })).toBeInTheDocument();
+  });
+
+  test("Financeiro some sem financeiro.gerenciar, mesmo com config.gerenciar e caixa.operar", async () => {
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "config.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    expect(screen.queryByRole("button", { name: "Financeiro" })).not.toBeInTheDocument();
+    expect(cabecalhos()).toEqual(["Hotel", "Estoque"]);
+  });
+
+  test("Financeiro aparece só com financeiro.gerenciar", async () => {
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["financeiro.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    expect(cabecalhos()).toEqual(["Financeiro"]);
   });
 
   test("só cadastros.gerenciar: apenas o grupo Cadastros, sem engrenagem", async () => {

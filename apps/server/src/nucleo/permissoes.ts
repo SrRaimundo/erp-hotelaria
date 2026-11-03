@@ -12,6 +12,7 @@ export const PERMISSOES = [
   "quartos.manutencao",
   "config.gerenciar",
   "supervisor",
+  "financeiro.gerenciar",
 ] as const;
 
 export type Permissao = (typeof PERMISSOES)[number];
@@ -29,6 +30,7 @@ export const DESCRICOES_PERMISSOES: Record<Permissao, string> = {
   "tarifas.gerenciar": "Configurar tarifas",
   "config.gerenciar": "Configurar a pousada, usuários, perfis e checklists",
   supervisor: "Autorizar ações sensíveis com a senha de supervisor",
+  "financeiro.gerenciar": "Operar e consultar o Financeiro",
 };
 
 export type UsuarioSessao = {
@@ -40,7 +42,7 @@ export type UsuarioSessao = {
   trocarSenha: boolean;
 };
 
-const SO_ADMIN: Permissao[] = ["cadastros.gerenciar", "tarifas.gerenciar", "config.gerenciar", "supervisor"];
+const SO_ADMIN: Permissao[] = ["cadastros.gerenciar", "tarifas.gerenciar", "config.gerenciar", "supervisor", "financeiro.gerenciar"];
 
 export const PERFIS_PADRAO: { nome: string; limiteDesconto: number; permissoes: string[] }[] = [
   { nome: "admin", limiteDesconto: 100, permissoes: [...PERMISSOES] },

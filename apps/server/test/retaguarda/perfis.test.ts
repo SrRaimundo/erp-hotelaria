@@ -125,8 +125,29 @@ describe("perfis", () => {
       "tarifas.gerenciar": "Configurar tarifas",
       "config.gerenciar": "Configurar a pousada, usuários, perfis e checklists",
       supervisor: "Autorizar ações sensíveis com a senha de supervisor",
+      "financeiro.gerenciar": "Operar e consultar o Financeiro",
     });
     expect(Object.keys(DESCRICOES_PERMISSOES).sort()).toEqual([...PERMISSOES].sort());
+  });
+
+  test("financeiro.gerenciar: admin tem, recepção e governança não; migração 0720 concede só ao admin, idempotente", async () => {
+    const perms = async (perfil: string) => (await ctx.db.selectFrom("perfil_permissoes").select("permissao").where("perfil", "=", perfil).execute()).map((r) => r.permissao);
+    expect(await perms("admin")).toContain("financeiro.gerenciar");
+    expect(await perms("recepcao")).not.toContain("financeiro.gerenciar");
+    expect(await perms("governanca")).not.toContain("financeiro.gerenciar");
+    // banco "antigo": admin sem a permissão, perfil personalizado copiado do admin
+    await ctx.db.deleteFrom("perfil_permissoes").where("permissao", "=", "financeiro.gerenciar").execute();
+    await ctx.db.insertInto("perfis").values({ nome: "copia", limite_desconto: 1 }).execute();
+    await ctx.db.insertInto("perfil_permissoes").values({ perfil: "copia", permissao: "caixa.operar" }).execute();
+    const { migracaoFinanceiroPermissao } = await import("../../src/financeiro/migracao.js");
+    await migracaoFinanceiroPermissao.up(ctx.db);
+    await migracaoFinanceiroPermissao.up(ctx.db);
+    expect(migracaoFinanceiroPermissao.nome).toBe("0720_financeiro_permissao");
+    expect((await perms("admin")).filter((p) => p === "financeiro.gerenciar")).toHaveLength(1);
+    expect(await perms("recepcao")).not.toContain("financeiro.gerenciar");
+    expect(await perms("copia")).toEqual(["caixa.operar"]);
+    const { todasMigracoes } = await import("../../src/shared/migracoes.js");
+    expect(todasMigracoes).toContain(migracaoFinanceiroPermissao);
   });
 
   test("API: CRUD de perfis exige config.gerenciar; /api/permissoes exige só sessão", async () => {

@@ -1,12 +1,12 @@
 # API Reference - Financeiro Module
 
-HTTP API endpoints for the Financeiro (Financial) module. All routes are prefixed with `/api/financeiro` and require the `caixa.operar` permission.
+HTTP API endpoints for the Financeiro (Financial) module. All routes are prefixed with `/api/financeiro` and require the `financeiro.gerenciar` permission.
 
 ## Authentication & Authorization
 
 All endpoints require:
 - **Authentication**: Valid JWT token in `Authorization: Bearer <token>` header (enforced by `/api` hook)
-- **Permission**: `caixa.operar` (checked at route level)
+- **Permission**: `financeiro.gerenciar` (checked at route level)
 - **Scope**: Data is automatically scoped to the user's local (pousada)
 
 ## Routes
@@ -51,7 +51,7 @@ List all transactions for a local within a date range.
 | Code | Description |
 |------|-------------|
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission |
+| 403 | User lacks `financeiro.gerenciar` permission |
 | 422 | Invalid query parameters (malformed UUID, invalid date format) |
 
 ---
@@ -110,7 +110,7 @@ Cancel a transaction (sensitive action requiring supervisor authorization).
 | Code | Description |
 |------|-------------|
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission; or supervisor authorization failed |
+| 403 | User lacks `financeiro.gerenciar` permission; or supervisor authorization failed |
 | 422 | Invalid UUID or missing required body fields |
 | 500 | Transaction not found or already cancelled |
 
@@ -157,7 +157,7 @@ Generate a billing collection request (boleto, PIX, or bank transfer) for an inv
 | Code | Description |
 |------|-------------|
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission |
+| 403 | User lacks `financeiro.gerenciar` permission |
 | 422 | Invalid UUID; invalid collection method; or invoice not found |
 | 500 | Error generating billing document (e.g., bank integration failure) |
 
@@ -210,7 +210,7 @@ Confirm payment receipt for a receivable, linking it to a transaction (Lançamen
 | Code | Description |
 |------|-------------|
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission |
+| 403 | User lacks `financeiro.gerenciar` permission |
 | 422 | Invalid UUID; invalid valor (must be positive); or receivable not found |
 | 500 | Bank account not found; or error creating linked transaction |
 
@@ -240,7 +240,7 @@ Get the balance of a bank/cash account on a specific date.
 | Code | Description |
 |------|-------------|
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission |
+| 403 | User lacks `financeiro.gerenciar` permission |
 | 422 | Invalid UUID; or invalid date format |
 | 500 | Account not found |
 
@@ -300,7 +300,7 @@ Transfer money between two bank/cash accounts (creates two linked movements).
 |------|-------------|
 | 201 | Transfer successful (see 201 as success above) |
 | 401 | Missing or invalid JWT token |
-| 403 | User lacks `caixa.operar` permission |
+| 403 | User lacks `financeiro.gerenciar` permission |
 | 422 | Invalid UUIDs; invalid valor (must be positive); or account not found |
 | 500 | Insufficient balance; or error creating linked transaction |
 
@@ -360,7 +360,7 @@ All endpoints may return:
 ```json
 {
   "error": "Forbidden",
-  "message": "User lacks required permission: caixa.operar"
+  "message": "User lacks required permission: financeiro.gerenciar"
 }
 ```
 

@@ -5,7 +5,7 @@ import { data } from "../../http/validacao.js";
 import type { Usuario } from "../servicos/locais.js";
 import type { UUID } from "../../shared/ids.js";
 
-export const PERMISSAO_FINANCEIRO = "caixa.operar";
+export const PERMISSAO_FINANCEIRO = "financeiro.gerenciar";
 
 /** Exige sessão (já garantida pelo hook de autenticação em /api) com permissão financeira. */
 export function exigirFinanceiro(req: FastifyRequest): void {

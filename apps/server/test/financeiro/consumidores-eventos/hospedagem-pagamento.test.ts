@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, test } from "vitest";
 import { processarPagamentoRegistrado, processarValorAReceberCriado, registrarConsumidoresHospedagem } from "../../../src/financeiro/consumidores-eventos/hospedagem-pagamento.js";
 import { LocalService } from "../../../src/financeiro/servicos/locais.js";
@@ -90,4 +91,9 @@ test("registrarConsumidoresHospedagem: assina o evento no barramento", async () 
   ctx.barramento.publicar({ id: "e1", seq: 1, tipo: "hospedagem.PagamentoRegistrado", payload: ev.payload, criadoEm: CRIADO });
   await new Promise((r) => setTimeout(r, 150));
   expect(await ctx.db.selectFrom("fin_lancamento").selectAll().execute()).toHaveLength(1);
+});
+
+test("consumidores de eventos não dependem de permissão de usuário", () => {
+  const fonte = readFileSync(new URL("../../../src/financeiro/consumidores-eventos/hospedagem-pagamento.ts", import.meta.url), "utf8");
+  expect(fonte).not.toMatch(/exigirPermissao|exigirAlgumaPermissao|PERMISSAO_FINANCEIRO|financeiro\.gerenciar/);
 });

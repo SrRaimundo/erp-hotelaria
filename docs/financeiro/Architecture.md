@@ -153,7 +153,7 @@ Every financial entity is scoped to a **Local** (financial context). In the ALIC
 
 ### User-Based Authorization
 
-The `caixa.operar` permission controls who can:
+The `financeiro.gerenciar` permission controls who can:
 - View transactions
 - Create transactions
 - Confirm payments
@@ -166,7 +166,7 @@ Request with JWT token
         │
         ├─► Extract user.id, user.permissoes
         │
-        ├─► Check "caixa.operar" ✓
+        ├─► Check "financeiro.gerenciar" ✓
         │
         └─► User can access their Local's data
 ```

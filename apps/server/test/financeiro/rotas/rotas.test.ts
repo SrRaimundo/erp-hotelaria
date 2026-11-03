@@ -40,6 +40,14 @@ describe("rotas do Financeiro", () => {
     expect((await app.inject({ method: "GET", url, headers: gov })).statusCode).toBe(403);
   });
 
+  test("recepção (sem financeiro.gerenciar) recebe 403 e admin 200", async () => {
+    const { ctx, app, admin, local } = await cenario();
+    const url = `/api/financeiro/lancamentos?local_id=${local.id}`;
+    const rec = await entrarComo(ctx, "recepcao");
+    expect((await app.inject({ method: "GET", url, headers: rec })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url, headers: admin })).statusCode).toBe(200);
+  });
+
   test("GET lançamentos lista por local e período", async () => {
     const { ctx, app, admin, local } = await cenario();
     await novoLancamento(ctx, local.id);

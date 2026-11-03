@@ -4,8 +4,9 @@ export type GrupoMenu = { id: string; rotulo: string; itens: ItemMenu[] };
 
 const CONFIG = "config.gerenciar";
 const CADASTROS = "cadastros.gerenciar";
+const FINANCEIRO = "financeiro.gerenciar";
 
-const financeiro = (slug: string, rotulo: string): ItemMenu => ({ para: `/financeiro/${slug}`, rotulo, permissao: CONFIG });
+const financeiro = (slug: string, rotulo: string): ItemMenu => ({ para: `/financeiro/${slug}`, rotulo, permissao: FINANCEIRO });
 const estoque = (slug: string, rotulo: string): ItemMenu => ({ para: `/estoque/${slug}`, rotulo, permissao: CONFIG });
 const cadastro = (slug: string, rotulo: string): ItemMenu => ({ para: `/cadastros/${slug}`, rotulo, permissao: CADASTROS });
 

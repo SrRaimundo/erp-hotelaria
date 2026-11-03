@@ -183,3 +183,14 @@ export const migracaoFinanceiro: Migracao = {
       .execute();
   },
 };
+
+/**
+ * Concede `financeiro.gerenciar` aos perfis `admin` já existentes. Idempotente (bancos novos já a recebem do seed).
+ * Perfis personalizados copiados do admin NÃO são alterados: concedem-se pela tela de perfis.
+ */
+export const migracaoFinanceiroPermissao: Migracao = {
+  nome: "0720_financeiro_permissao",
+  async up(db) {
+    await sql`INSERT OR IGNORE INTO perfil_permissoes (perfil, permissao) SELECT nome, 'financeiro.gerenciar' FROM perfis WHERE nome = 'admin'`.execute(db);
+  },
+};

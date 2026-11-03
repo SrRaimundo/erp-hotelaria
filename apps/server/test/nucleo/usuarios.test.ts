@@ -11,7 +11,7 @@ describe("usuários, sessão e supervisor", () => {
     const { token, usuario } = await entrar(ctx, "admin", "admin");
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(usuario).toMatchObject({ perfil: "admin", limiteDesconto: 100, trocarSenha: true });
-    expect(usuario.permissoes).toHaveLength(11);
+    expect(usuario.permissoes).toHaveLength(12);
     expect(await sessaoPorToken(ctx, token)).toEqual(usuario);
     await sair(ctx, token);
     expect(await sessaoPorToken(ctx, token)).toBeUndefined();
