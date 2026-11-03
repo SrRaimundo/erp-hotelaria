@@ -20,12 +20,16 @@ export function TelaRelatorios() {
           </Link>
         ))}
       </div>
-      <h2 className="rel-subtitulo">Em breve</h2>
-      <ul className="rel-em-breve">
-        {EM_BREVE.map((nome) => (
-          <li key={nome}>{nome}</li>
-        ))}
-      </ul>
+      {EM_BREVE.length > 0 && (
+        <>
+          <h2 className="rel-subtitulo">Em breve</h2>
+          <ul className="rel-em-breve">
+            {EM_BREVE.map((nome) => (
+              <li key={nome}>{nome}</li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
