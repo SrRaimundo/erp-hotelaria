@@ -20,9 +20,11 @@ const CATEGORIAS = [
   { valor: "funcionario", rotulo: "Funcionário" },
   { valor: "contrato", rotulo: "Contrato" },
 ];
-const ROTULO_CATEGORIA = Object.fromEntries(CATEGORIAS.map((c) => [c.valor, c.rotulo]));
+/** Registro automático do Cartão de Crédito: não é uma opção de escolha ao lançar. */
+const ROTULO_TAXA_CARTAO = "Cartão de Crédito (taxa)";
+const ROTULO_CATEGORIA: Record<string, string> = { ...Object.fromEntries(CATEGORIAS.map((c) => [c.valor, c.rotulo])), taxa_cartao: ROTULO_TAXA_CARTAO };
 const FORMAS_PAGAR = ["pix", "boleto", "dinheiro", "transferencia", "cheque", "debito", "credito"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_FORMA, valor) }));
-const STATUS = ["pendente", "confirmado", "cancelado"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_STATUS, valor) }));
+const STATUS = ["pendente", "confirmado", "liquidado", "cancelado"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_STATUS, valor) }));
 const tom = (s: string) => (s === "cancelado" ? "terracota" : s === "pendente" ? "amarelo" : "verde");
 
 function NovoFornecedor({ localId, aoCriar, aoFechar }: { localId: string; aoCriar: (id: string) => void; aoFechar: () => void }) {
@@ -97,19 +99,34 @@ function PainelNova({ localId, aoFechar }: { localId: string; aoFechar: () => vo
 function PainelPagar({ item, contas, aoFechar }: { item: Lancamento; contas: Conta[]; aoFechar: () => void }) {
   const [contaId, setContaId] = useState(contas[0]?.id ?? "");
   const [forma, setForma] = useState(item.forma_pagamento === "boleto" ? "pix" : item.forma_pagamento);
+  const [valor, setValor] = useState<number | null>(item.valor);
+  const [novoVenc, setNovoVenc] = useState("");
   const baixar = useBaixarContaPagar();
+  const parcial = valor !== null && valor > 0 && valor < item.valor;
+  const invalido = !contaId || !valor || valor > item.valor || (parcial && !novoVenc);
   return (
     <form className="formulario" onSubmit={(e) => {
       e.preventDefault();
-      if (!contaId) return;
-      baixar.mutate({ id: item.id, conta_id: contaId, forma_pagamento: forma }, { onSuccess: aoFechar });
+      if (invalido || valor === null) return;
+      baixar.mutate(
+        { id: item.id, conta_id: contaId, forma_pagamento: forma, ...(parcial ? { valor, novo_vencimento: novoVenc } : {}) },
+        { onSuccess: aoFechar },
+      );
     }}>
       <p>{item.descricao} — <strong>{formatarReais(item.valor)}</strong></p>
       <Selecao rotulo="Pagar com a conta" valor={contaId} aoMudar={setContaId} opcoes={contas.map((c) => ({ valor: c.id, rotulo: `${c.nome} (${formatarReais(c.saldo)})` }))} />
       <Selecao rotulo="Forma de pagamento" valor={forma} aoMudar={setForma} opcoes={FORMAS_PAGAR} />
+      <CampoDinheiro rotulo="Valor a pagar agora" valor={valor} aoMudar={setValor} />
+      {valor !== null && valor > item.valor && <p role="alert" className="erro-acao">O valor é maior que o devido ({formatarReais(item.valor)}).</p>}
+      {parcial && (
+        <>
+          <p className="fin__suave">Fica um saldo de {formatarReais(item.valor - valor!)} em uma nova parcela, ligada a esta conta.</p>
+          <CampoTexto rotulo="Novo vencimento do saldo" tipo="date" valor={novoVenc} aoMudar={setNovoVenc} />
+        </>
+      )}
       <ErroAcao erro={baixar.error} />
       <div className="formulario__acoes">
-        <Botao type="submit" disabled={!contaId || baixar.isPending}>Confirmar pagamento</Botao>
+        <Botao type="submit" disabled={invalido || baixar.isPending}>Confirmar pagamento</Botao>
       </div>
     </form>
   );
@@ -148,15 +165,15 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
                 <tbody>
                   {linhas.map((l) => (
                     <tr key={l.id}>
-                      <td>{dataBr(l.vencimento ?? l.data)}</td>
-                      <td>{l.descricao || "—"}</td>
+                      <td>{dataBr(l.vencimento_dia ?? l.dia)}</td>
+                      <td>{l.descricao || "—"}{l.valor_total ? <span className="fin__suave"> · pago parcial ({formatarReais(l.valor)} de {formatarReais(l.valor_total)})</span> : null}{l.parcela_de ? <span className="fin__suave"> · saldo de pagamento parcial</span> : null}</td>
                       <td>{l.categoria ? rotulo(ROTULO_CATEGORIA, l.categoria) : "—"}</td>
                       <td>{l.fornecedor_nome ?? "—"}</td>
                       <td className="fin__num">{formatarReais(l.valor)}</td>
                       <td><Etiqueta tom={tom(l.status)}>{rotulo(ROTULO_STATUS, l.status)}</Etiqueta></td>
                       <td className="fin__acoes">
-                        {l.status === "pendente" && <Botao tamanho="pequeno" onClick={() => setPagar(l)}>Pagar</Botao>}
-                        {l.status !== "cancelado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(l)}>Cancelar</Botao>}
+                        {l.categoria !== "taxa_cartao" && l.status === "pendente" && <Botao tamanho="pequeno" onClick={() => setPagar(l)}>Pagar</Botao>}
+                        {l.categoria !== "taxa_cartao" && l.status !== "cancelado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(l)}>Cancelar</Botao>}
                       </td>
                     </tr>
                   ))}

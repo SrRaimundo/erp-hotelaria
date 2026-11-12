@@ -32,3 +32,12 @@
 .fin__grupo { border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .fin__grupo legend { color: var(--texto-suave); font-size: 0.8125rem; padding: 0 4px; }
 @media (max-width: 899px) { .fin__seletores, .fin__seletores .campo, .fin__seletores select { width: 100%; } }
+.extrato-cobranca h3 { font-size: 1.0625rem; margin-bottom: 4px; }
+.extrato-cobranca__acoes { margin-top: 12px; }
+/* Impressão do extrato da cobrança: só ele sai na folha. */
+@media print {
+  body:has(.extrato-cobranca) * { visibility: hidden; }
+  body:has(.extrato-cobranca) .extrato-cobranca, body:has(.extrato-cobranca) .extrato-cobranca * { visibility: visible; }
+  body:has(.extrato-cobranca) .extrato-cobranca { position: absolute; left: 0; top: 0; width: 100%; }
+  body:has(.extrato-cobranca) .extrato-cobranca__acoes { display: none; }
+}

@@ -34,6 +34,7 @@ export function RelatoriosTab({ localId, contaId }: { localId: string; contaId: 
               <Linha rotulo="Saldo inicial" valor={formatarReais(f.saldo_inicial)} />
               <Linha rotulo="Entradas" valor={formatarReais(f.entradas)} />
               <Linha rotulo="Saídas" valor={formatarReais(f.saidas)} />
+              <Linha rotulo="Taxas de cartão (sem movimento de caixa)" valor={formatarReais(f.taxas_cartao)} />
               <Linha rotulo="Saldo final" valor={formatarReais(f.saldo_final)} />
             </ul>
             <Barras itens={[{ rotulo: "Entradas", valor: f.entradas }, { rotulo: "Saídas", valor: f.saidas, tom: "terracota" }]} />
@@ -47,6 +48,7 @@ export function RelatoriosTab({ localId, contaId }: { localId: string; contaId: 
             <ul className="fin__resumo">
               <Linha rotulo="Recebimentos" valor={formatarReais(cons.data.total.recebimentos)} />
               <Linha rotulo="Pagamentos" valor={formatarReais(cons.data.total.pagamentos)} />
+              <Linha rotulo="Taxas de cartão (sem movimento de caixa)" valor={formatarReais(cons.data.total.taxas_cartao)} />
               <Linha rotulo="Saldo final" valor={formatarReais(cons.data.total.saldo_final)} />
             </ul>
             <Barras itens={cons.data.locais.map((l) => ({ rotulo: l.nome, valor: l.recebimentos }))} />

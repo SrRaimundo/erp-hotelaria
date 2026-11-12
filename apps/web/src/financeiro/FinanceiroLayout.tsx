@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Cartao } from "../componentes/Cartao";
 import { ErroAcao } from "../componentes/ErroAcao";
 import { CaixaBancoTab } from "./CaixaBancoTab";
+import { CobrancaTab } from "./CobrancaTab";
 import { CartaoCreditoTab } from "./CartaoCreditoTab";
 import { ContasPagarTab } from "./ContasPagarTab";
 import { ContasReceberTab } from "./ContasReceberTab";
@@ -12,7 +13,7 @@ import { Selecao } from "./comuns";
 import { useContas, useLocais } from "./useFinanceiro";
 import "./financeiro.css";
 
-export type AbaId = "local" | "pagar" | "receber" | "cartao" | "caixa" | "faturamento" | "relatorios";
+export type AbaId = "local" | "pagar" | "receber" | "cartao" | "caixa" | "faturamento" | "relatorios" | "cobranca";
 
 const TITULOS: Record<AbaId, string> = {
   local: "Local",
@@ -22,6 +23,7 @@ const TITULOS: Record<AbaId, string> = {
   caixa: "Caixa e Banco",
   faturamento: "Faturamento",
   relatorios: "Relatórios do Financeiro",
+  cobranca: "Cobrança",
 };
 
 const CHAVE_LOCAL = "erp.financeiro.local";
@@ -84,6 +86,7 @@ export function FinanceiroLayout({ aba }: { aba: AbaId }) {
                 {aba === "caixa" && <CaixaBancoTab localId={localId} contaId={contaId} contas={listaContas} />}
                 {aba === "faturamento" && <FaturamentoTab localId={localId} />}
                 {aba === "relatorios" && <RelatoriosTab localId={localId} contaId={contaId} />}
+                {aba === "cobranca" && <CobrancaTab localId={localId} />}
               </>
             )}
           </>

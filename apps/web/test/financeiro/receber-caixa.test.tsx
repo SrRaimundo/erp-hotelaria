@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { chamadas, instalarApiFalsa } from "../api-falsa";
@@ -8,7 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const ITEM = {
   id: "r1", numero_documento: "FAT-2026-000001", cliente_id: "cli1", cliente_nome: "Empresa X Ltda", data_vencimento: "2026-12-10T12:00:00.000Z",
-  valor_original: 90000, valor_recebido: 30000, valor_pendente: 60000, situacao: "parcialmente_recebido",
+  valor_original: 90000, valor_recebido: 30000, valor_pendente: 60000, situacao: "parcialmente_recebido", parcela_de: null, valor_total: null,
 };
 const VENCIDO = { ...ITEM, id: "r2", numero_documento: "FAT-2026-000002", cliente_nome: "Hotel Y", valor_recebido: 0, valor_pendente: 5000, valor_original: 5000, situacao: "vencido" };
 const vazio = { quantidade: 0, valor_original: 0, valor_recebido: 0, valor_pendente: 0 };
@@ -43,9 +43,13 @@ describe("tela Contas a Receber", () => {
     await u.clear(within(painel).getByLabelText("Valor recebido"));
     await u.type(within(painel).getByLabelText("Valor recebido"), "250,75");
     await u.selectOptions(within(painel).getByLabelText("Conta de destino"), BANCO.id);
+    // recebimento parcial: o saldo vira nova parcela e pede a nova data
+    expect(within(painel).getByText(/vira uma nova parcela, ligada a ela/)).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: "Confirmar" })).toBeDisabled();
+    fireEvent.change(within(painel).getByLabelText("Novo vencimento do saldo"), { target: { value: "2026-12-31" } });
     await u.click(within(painel).getByRole("button", { name: "Confirmar" }));
     const put = await esperarChamada(chamadas, "PUT", "/api/financeiro/contas-receber/r1/confirmar-pagamento");
-    expect(put.corpo).toEqual({ valor: 25075, conta_bancaria_id: BANCO.id });
+    expect(put.corpo).toEqual({ valor: 25075, conta_bancaria_id: BANCO.id, novo_vencimento: "2026-12-31", chave: expect.any(String) });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
@@ -74,7 +78,7 @@ describe("tela Contas a Receber", () => {
 describe("tela Caixa e Banco", () => {
   const MOV = {
     conta_id: "c1", saldo_inicial: 0, total_creditos: 25000, total_debitos: 0, saldo_final: 25000,
-    movimentos: [{ id: "m1", data: "2026-11-02T12:00:00.000Z", tipo: "credito", lancamento_id: "x", credito: 25000, debito: 0, saldo_posterior: 25000 }],
+    movimentos: [{ id: "m1", data: "2026-11-02T12:00:00.000Z", dia: "2026-11-02", tipo: "credito", lancamento_id: "x", credito: 25000, debito: 0, saldo_posterior: 25000, descricao: "Cartão Visa", origem: "manual", estornavel: true }],
   };
   const rotas = (extra: Record<string, unknown> = {}) => ({
     ...rotasBase(),
@@ -108,7 +112,7 @@ describe("tela Caixa e Banco", () => {
     await u.type(within(painel).getByLabelText("Valor"), "100");
     await u.click(within(painel).getByRole("button", { name: "Transferir" }));
     const post = await esperarChamada(chamadas, "POST", "/api/financeiro/caixa-banco/transferencia");
-    expect(post.corpo).toEqual({ origem: CAIXA.id, destino: BANCO.id, valor: 10000 });
+    expect(post.corpo).toEqual({ origem: CAIXA.id, destino: BANCO.id, valor: 10000, chave: expect.any(String) });
   });
 
   test("origem igual ao destino é barrada na hora", async () => {
@@ -150,7 +154,7 @@ describe("tela Caixa e Banco", () => {
     await u.type(within(painel).getByLabelText("Saldo inicial"), "1.500,00");
     await u.click(criar);
     const post = await esperarChamada(chamadas, "POST", "/api/financeiro/contas");
-    expect(post.corpo).toEqual({ local_id: "l1", nome: "Banco Itaú", tipo: "corrente", banco: "341", agencia: "0001", numero: "55555-0", saldo_inicial: 150000 });
+    expect(post.corpo).toEqual({ local_id: "l1", nome: "Banco Itaú", tipo: "corrente", banco: "341", agencia: "0001", numero: "55555-0", saldo_inicial: 150000, chave: expect.any(String) });
   });
 
   test("trocar o local no topo recarrega as contas daquele local", async () => {
@@ -165,5 +169,28 @@ describe("tela Caixa e Banco", () => {
     await u.selectOptions(await screen.findByLabelText("Local"), "Sorveteria");
     expect(await screen.findByText("Caixa da Sorveteria", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByLabelText("Conta (caixa/banco)")).toHaveValue("c9");
+  });
+
+  test("estornar um lançamento do extrato exige supervisor e envia motivo; o erro fica na janela", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(rotas({ "POST /api/financeiro/lancamentos/x/estornar": { __status: 422, codigo: "ESTADO_INVALIDO", mensagem: "A parcela do saldo deste pagamento parcial já teve movimento." } }));
+    await abrirAba("caixa");
+    expect(await screen.findByText("Cartão Visa")).toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Estornar" }));
+    const janela = await screen.findByRole("dialog", { name: "Estornar lançamento" });
+    await u.type(within(janela).getByLabelText("Motivo"), "Valor errado");
+    await u.type(within(janela).getByLabelText("Login do supervisor"), "admin");
+    await u.type(within(janela).getByLabelText("Senha do supervisor"), "admin");
+    await u.click(within(janela).getByRole("button", { name: /Confirmar|Autorizar|Estornar/ }));
+    expect(await within(janela).findByText(/A parcela do saldo deste pagamento parcial/)).toBeInTheDocument();
+    const post = chamadas.find((c) => c.metodo === "POST")!;
+    expect(post.corpo).toEqual({ motivo: "Valor errado", supervisor: { login: "admin", senha: "admin" } });
+  });
+
+  test("movimento já revertido não oferece Estornar", async () => {
+    instalarApiFalsa(rotas({ "GET /api/financeiro/relatorios/movimento": { ...MOV, movimentos: [{ ...MOV.movimentos[0], estornavel: false }] } }));
+    await abrirAba("caixa");
+    expect(await screen.findByText("Cartão Visa")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Estornar" })).not.toBeInTheDocument();
   });
 });

@@ -5,8 +5,9 @@ import { Cartao } from "../componentes/Cartao";
 import { ErroAcao } from "../componentes/ErroAcao";
 import { Gaveta } from "../componentes/Gaveta";
 import { formatarReais } from "../lib/dinheiro";
-import { CampoTexto, dataBr, Estado, Selecao } from "./comuns";
-import { dataLocal, useCriarConta, useMovimento, useSaldo, useTransferir, type Conta } from "./useFinanceiro";
+import { JanelaSupervisor } from "../componentes/JanelaSupervisor";
+import { CampoTexto, dataBr, Estado, ROTULO_ORIGEM, rotulo, Selecao } from "./comuns";
+import { dataLocal, useCriarConta, useEstornarLancamento, useMovimento, useSaldo, useTransferir, type Conta, type Extrato } from "./useFinanceiro";
 
 const TIPOS_CONTA = [
   { valor: "corrente", rotulo: "Conta corrente" },
@@ -71,6 +72,8 @@ function PainelNovaConta({ localId, aoFechar }: { localId: string; aoFechar: () 
 
 export function CaixaBancoTab({ localId, contaId, contas }: { localId: string; contaId: string; contas: Conta[] }) {
   const [painel, setPainel] = useState<"transferir" | "conta" | null>(null);
+  const [estornar, setEstornar] = useState<Extrato["movimentos"][number] | null>(null);
+  const estorno = useEstornarLancamento();
   const [periodo] = useState(() => ({ inicio: dataLocal(-30), fim: dataLocal() }));
   const saldo = useSaldo(contaId);
   const mov = useMovimento(contaId, periodo);
@@ -104,14 +107,16 @@ export function CaixaBancoTab({ localId, contaId, contas }: { localId: string; c
             {(mov.data?.movimentos.length ?? 0) === 0 ? <p className="fin__suave">Sem movimentos no período.</p> : (
               <div className="fin__rolagem">
                 <table className="fin__tabela">
-                  <thead><tr><th>Tipo</th><th className="fin__num">Valor</th><th>Data</th><th className="fin__num">Saldo posterior</th></tr></thead>
+                  <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th className="fin__num">Valor</th><th className="fin__num">Saldo posterior</th><th><span className="fin__oculto">Ações</span></th></tr></thead>
                   <tbody>
                     {mov.data!.movimentos.map((m) => (
                       <tr key={m.id}>
+                        <td>{dataBr(m.dia)}</td>
+                        <td>{m.descricao || rotulo(ROTULO_ORIGEM, m.origem) || "—"}</td>
                         <td>{m.tipo.replace(/_/g, " ")}</td>
                         <td className="fin__num">{formatarReais(m.credito > 0 ? m.credito : -m.debito)}</td>
-                        <td>{dataBr(m.data)}</td>
                         <td className="fin__num">{formatarReais(m.saldo_posterior)}</td>
+                        <td className="fin__acoes">{m.estornavel && <Botao variante="contorno" tamanho="pequeno" onClick={() => setEstornar(m)}>Estornar</Botao>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -121,6 +126,16 @@ export function CaixaBancoTab({ localId, contaId, contas }: { localId: string; c
           </Estado>
         </Cartao>
       )}
+      <JanelaSupervisor
+        aberta={estornar !== null}
+        titulo="Estornar lançamento"
+        aoCancelar={() => setEstornar(null)}
+        aoConfirmar={async (aut) => {
+          if (!estornar) return;
+          await estorno.mutateAsync({ id: estornar.lancamento_id, aut });
+          setEstornar(null);
+        }}
+      />
       <Gaveta aberta={painel === "transferir"} aoFechar={fechar} titulo="Transferir entre contas">
         {painel === "transferir" && <PainelTransferir contaId={contaId} contas={contas} aoFechar={fechar} />}
       </Gaveta>

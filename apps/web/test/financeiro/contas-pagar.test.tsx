@@ -8,8 +8,9 @@ afterEach(() => vi.unstubAllGlobals());
 
 const PENDENTE = {
   id: "p1", local_id: "l1", data: "2026-11-01T12:00:00.000Z", tipo: "pagamento", origem: "manual", forma_pagamento: "boleto", descricao: "Pães de novembro",
-  categoria: "fornecedor", vencimento: "2026-11-20T12:00:00.000Z", fornecedor_nome: "Padaria Ltda", status: "pendente", valor: 12000,
+  categoria: "fornecedor", vencimento: "2026-11-20T12:00:00.000Z", dia: "2026-11-01", vencimento_dia: "2026-11-20", fornecedor_nome: "Padaria Ltda", status: "pendente", valor: 12000,
 };
+const TAXA = { ...PENDENTE, id: "p3", descricao: "Taxa do cartão Visa (credito)", categoria: "taxa_cartao", referencia_tipo: "taxa_cartao", fornecedor_nome: null, status: "liquidado", valor: 250, vencimento: undefined, vencimento_dia: null };
 const PAGO = { ...PENDENTE, id: "p2", descricao: "Luz de outubro", categoria: "servico", fornecedor_nome: null, status: "confirmado", valor: 30000 };
 
 const rotas = (extra: Record<string, unknown> = {}) => ({
@@ -60,7 +61,7 @@ describe("tela Contas a Pagar", () => {
     expect(lancar).toBeEnabled();
     await u.click(lancar);
     const post = await esperarChamada(chamadas, "POST", "/api/financeiro/contas-a-pagar");
-    expect(post.corpo).toEqual({ local_id: "l1", descricao: "Pães de dezembro", categoria: "fornecedor", valor: 12050, vencimento: "2026-12-05", fornecedor_id: "f1" });
+    expect(post.corpo).toEqual({ local_id: "l1", descricao: "Pães de dezembro", categoria: "fornecedor", valor: 12050, vencimento: "2026-12-05", fornecedor_id: "f1", chave: expect.any(String) });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
@@ -89,7 +90,7 @@ describe("tela Contas a Pagar", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo fornecedor" })).not.toBeInTheDocument());
     const painel = screen.getByRole("dialog", { name: "Nova conta a pagar" });
     await waitFor(() => expect(within(painel).getByLabelText("Fornecedor")).toHaveValue("f9"));
-    expect(chamadas.find((c) => c.metodo === "POST")!.corpo).toEqual({ local_id: "l1", razao_social: "Gráfica Alfa" });
+    expect(chamadas.find((c) => c.metodo === "POST")!.corpo).toEqual({ local_id: "l1", razao_social: "Gráfica Alfa", chave: expect.any(String) });
   });
 
   test("erro do servidor aparece dentro do painel de lançamento", async () => {
@@ -140,5 +141,72 @@ describe("tela Contas a Pagar", () => {
     instalarApiFalsa(rotas({ "GET /api/financeiro/lancamentos": [] }));
     await abrirAba("pagar");
     expect(await screen.findByText("Nenhuma conta a pagar encontrada.")).toBeInTheDocument();
+  });
+
+  test("pagamento parcial: pede o novo vencimento do saldo e envia valor e data", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(rotas({ "PUT /api/financeiro/contas-a-pagar/p1/baixar": { ...PENDENTE, status: "confirmado" } }));
+    await abrirAba("pagar");
+    await u.click(await screen.findByRole("button", { name: "Pagar" }));
+    const painel = await screen.findByRole("dialog", { name: "Pagar conta" });
+    expect(within(painel).getByLabelText("Valor a pagar agora")).toHaveValue("120,00");
+    expect(within(painel).queryByLabelText("Novo vencimento do saldo")).not.toBeInTheDocument();
+    await u.clear(within(painel).getByLabelText("Valor a pagar agora"));
+    await u.type(within(painel).getByLabelText("Valor a pagar agora"), "50,00");
+    expect(within(painel).getByText(/Fica um saldo de R\$ 70,00 em uma nova parcela/)).toBeInTheDocument();
+    const confirmar = within(painel).getByRole("button", { name: "Confirmar pagamento" });
+    expect(confirmar).toBeDisabled();
+    fireEvent.change(within(painel).getByLabelText("Novo vencimento do saldo"), { target: { value: "2026-12-20" } });
+    await u.click(confirmar);
+    const put = await esperarChamada(chamadas, "PUT", "/api/financeiro/contas-a-pagar/p1/baixar");
+    expect(put.corpo).toEqual({ conta_id: CAIXA.id, forma_pagamento: "pix", valor: 5000, novo_vencimento: "2026-12-20" });
+  });
+
+  test("valor maior que o devido é barrado na hora", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(rotas());
+    await abrirAba("pagar");
+    await u.click(await screen.findByRole("button", { name: "Pagar" }));
+    const painel = await screen.findByRole("dialog", { name: "Pagar conta" });
+    await u.clear(within(painel).getByLabelText("Valor a pagar agora"));
+    await u.type(within(painel).getByLabelText("Valor a pagar agora"), "130,00");
+    expect(within(painel).getByRole("alert")).toHaveTextContent("O valor é maior que o devido");
+    expect(within(painel).getByRole("button", { name: "Confirmar pagamento" })).toBeDisabled();
+  });
+
+  test("histórico: parcela de saldo e pagamento parcial ficam identificados", async () => {
+    const pago = { ...PAGO, id: "p4", descricao: "Obra", status: "confirmado", valor: 4000, valor_total: 10000 };
+    const resto = { ...PENDENTE, id: "p5", descricao: "Obra", parcela_de: "p4", valor: 6000 };
+    instalarApiFalsa(rotas({ "GET /api/financeiro/lancamentos": [pago, resto] }));
+    await abrirAba("pagar");
+    expect(await screen.findByText(/pago parcial \(R\$ 40,00 de R\$ 100,00\)/)).toBeInTheDocument();
+    expect(screen.getByText(/saldo de pagamento parcial/)).toBeInTheDocument();
+  });
+
+  test("a taxa do cartão aparece como despesa do Cartão de Crédito, já liquidada, sem pagar nem cancelar", async () => {
+    instalarApiFalsa(rotas({ "GET /api/financeiro/lancamentos": [TAXA] }));
+    await abrirAba("pagar");
+    const linha = (await screen.findByText("Taxa do cartão Visa (credito)")).closest("tr")!;
+    expect(within(linha).getByText("Cartão de Crédito (taxa)")).toBeInTheDocument();
+    expect(within(linha).getByText("Liquidado")).toBeInTheDocument();
+    expect(within(linha).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  test("tentar de novo depois de um erro reenvia a MESMA chave (o servidor só executa uma vez)", async () => {
+    const u = userEvent.setup();
+    let tentativa = 0;
+    instalarApiFalsa(rotas({ "POST /api/financeiro/contas-a-pagar": () => (++tentativa === 1 ? { __status: 500, codigo: "ERRO_INTERNO", mensagem: "Algo deu errado no servidor. Tente de novo." } : { __status: 201, ...PENDENTE }) }));
+    await abrirAba("pagar");
+    await u.click(await screen.findByRole("button", { name: "+ Nova conta a pagar" }));
+    const painel = await screen.findByRole("dialog", { name: "Nova conta a pagar" });
+    await u.type(within(painel).getByLabelText("Descrição"), "Luz");
+    await u.type(within(painel).getByLabelText("Valor"), "50");
+    await u.click(within(painel).getByRole("button", { name: "Lançar conta a pagar" }));
+    expect(await within(painel).findByRole("alert")).toBeInTheDocument();
+    await u.click(within(painel).getByRole("button", { name: "Lançar conta a pagar" }));
+    await waitFor(() => expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(2));
+    const [a, b] = chamadas.filter((c) => c.metodo === "POST").map((c) => (c.corpo as { chave: string }).chave);
+    expect(a).toBeTruthy();
+    expect(a).toBe(b);
   });
 });

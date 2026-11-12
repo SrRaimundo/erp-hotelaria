@@ -9,6 +9,8 @@ const FINANCEIRO = "financeiro.gerenciar";
 const financeiro = (slug: string, rotulo: string): ItemMenu => ({ para: `/financeiro/${slug}`, rotulo, permissao: FINANCEIRO });
 const estoque = (slug: string, rotulo: string): ItemMenu => ({ para: `/estoque/${slug}`, rotulo, permissao: CONFIG });
 const cadastro = (slug: string, rotulo: string): ItemMenu => ({ para: `/cadastros/${slug}`, rotulo, permissao: CADASTROS });
+/** Cadastro do Financeiro dentro do grupo Cadastros: exige a permissão financeira, não a de cadastros. */
+const cadastroFinanceiro = (slug: string, rotulo: string): ItemMenu => ({ para: `/cadastros/${slug}`, rotulo, permissao: FINANCEIRO });
 
 export const GRUPOS_MENU: GrupoMenu[] = [
   {
@@ -59,7 +61,7 @@ export const GRUPOS_MENU: GrupoMenu[] = [
       cadastro("categorias-e-quartos", "Categorias e Quartos"),
       cadastro("setores", "Setores"),
       cadastro("fornecedor", "Fornecedor"),
-      cadastro("cobranca", "Cobrança"),
+      cadastroFinanceiro("cobranca", "Cobrança"),
       cadastro("tipo-de-documento", "Tipo de Documento"),
       cadastro("grupo", "Grupo"),
       cadastro("subgrupo", "SubGrupo"),

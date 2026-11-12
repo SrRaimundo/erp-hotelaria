@@ -31,7 +31,7 @@ describe("tela Local", () => {
     await u.click(within(painel).getByLabelText("Recebe os lançamentos da hospedagem"));
     await u.click(salvar);
     const post = await esperarChamada(chamadas, "POST", "/api/financeiro/locais");
-    expect(post.corpo).toEqual({ nome: "Sorveteria", hospedagem_padrao: true });
+    expect(post.corpo).toEqual({ nome: "Sorveteria", hospedagem_padrao: true, chave: expect.any(String) });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 

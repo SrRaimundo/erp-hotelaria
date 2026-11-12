@@ -50,6 +50,7 @@ const TELAS_PRONTAS: Record<string, ReactElement> = {
   "/financeiro/faturamento": <FinanceiroLayout key="faturamento" aba="faturamento" />,
   "/financeiro/caixa-e-banco": <FinanceiroLayout key="caixa" aba="caixa" />,
   "/financeiro/relatorios": <FinanceiroLayout key="relatorios" aba="relatorios" />,
+  "/cadastros/cobranca": <FinanceiroLayout key="cobranca" aba="cobranca" />,
   "/cadastros/produtos": <TelaProdutos />,
   "/cadastros/categorias-e-quartos": <TelaCategoriasQuartos />,
 };

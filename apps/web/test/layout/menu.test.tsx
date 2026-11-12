@@ -76,8 +76,11 @@ describe("menu em grupos", () => {
   test("itens sem permissão somem e grupo sem itens visíveis também", async () => {
     const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "financeiro.gerenciar", "config.gerenciar"] } });
     await aguardarConsultas(cliente);
-    expect(cabecalhos()).toEqual(["Hotel", "Financeiro", "Estoque"]);
-    expect(screen.queryByRole("button", { name: "Cadastros" })).not.toBeInTheDocument();
+    // Cadastros aparece só pela Cobrança (permissão financeira), sem os cadastros gerais.
+    expect(cabecalhos()).toEqual(["Hotel", "Financeiro", "Estoque", "Cadastros"]);
+    await userEvent.click(screen.getByRole("button", { name: /^Cadastros/ }));
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toContain("Cobrança");
+    expect(screen.queryByRole("link", { name: "Produtos" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Governança" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Caixa" })).toBeInTheDocument();
   });
@@ -92,7 +95,14 @@ describe("menu em grupos", () => {
   test("Financeiro aparece só com financeiro.gerenciar", async () => {
     const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["financeiro.gerenciar"] } });
     await aguardarConsultas(cliente);
-    expect(cabecalhos()).toEqual(["Financeiro"]);
+    expect(cabecalhos()).toEqual(["Financeiro", "Cadastros"]);
+  });
+
+  test("Cobrança (cadastro do Financeiro) não aparece para quem só tem cadastros.gerenciar", async () => {
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { rota: "/cadastros/produtos", usuario: { permissoes: ["cadastros.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    expect(screen.queryByRole("link", { name: "Cobrança" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Produtos" })).toBeInTheDocument();
   });
 
   test("só cadastros.gerenciar: apenas o grupo Cadastros, sem engrenagem", async () => {

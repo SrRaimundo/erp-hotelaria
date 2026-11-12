@@ -10,11 +10,11 @@ const vazio = { quantidade: 0, valor_original: 0, valor_recebido: 0, valor_pende
 const rotas = (extra: Record<string, unknown> = {}) => ({
   ...rotasBase(),
   "GET /api/financeiro/relatorios/fluxo-caixa": {
-    local_id: "l1", data: "2026-11-02", saldo_inicial: 10000, entradas: 25000, saidas: 5000, transferencias_entrada: 0, transferencias_saida: 0, saldo_final: 30000,
+    local_id: "l1", data: "2026-11-02", saldo_inicial: 10000, entradas: 25000, saidas: 5000, transferencias_entrada: 0, transferencias_saida: 0, taxas_cartao: 250, saldo_final: 30000,
   },
   "GET /api/financeiro/relatorios/consolidado": {
-    data_inicio: "a", data_fim: "b", locais: [{ local_id: "l1", nome: "Pousada Sol", saldo_inicial: 0, recebimentos: 50000, pagamentos: 8000, saldo_final: 42000 }],
-    total: { saldo_inicial: 0, recebimentos: 50000, pagamentos: 8000, saldo_final: 42000 },
+    data_inicio: "a", data_fim: "b", locais: [{ local_id: "l1", nome: "Pousada Sol", saldo_inicial: 0, recebimentos: 50000, pagamentos: 8000, taxas_cartao: 250, saldo_final: 42000 }],
+    total: { saldo_inicial: 0, recebimentos: 50000, pagamentos: 8000, taxas_cartao: 250, saldo_final: 42000 },
   },
   "GET /api/financeiro/relatorios/contas-receber": {
     local_id: "l1", itens: [],
@@ -33,6 +33,7 @@ describe("tela Relatórios do Financeiro", () => {
     await abrirAba("relatorios");
     const fluxo = (await screen.findByRole("heading", { name: "Fluxo de caixa (hoje)" })).parentElement!;
     expect(within(fluxo).getByText("R$ 300,00")).toBeInTheDocument();
+    expect(within(fluxo).getByText("Taxas de cartão (sem movimento de caixa)")).toBeInTheDocument();
     const consolidado = screen.getByRole("heading", { name: /Consolidado por local/ }).parentElement!;
     expect(within(consolidado).getByText("R$ 500,00")).toBeInTheDocument();
     const receber = screen.getByRole("heading", { name: "Contas a receber" }).parentElement!;
