@@ -118,48 +118,8 @@ Cancel a transaction (sensitive action requiring supervisor authorization).
 
 ### Faturamento (Invoicing)
 
-#### POST /api/financeiro/faturamento/gerar-cobranca
-Generate a billing collection request (boleto, PIX, or bank transfer) for an invoice.
-
-**Request Body:**
-```json
-{
-  "faturamento_id": "uuid",
-  "forma": "boleto"
-}
-```
-
-**Parameters:**
-| Field | Type | Required | Allowed Values | Description |
-|-------|------|----------|-----------------|-------------|
-| `faturamento_id` | UUID | Yes | - | Invoice (Faturamento) ID |
-| `forma` | string | Yes | `boleto`, `pix`, `deposito` | Collection method |
-
-**Success Response (201):**
-```json
-{
-  "id": "uuid",
-  "local_id": "uuid",
-  "cliente_id": "uuid",
-  "referencia_id": "uuid",
-  "referencia_tipo": "checkout",
-  "valor_original": 50000,
-  "valor_liquido": 49500,
-  "data_vencimento": "2026-12-01",
-  "forma_cobranca": "boleto",
-  "numero_documento": "123456789.01 12345678901234 567890123456 7",
-  "status": "aberto",
-  "lançamentos_id": []
-}
-```
-
-**Error Responses:**
-| Code | Description |
-|------|-------------|
-| 401 | Missing or invalid JWT token |
-| 403 | User lacks `financeiro.gerenciar` permission |
-| 422 | Invalid UUID; invalid collection method; or invoice not found |
-| 500 | Error generating billing document (e.g., bank integration failure) |
+Invoices are closed through `POST /api/financeiro/faturamentos/fechar-grupo` (one or more open closings of the same client; see the addendum at the end).
+The old `POST /faturamento/gerar-cobranca` route was removed: it generated a document number without creating the Conta a Receber and left the invoice stranded.
 
 ---
 
@@ -391,17 +351,6 @@ curl -X GET "http://localhost:3000/api/financeiro/lancamentos?local_id=uuid&data
   -H "Authorization: Bearer token"
 ```
 
-### Generate billing:
-```bash
-curl -X POST "http://localhost:3000/api/financeiro/faturamento/gerar-cobranca" \
-  -H "Authorization: Bearer token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "faturamento_id": "uuid",
-    "forma": "boleto"
-  }'
-```
-
 ### Confirm payment:
 ```bash
 curl -X PUT "http://localhost:3000/api/financeiro/contas-receber/uuid/confirmar-pagamento" \
@@ -457,6 +406,31 @@ Dias (`data`, `data_inicio`, `data_fim`, relatórios) são contados no fuso da p
 | `POST /api/financeiro/cartao/movimentos` | `{ local_id, data, bandeira, tipo, valor, informado: "bruto"\|"liquido", taxa_percentual, previsao? }`. |
 | `PUT /api/financeiro/cartao/movimentos/:id/baixar` | `{ conta_id, taxa_percentual? }`. Credita o líquido na conta. |
 
-Cancelar ou estornar um lançamento que já movimentou o Caixa/Banco grava o movimento oposto (o saldo volta).
+### Reversão (cancelar e estornar)
+
+Uma regra só, uma vez só por lançamento: `POST /api/financeiro/lancamentos/:id/estornar` e `DELETE /api/financeiro/lancamentos/:id`
+(`{ motivo, supervisor: {login, senha} }`). Ambos devolvem o saldo (movimento oposto), restauram a conta a receber e a fatura
+(recebimento) e cancelam o movimento de cartão com a sua taxa. A segunda tentativa, ou cancelar depois de estornar, é recusada (422).
+Pagamento parcial: a parcela do saldo só é removida junto se ninguém mexeu nela; senão a reversão é recusada com explicação.
+A taxa de cartão e o estorno em si não podem ser revertidos sozinhos.
+
+### Pagamento parcial
+
+- `PUT /contas-a-pagar/:id/baixar` aceita `valor` e `novo_vencimento`; `PUT /contas-receber/:id/confirmar-pagamento` aceita `novo_vencimento`.
+  Pagar/receber menos que o devido exige `novo_vencimento`: o original fica quitado pela parte paga e nasce uma nova parcela (campo `parcela_de`)
+  com o saldo. A soma das parcelas é sempre o valor original (`valor_total` guarda o valor antes da divisão).
+
+### Faturamento agrupado
+
+- `POST /faturamentos/fechar-grupo` `{ ids[], forma, data_vencimento }`: mesmo cliente e local, todos abertos. Um número de documento, uma conta a receber pela soma.
+- `GET /faturamentos/extrato?local_id=&numero=`: cada fechamento da fatura (reserva, hóspede, período, valor) e o total.
+
+### Cobrança (condições de cartão)
+
+- `GET/POST /cobranca/condicoes`, `PUT /cobranca/condicoes/:id`: adquirente, bandeira, tipo, `prazo_dias` (D+N qualquer) e `taxa_percentual`, `ativo`.
+- O movimento de cartão guarda uma cópia do prazo e da taxa na criação. Pagamento de cartão da hospedagem sem condição única do tipo entra com `revisar: 1`
+  (sem taxa nem prazo inventados) e só é baixado informando `condicao_id` (ou a taxa).
+- A taxa descontada na baixa vira um lançamento de pagamento "liquidado" (categoria `taxa_cartao`), sem movimento de caixa: o banco recebeu só o líquido.
+  Aparece em Contas a Pagar e em `taxas_cartao` dos relatórios de fluxo e consolidado, fora do saldo.
 Checkouts faturados da hospedagem ficam em Faturamento aberto até `fechar`; só então viram Conta a Receber.
 Pagamentos em cartão da hospedagem viram movimentos de cartão a receber (taxa 0 até a baixa).

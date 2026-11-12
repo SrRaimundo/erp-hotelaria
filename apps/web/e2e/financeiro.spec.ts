@@ -41,6 +41,13 @@ async function irPara(page: Page, item: string) {
   await page.locator("#menu-grupo-financeiro").getByRole("link", { name: item, exact: true }).click();
 }
 
+/** Abre o item Cobrança do grupo Cadastros (visível para quem tem a permissão financeira). */
+async function irParaCobranca(page: Page) {
+  const grupo = page.getByRole("button", { name: /^Cadastros/ });
+  if ((await grupo.getAttribute("aria-expanded")) !== "true") await grupo.click();
+  await page.locator("#menu-grupo-cadastros").getByRole("link", { name: "Cobrança", exact: true }).click();
+}
+
 /** Captura desktop e 390 px e garante que a página não rola na horizontal no celular. */
 async function capturar(page: Page, nome: string) {
   mkdirSync(CAPTURAS, { recursive: true });
@@ -161,6 +168,30 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
   });
 
+  test("3b. Contas a Pagar: pagamento parcial cria a parcela do saldo e só o valor pago sai da conta", async () => {
+    await irPara(page, "Contas a Pagar");
+    await page.getByRole("button", { name: "+ Nova conta a pagar" }).click();
+    let painel = page.getByRole("dialog", { name: "Nova conta a pagar" });
+    await painel.getByLabel("Descrição").fill("Aluguel E2E");
+    await painel.getByLabel("Valor").fill("200,00");
+    await painel.getByRole("button", { name: "Lançar conta a pagar" }).click();
+    await expect(painel).toBeHidden();
+    await page.getByRole("row", { name: /Aluguel E2E/ }).getByRole("button", { name: "Pagar" }).click();
+    painel = page.getByRole("dialog", { name: "Pagar conta" });
+    const opcao = await painel.getByLabel("Pagar com a conta").locator("option", { hasText: "Banco E2E" }).textContent();
+    await painel.getByLabel("Pagar com a conta").selectOption({ label: opcao! });
+    await painel.getByLabel("Valor a pagar agora").fill("80,00");
+    await painel.getByLabel("Novo vencimento do saldo").fill("2030-01-15");
+    await painel.getByRole("button", { name: "Confirmar pagamento" }).click();
+    await expect(painel).toBeHidden();
+    await expect(page.getByText(/pago parcial \(R\$ 80,00 de R\$ 200,00\)/)).toBeVisible();
+    await expect(page.getByText(/saldo de pagamento parcial/)).toBeVisible();
+    await capturar(page, "03b-pagamento-parcial");
+    await irPara(page, "Caixa e Banco");
+    saldoBanco -= 8000;
+    await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
+  });
+
   let faturado = 0;
   test("4. Hospedagem: check-out com valor faturado chega em Faturamento aberto", async ({ request }) => {
     const lista = await (await api(request, admin, "get", "/api/reservas?estado=hospedada&porPagina=100")).json();
@@ -193,6 +224,13 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await painel.getByRole("button", { name: "Fechar fatura" }).click();
     await expect(painel).toBeHidden();
     await expect(page.getByText(/Nenhum fechamento marcado/)).toBeVisible();
+    await page.getByLabel("Mostrar").selectOption({ label: "Fechadas" });
+    await page.getByRole("row", { name: new RegExp(CLIENTE) }).getByRole("button", { name: "Extrato" }).click();
+    const extrato = page.getByRole("dialog", { name: "Extrato da cobrança" });
+    await expect(extrato).toContainText(CLIENTE);
+    await expect(extrato).toContainText("Total da fatura");
+    await capturar(page, "05b-extrato-da-cobranca");
+    await extrato.getByRole("button", { name: "Fechar" }).click();
 
     await irPara(page, "Contas a Receber");
     const linha = page.getByRole("row", { name: new RegExp(CLIENTE) });
@@ -218,20 +256,36 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await capturar(page, "06-caixa-e-banco-depois");
   });
 
-  test("7. Cartão de Crédito: registra o líquido e baixa na conta", async () => {
+  test("6b. Cobrança: cadastra a condição do cartão no grupo Cadastros", async () => {
+    await irParaCobranca(page);
+    await expect(page.getByRole("heading", { name: "Cobrança", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "+ Nova condição" }).click();
+    const painel = page.getByRole("dialog", { name: "Nova condição de cobrança" });
+    await painel.getByLabel("Adquirente").fill("Cielo E2E");
+    await painel.getByLabel("Bandeira").fill("Visa");
+    await painel.getByLabel("Prazo para receber (dias, D+N)").fill("30");
+    await painel.getByLabel("Taxa (%)").fill("2");
+    await painel.getByRole("button", { name: "Salvar" }).click();
+    await expect(painel).toBeHidden();
+    await expect(page.getByRole("row", { name: /Cielo E2E/ })).toContainText("D+30");
+    await capturar(page, "06b-cobranca");
+  });
+
+  test("7. Cartão de Crédito: registra pela condição, baixa o líquido e a taxa vira despesa só de registro", async () => {
     await irPara(page, "Cartão de Crédito");
     await page.getByRole("button", { name: "+ Novo movimento" }).click();
     let painel = page.getByRole("dialog", { name: "Novo movimento de cartão" });
-    await painel.getByLabel("Bandeira").selectOption("Visa");
+    const cond = await painel.getByLabel("Condição de cobrança").locator("option", { hasText: "Cielo E2E" }).textContent();
+    await painel.getByLabel("Condição de cobrança").selectOption({ label: cond! });
     await painel.getByLabel("O valor informado é").selectOption({ label: "Líquido (já sem a taxa)" });
     await painel.getByLabel("Valor", { exact: true }).fill("98,00");
-    await painel.getByLabel("Taxa da operadora (%)").fill("2");
     await expect(painel.getByRole("list", { name: "Conferência dos valores" })).toContainText("R$ 100,00");
     await capturar(page, "07a-novo-movimento-cartao");
     await painel.getByRole("button", { name: "Registrar movimento" }).click();
     await expect(painel).toBeHidden();
-    const linha = page.getByRole("row", { name: /Visa/ });
+    const linha = page.getByRole("row", { name: /Cielo E2E/ });
     await expect(linha).toContainText("A receber");
+    await expect(linha).toContainText("D+30");
     await capturar(page, "07-cartao");
 
     await linha.getByRole("button", { name: "Baixar" }).click();
@@ -242,8 +296,15 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await expect(linha).toContainText("Baixado");
 
     await irPara(page, "Caixa e Banco");
-    saldoBanco += 9800;
+    saldoBanco += 9800; // só o líquido
     await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
+
+    await irPara(page, "Contas a Pagar");
+    const taxa = page.getByRole("row", { name: /Taxa do cartão Visa/ });
+    await expect(taxa).toContainText("Cartão de Crédito (taxa)");
+    await expect(taxa).toContainText("Liquidado");
+    await expect(taxa.getByRole("button")).toHaveCount(0);
+    await capturar(page, "07b-taxa-do-cartao");
   });
 
   test("8. Relatórios: abre sem erro", async () => {

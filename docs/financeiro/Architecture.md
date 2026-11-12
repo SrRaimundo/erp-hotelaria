@@ -31,7 +31,7 @@ apps/server/src/financeiro/
 │   ├── index.ts                     # Router aggregator
 │   ├── comum.ts                     # Shared validation & auth
 │   ├── lançamentos.ts               # GET /lancamentos, DELETE /lancamentos/:id
-│   ├── faturamento.ts               # POST /faturamento/gerar-cobranca
+│   ├── faturamento.ts               # GET /faturamentos, /faturamentos/extrato, POST /faturamentos/fechar-grupo
 │   ├── contas-receber.ts            # PUT /contas-receber/:id/confirmar-pagamento
 │   └── caixa-banco.ts               # GET/POST caixa-banco/saldo & /transferencia
 └── relatórios/                      # Reporting queries
@@ -48,52 +48,39 @@ apps/server/src/financeiro/
 
 ## Event-Driven Integration
 
-The Financeiro module is driven by events from the Hospedagem (hotel bookings) system. This creates a clean separation of concerns and supports offline-first synchronization.
+The Financeiro module is driven by events from the Hospedagem (hotel bookings) system. This creates a clean separation of concerns. Delivery to the Financeiro is durable (outbox + persisted cursor, see below). Synchronizing with the cloud is NOT implemented here: it belongs to Plan C.
 
 ### Event Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        HOSPEDAGEM (Bookings)                    │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             ├─► hospedagem.PagamentoRegistrado
-                             │   └─► Contém: pagamentoId, contaId,
-                             │       reservaId?, formaCodigo, valor
-                             │
-                             └─► hospedagem.ValorAReceberCriado
-                                 └─► Contém: valorAReceberId,
-                                     responsavel, valor
-
-                             │
-                ┌────────────▼────────────────────────────────────┐
-                │     BARRAMENTO (Event Bus / Message Queue)      │
-                └────────────┬────────────────────────────────────┘
-                             │
-              ┌──────────────┴──────────────────────┐
-              │                                     │
-              ▼                                     ▼
-    ┌─────────────────────────────┐    ┌──────────────────────────┐
-    │  PagamentoRegistrado        │    │ ValorAReceberCriado      │
-    │  Consumer                   │    │ Consumer                 │
-    └─────────────────────────────┘    └──────────────────────────┘
-              │                                     │
-              │ ◄── Duplicate check by ID          │ ◄── Duplicate check
-              │     (Outbox pattern)               │     (Outbox pattern)
-              │                                     │
-              ▼                                     ▼
-    ┌─────────────────────────────┐    ┌──────────────────────────┐
-    │ Lançamento + Movimento      │    │ Faturamento +            │
-    │ (if cash/PIX)               │    │ Cobrança + ContaReceber  │
-    └─────────────────────────────┘    └──────────────────────────┘
-              │                                     │
-              └──────────────┬──────────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │   FINANCEIRO    │
-                    │    Database     │
-                    └─────────────────┘
+HOSPEDAGEM (same transaction as the hotel operation)
+   └─► writes the event to the `outbox` table (seq, tipo, payload)
+          │ commit
+          ▼
+   event bus (in memory)  ── only a "wake up" signal ──►  processarPendentes()
+                                                              │
+   boot (before listen) and the scheduler (every 60 s) ──────►│
+                                                              ▼
+                              reads `outbox` rows with seq > fin_cursor.ultimo_seq
+                              for the hospedagem.* types, in seq order
+                                                              │
+        per event, ONE transaction: handler effect + cursor advance
+                                                              │
+   PagamentoRegistrado ─► Lançamento (+ Movimento for cash/PIX, + cartão movement for debit/credit)
+   PagamentoEstornado  ─► reverses the Lançamento and its effect (or raises an alert)
+   ValorAReceberCriado ─► Faturamento (open; Conta a Receber only when the invoice is closed)
 ```
+
+Properties (all covered by tests in `apps/server/test/financeiro/fila.test.ts` and `reversao.test.ts`):
+
+- **Catch-up after a crash**: events committed before a crash are consumed at the next start, exactly once.
+- **Order**: strictly by `seq`. A failing event blocks the ones after it (a reversal never overtakes its payment).
+- **Failure**: the transaction rolls back, the cursor does not move, the event is retried at the next cycle (bus signal or 60 s scheduler).
+  After 3 failures an `alertas` entry (`financeiro_evento_falhou`) is raised and resolved when the event finally succeeds.
+  A permanently failing event keeps blocking the queue until its cause is fixed: this is deliberate and visible through the alert.
+- **The hotel operation never fails because of the Financeiro**: consumption runs after the hospedagem commit.
+- **Initial position**: migration 0740 starts the cursor at the highest existing `outbox.seq`. History from before the Financeiro was installed is **not** reprocessed (no opening balances are known for it). A new database starts at 0.
+- Handlers are also idempotent by business key (`referencia_id`, unique partial index), so a replay is harmless.
 
 ### Processing Flow: PagamentoRegistrado
 
@@ -109,7 +96,7 @@ The Financeiro module is driven by events from the Hospedagem (hotel bookings) s
    - Status: `"pendente"` → `"confirmado"` when Movimento created
 6. **Route by Payment Form**:
    - **Dinheiro/PIX**: Create `Movimento` immediately (credito to "Caixa" account)
-   - **Débito/Crédito**: Log and wait for card settlement consumer (not implemented yet)
+   - **Débito/Crédito**: Create a `fin_cartao_movimento` (a receber da operadora). With exactly one active condition of the type in the Local (Cadastros > Cobrança) it takes that condition's prazo (D+N) and taxa as a snapshot; with none (or several) it is flagged `revisar` with no taxa/prazo invented, and cannot be baixado until the condition is chosen. No Movimento until the baixa (net of the fee).
    - **Other forms**: Ignore (only direct payments recorded)
 
 ### Processing Flow: ValorAReceberCriado
@@ -121,16 +108,16 @@ The Financeiro module is driven by events from the Hospedagem (hotel bookings) s
 3. **Resolve Local & Upsert Cliente**: Same as PagamentoRegistrado
 4. **Create Faturamento**:
    - `referencia_id` from checkout (`valor_a_receber.id`)
-   - `forma_cobranca: "boleto"` (default)
-   - `data_vencimento: data_emissao + 30 dias`
-   - Status: `"aberto"`
-5. **Generate Billing**:
-   - Call FaturamentoService.gerarCobranca() to create boleto number
-   - Update Faturamento with `numero_documento`
-6. **Create ContaReceber**:
-   - Links to Faturamento and Cliente
-   - Status: `"pendente"`
-   - Forms: can be "boleto", "pix", "deposito", etc.
+   - Status: `"aberto"`, no document number yet
+5. **Stop here**: the checkout stays an open closing in the Faturamento screen. The operator closes the invoice there
+   (one or several closings of the same client); closing generates the document number and creates ONE ContaReceber for the sum.
+
+### Processing Flow: PagamentoEstornado
+
+1. Find the Lançamento by `referencia_id` = `pagamentoId` (`referencia_tipo: "hospedagem_pagamento"`). Already cancelled: do nothing (once only).
+2. Card movement already **baixado**: change nothing, raise alert `financeiro_estorno_conciliado` for a manual decision (reverse the baixa in Caixa e Banco).
+3. Otherwise cancel the Lançamento through the single reversal rule: opposite Movimento (saldo restored) and card movement cancelled.
+4. Faturado payment: the open Faturamento is cancelled; if the invoice is already closed (or the match is ambiguous), alert instead.
 
 ---
 
@@ -189,31 +176,32 @@ DELETE /api/financeiro/lancamentos/:id
 
 ## Offline-First & Event Sourcing
 
-### Outbox Pattern (Idempotency)
+### Outbox and idempotency (what exists)
 
-The system uses an **Outbox pattern** to ensure exactly-once processing and offline resilience:
+The module reads the existing `outbox` through a persisted cursor (`fin_cursor`), as described in "Event Flow".
+Exactly-once *effect* comes from the cursor advancing in the same transaction as the handler, plus idempotent handlers:
 
-1. **Transaction Isolation**: Each consumer operation is wrapped in `emTransacao(ctx, async (tx) => { ... })`
-2. **Duplicate Detection**: Before processing, check if `referencia_id` already exists
-3. **Atomic Writes**: Write Lançamento and Movimento in same transaction
-4. **Idempotency by UUID**: Every event has a unique `referencia_id` from the source system
-
-**Example (PagamentoRegistrado):**
 ```typescript
 const dup = await tx.db
   .selectFrom("fin_lancamento")
   .select("id")
-  .where("referencia_id", "=", p.pagamentoId)       // ← UUID from event
+  .where("referencia_id", "=", p.pagamentoId)
   .where("referencia_tipo", "=", "hospedagem_pagamento")
   .executeTakeFirst();
-
-if (dup) return;  // Already processed; safe to skip
+if (dup) return; // already processed
 ```
 
-**Benefits:**
-- Events can be replayed without creating duplicates
-- Supports offline scenarios: events queue locally, sync when online
-- Guarantees data consistency even with network retries
+Money actions started from the screen (create conta a pagar, receive, transfer, close invoice, create cartão movement, create local/conta/fornecedor)
+accept an optional `chave` in the body. The same `chave` sent twice (double click, retry) runs once and returns the first response
+(`fin_idempotencia`). A failed attempt does not consume the key.
+
+### Not implemented: cloud synchronization
+
+Sending Financeiro data to the cloud ("sincronizar ao conectar") is **Plan C** and is out of scope here:
+
+- Nothing in the repository reads `outbox.enviado_em` (no synchronizer exists yet).
+- The Financeiro does not publish its own events (Lançamentos, Movimentos) to the `outbox`.
+- The system works fully on the local server without internet; the cloud copy is a later phase.
 
 ### No Immediate Deletions
 
@@ -431,7 +419,7 @@ await emTransacao(ctx, async (tx) => {
 
 ### Duplicate Key Violations
 
-Prevented by explicit duplicate checks before writes. No constraint-based errors.
+Prevented by explicit duplicate checks before writes, backed by unique partial indexes (`fin_lancamento` by hospedagem payment, `fin_faturamento` by checkout) as a last defense.
 
 ### Missing References
 
@@ -439,7 +427,7 @@ Validation before foreign key operations (e.g., conta_id must exist).
 
 ### Retryable Events
 
-Events failed processing are NOT automatically retried (responsibility of message broker). Manual intervention may be needed if consumer crashes.
+Events that fail are retried automatically (cursor not advanced, retried every cycle). After 3 failures an alert is raised. Nothing is lost on a crash: the event stays in the `outbox` and is consumed at the next start.
 
 ---
 
