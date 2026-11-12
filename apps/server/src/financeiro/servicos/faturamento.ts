@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { obterConfig } from "../../nucleo/pousada.js";
 import { dataLocal } from "../../shared/tempo.js";
 import { auditar } from "../../infra/auditoria.js";
@@ -10,6 +11,16 @@ import { ContasReceberService } from "./contas-receber.js";
 import type { Usuario } from "./locais.js";
 
 const PRAZO_VENCIMENTO_DIAS = 30;
+
+export type ExtratoCobranca = {
+  numero_documento: string;
+  cliente: { id: UUID; nome: string; documento: string | null; contato: { email?: string; telefone?: string; endereco?: string } };
+  forma_cobranca: string;
+  data_vencimento: string;
+  status: string;
+  total: number;
+  itens: { id: UUID; reserva_codigo: number | null; hospede: string | null; chegada: string | null; saida: string | null; valor: number }[];
+};
 
 export type FaturamentoListado = {
   id: UUID; cliente_id: UUID; cliente_nome: string; cliente_documento: string | null;
@@ -111,7 +122,7 @@ export class FaturamentoService {
       if (f.numero_documento) throw new ErroDominio("ESTADO_INVALIDO", "Cobrança já gerada.");
       const r = await tx.db
         .selectFrom("fin_faturamento")
-        .select(({ fn }) => fn.count<number>("numero_documento").as("n"))
+        .select(sql<number>`count(distinct numero_documento)`.as("n"))
         .where("local_id", "=", f.local_id)
         .executeTakeFirst();
       const ano = dataLocal(tx.relogio.agora(), (await obterConfig(tx)).fuso).slice(0, 4);
@@ -157,22 +168,71 @@ export class FaturamentoService {
     }));
   }
 
-  /**
-   * Fecha a fatura: gera o número do documento, ajusta forma e vencimento e envia o valor para Contas a Receber.
-   * Sem a chamada, o checkout faturado fica apenas aberto em Faturamento.
-   */
+  /** Fecha uma fatura de um único fechamento (atalho de `fecharGrupo`). */
   async fechar(id: UUID, forma: Faturamento["forma_cobranca"], vencimento: Date, usuario: Usuario): Promise<Faturamento> {
+    return this.fecharGrupo([id], forma, vencimento, usuario);
+  }
+
+  /**
+   * Fecha UMA fatura com um ou mais fechamentos abertos do mesmo cliente e local: um número de documento para todos,
+   * uma Conta a Receber pela soma. Sem a chamada, o checkout faturado fica apenas aberto em Faturamento.
+   */
+  async fecharGrupo(ids: UUID[], forma: Faturamento["forma_cobranca"], vencimento: Date, usuario: Usuario): Promise<Faturamento> {
     if (Number.isNaN(vencimento.getTime())) throw new ErroDominio("VALIDACAO_FALHOU", "Data de vencimento inválida.");
+    if (ids.length === 0) throw new ErroDominio("VALIDACAO_FALHOU", "Escolha ao menos um fechamento.");
+    if (new Set(ids).size !== ids.length) throw new ErroDominio("VALIDACAO_FALHOU", "Há fechamentos repetidos na seleção.");
     return emTransacao(this.ctx, async (tx) => {
       const svc = new FaturamentoService(tx);
-      const aberto = await svc.obter(id);
-      const cobr = await svc.gerarCobranca(id, forma, usuario);
-      await tx.db.updateTable("fin_faturamento").set({ data_vencimento: vencimento.toISOString() }).where("id", "=", id).execute();
-      await new ContasReceberService(tx).criarRecebivel(
-        id, aberto.cliente_id, aberto.local_id, cobr.numero_documento, aberto.valor_liquido, vencimento, usuario,
-      );
-      return svc.obter(id);
+      const fats: Faturamento[] = [];
+      for (const id of ids) fats.push(await svc.obter(id));
+      const primeiro = fats[0]!;
+      for (const f of fats) {
+        if (f.local_id !== primeiro.local_id) throw new ErroDominio("VALIDACAO_FALHOU", "Os fechamentos são de locais diferentes.");
+        if (f.cliente_id !== primeiro.cliente_id) throw new ErroDominio("VALIDACAO_FALHOU", "Só é possível agrupar fechamentos do mesmo cliente numa fatura.");
+        if (f.status !== "aberto" || f.numero_documento) throw new ErroDominio("ESTADO_INVALIDO", "Um dos fechamentos já está em fatura fechada.");
+      }
+      const cobr = await svc.gerarCobranca(primeiro.id, forma, usuario);
+      for (const f of fats.slice(1)) {
+        await tx.db.updateTable("fin_faturamento").set({ forma_cobranca: forma, numero_documento: cobr.numero_documento }).where("id", "=", f.id).execute();
+      }
+      await tx.db.updateTable("fin_faturamento").set({ data_vencimento: vencimento.toISOString() }).where("numero_documento", "=", cobr.numero_documento).where("local_id", "=", primeiro.local_id).execute();
+      const soma = fats.reduce((s, f) => s + f.valor_liquido.centavos, 0);
+      await new ContasReceberService(tx).criarRecebivel(primeiro.id, primeiro.cliente_id, primeiro.local_id, cobr.numero_documento, Dinheiro.de(soma), vencimento, usuario);
+      await auditar(tx, { ator: usuario.email, acao: "fin_faturamento.fechar_grupo", alvoTipo: "fin_faturamento", alvoId: primeiro.id, dados: { ids, numero_documento: cobr.numero_documento, total: soma } });
+      return svc.obter(primeiro.id);
     });
+  }
+
+  /** Extrato da cobrança: cada fechamento agrupado na fatura (reserva, hóspede, período, valor). */
+  async extrato(local_id: UUID, numero_documento: string): Promise<ExtratoCobranca> {
+    const linhas = (await this.ctx.db
+      .selectFrom("fin_faturamento as f")
+      .innerJoin("fin_cliente as c", "c.id", "f.cliente_id")
+      .leftJoin("valores_a_receber as v", "v.id", "f.referencia_id")
+      .leftJoin("reservas as r", "r.id", "v.reserva_id")
+      .leftJoin("hospedes as h", "h.id", "r.titular_id")
+      .select([
+        "f.id", "f.valor_liquido", "f.data_vencimento", "f.forma_cobranca", "f.status", "f.cliente_id", "c.nome as cliente_nome", "c.cpf_cnpj as cliente_documento",
+        "c.contato as cliente_contato", "r.codigo as reserva_codigo", "r.chegada", "r.saida", "h.nome as hospede",
+      ])
+      .where("f.local_id", "=", local_id)
+      .where("f.numero_documento", "=", numero_documento)
+      .orderBy("r.codigo")
+      .orderBy("f.id")
+      .execute()) as any[];
+    if (linhas.length === 0) throw new ErroDominio("NAO_ENCONTRADO", "Fatura não encontrada.");
+    const p = linhas[0];
+    let contato = {};
+    try { contato = p.cliente_contato ? JSON.parse(p.cliente_contato) : {}; } catch { /* contato ilegível: segue sem */ }
+    return {
+      numero_documento,
+      cliente: { id: p.cliente_id, nome: p.cliente_nome, documento: p.cliente_documento, contato },
+      forma_cobranca: p.forma_cobranca,
+      data_vencimento: p.data_vencimento,
+      status: linhas.every((l) => l.status === "pago") ? "pago" : linhas.some((l) => l.status === "parcialmente_pago") ? "parcialmente_pago" : "aberto",
+      total: linhas.reduce((s, l) => s + l.valor_liquido, 0),
+      itens: linhas.map((l) => ({ id: l.id, reserva_codigo: l.reserva_codigo ?? null, hospede: l.hospede ?? null, chegada: l.chegada ?? null, saida: l.saida ?? null, valor: l.valor_liquido })),
+    };
   }
 
   async obter(id: UUID): Promise<Faturamento> {

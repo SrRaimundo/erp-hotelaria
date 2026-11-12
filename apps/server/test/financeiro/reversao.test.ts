@@ -47,13 +47,13 @@ async function fatura(valor = 90000) {
   expect((await chamar("POST", "/faturamentos/fat1/fechar", { forma: "pix", data_vencimento: "2026-12-10" })).status).toBe(200);
   return (await ctx.db.selectFrom("fin_conta_receber").selectAll().executeTakeFirstOrThrow()) as any;
 }
-const receber = (id: string, valor: number) => chamar("PUT", `/contas-receber/${id}/confirmar-pagamento`, { valor, conta_bancaria_id: caixa.id });
+const receber = (id: string, valor: number, novo?: string) => chamar("PUT", `/contas-receber/${id}/confirmar-pagamento`, { valor, conta_bancaria_id: caixa.id, novo_vencimento: novo });
 const lancReceb = async () => (await ctx.db.selectFrom("fin_lancamento").selectAll().where("referencia_tipo", "=", "conta_receber").executeTakeFirstOrThrow()) as any;
 
 describe("estorno de recebimento (uma regra, uma rota, uma vez)", () => {
   test("estornar recebimento parcial devolve saldo, conta a receber e fatura; segunda vez e cancelar depois são recusados", async () => {
     const rec = await fatura();
-    await receber(rec.id, 30000);
+    await receber(rec.id, 30000, "2026-12-30");
     expect(await saldo()).toBe(30000);
     const l = await lancReceb();
 
@@ -88,16 +88,18 @@ describe("estorno de recebimento (uma regra, uma rota, uma vez)", () => {
 
   test("com o estornar de um recebimento parcial entre dois, só o escolhido some", async () => {
     const rec = await fatura();
-    await receber(rec.id, 30000);
-    await receber(rec.id, 20000);
-    const ls = (await ctx.db.selectFrom("fin_lancamento").selectAll().where("referencia_tipo", "=", "conta_receber").orderBy("criado_em").orderBy("valor", "desc").execute()) as any[];
+    await receber(rec.id, 30000, "2026-12-30");
+    const filha = (await ctx.db.selectFrom("fin_conta_receber").selectAll().where("parcela_de", "=", rec.id).executeTakeFirstOrThrow()) as any;
+    await receber(filha.id, 20000, "2027-01-30");
+    const ls = (await ctx.db.selectFrom("fin_lancamento").selectAll().where("referencia_tipo", "=", "conta_receber").execute()) as any[];
     await chamar("POST", `/lancamentos/${ls.find((x) => x.valor === 20000).id}/estornar`, { motivo: "Engano", supervisor: SUP });
     expect(await saldo()).toBe(30000);
-    expect((await ctx.db.selectFrom("fin_conta_receber").selectAll().executeTakeFirstOrThrow() as any)).toMatchObject({ valor_recebido: 30000, status: "parcialmente_recebido" });
+    expect((await ctx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", rec.id).executeTakeFirstOrThrow() as any)).toMatchObject({ valor_recebido: 30000, status: "recebido" });
+    expect((await ctx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", filha.id).executeTakeFirstOrThrow() as any)).toMatchObject({ valor_original: 60000, valor_recebido: 0, status: "pendente" });
   });
 
   test("estornar cartão já baixado cancela o movimento e tira do liquidado", async () => {
-    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 10000, informado: "bruto", taxa_percentual: 2 })).corpo;
+    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 10000, prazo_dias: 30, informado: "bruto", taxa_percentual: 2 })).corpo;
     await chamar("PUT", `/cartao/movimentos/${m.id}/baixar`, { conta_id: caixa.id });
     expect(await saldo()).toBe(9800);
     const r = await chamar("POST", `/lancamentos/${m.lancamento_id}/estornar`, { motivo: "Venda desfeita", supervisor: SUP });
@@ -110,7 +112,7 @@ describe("estorno de recebimento (uma regra, uma rota, uma vez)", () => {
 
   test("senha de supervisor errada ou motivo vazio não estorna", async () => {
     const rec = await fatura();
-    await receber(rec.id, 1000);
+    await receber(rec.id, 1000, "2026-12-30");
     const l = await lancReceb();
     expect((await chamar("POST", `/lancamentos/${l.id}/estornar`, { motivo: "x", supervisor: { login: "admin", senha: "errada" } })).status).toBe(422);
     expect((await chamar("POST", `/lancamentos/${l.id}/estornar`, { motivo: " ", supervisor: SUP })).status).toBeGreaterThanOrEqual(400);
@@ -146,6 +148,7 @@ describe("PagamentoEstornado da hospedagem (C1)", () => {
   });
 
   test("cartão já baixado: nada muda sozinho e abre alerta para decisão manual", async () => {
+    await chamar("POST", "/cobranca/condicoes", { local_id: local.id, adquirente: "Cielo", bandeira: "Visa", tipo: "credito", prazo_dias: 30, taxa_percentual: 0 });
     await publicar("hospedagem.PagamentoRegistrado", pag("p3", "credito"));
     await processarPendentes(ctx);
     const m = (await chamar("GET", `/cartao/movimentos?local_id=${local.id}`)).corpo[0];
@@ -189,7 +192,7 @@ describe("PagamentoEstornado da hospedagem (C1)", () => {
 
 describe("taxa do cartão como despesa só de registro", () => {
   const baixado = async () => {
-    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 10000, informado: "bruto", taxa_percentual: 2.5 })).corpo;
+    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 10000, prazo_dias: 30, informado: "bruto", taxa_percentual: 2.5 })).corpo;
     await chamar("PUT", `/cartao/movimentos/${m.id}/baixar`, { conta_id: caixa.id });
     return m;
   };

@@ -11,7 +11,7 @@ export type PosicaoReceber = {
   local_id: UUID;
   situacoes: Record<SituacaoReceber, Totais>;
   itens: {
-    id: UUID; numero_documento: string; cliente_id: UUID; cliente_nome: string; data_vencimento: string;
+    id: UUID; numero_documento: string; cliente_id: UUID; cliente_nome: string; parcela_de: UUID | null; valor_total: number | null; data_vencimento: string;
     valor_original: number; valor_recebido: number; valor_pendente: number; situacao: SituacaoReceber;
   }[];
 };
@@ -23,7 +23,7 @@ export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promi
   const linhas = (await ctx.db
     .selectFrom("fin_conta_receber as r")
     .innerJoin("fin_cliente as c", "c.id", "r.cliente_id")
-    .select(["r.id", "r.numero_documento", "r.cliente_id", "c.nome as cliente_nome", "r.data_vencimento", "r.valor_original", "r.valor_recebido", "r.status"])
+    .select(["r.id", "r.numero_documento", "r.cliente_id", "c.nome as cliente_nome", "r.data_vencimento", "r.valor_original", "r.valor_recebido", "r.status", "r.parcela_de", "r.valor_total"])
     .where("r.local_id", "=", local_id)
     .where("r.status", "!=", "cancelado")
     .orderBy("r.data_vencimento")
@@ -44,7 +44,7 @@ export async function posicaoContasReceber(ctx: Contexto, local_id: UUID): Promi
     s.valor_recebido += l.valor_recebido;
     s.valor_pendente += pendente;
     itens.push({
-      id: l.id, numero_documento: l.numero_documento, cliente_id: l.cliente_id, cliente_nome: l.cliente_nome, data_vencimento: l.data_vencimento,
+      id: l.id, numero_documento: l.numero_documento, cliente_id: l.cliente_id, cliente_nome: l.cliente_nome, parcela_de: l.parcela_de ?? null, valor_total: l.valor_total ?? null, data_vencimento: l.data_vencimento,
       valor_original: l.valor_original, valor_recebido: l.valor_recebido, valor_pendente: pendente, situacao,
     });
   }

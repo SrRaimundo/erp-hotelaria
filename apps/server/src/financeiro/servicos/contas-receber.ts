@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { auditar } from "../../infra/auditoria.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
 import { Dinheiro } from "../../shared/dinheiro.js";
@@ -36,6 +37,33 @@ function paraContaReceber(c: any): ContaReceber {
     status: c.status,
     lançamentos_id: c.lançamentos_id ? JSON.parse(c.lançamentos_id) : [],
   };
+}
+
+/** Documento da fatura: as parcelas de saldo levam o sufixo -P1, -P2... sobre o número do documento original. */
+export const numeroBase = (numero: string): string => numero.replace(/-P\d+$/, "");
+
+/**
+ * Situação da fatura a partir de todas as parcelas do documento: paga só quando todas estão quitadas.
+ * Cobre o documento agrupado (vários fechamentos com o mesmo número).
+ */
+export async function atualizarFaturaDoDocumento(tx: Contexto, local_id: UUID, base: string): Promise<void> {
+  const linhas = (await tx.db
+    .selectFrom("fin_conta_receber")
+    .select(["status", "valor_recebido", "lançamentos_id"])
+    .where("local_id", "=", local_id)
+    .where((eb) => eb.or([eb("numero_documento", "=", base), eb("numero_documento", "like", `${base}-P%`)]))
+    .where("status", "!=", "cancelado")
+    .execute()) as any[];
+  if (linhas.length === 0) return;
+  const todos = linhas.every((l) => l.status === "recebido");
+  const algum = linhas.some((l) => l.valor_recebido > 0);
+  const lancamentos = linhas.flatMap((l) => (l["lançamentos_id"] ? (JSON.parse(l["lançamentos_id"]) as string[]) : []));
+  await tx.db
+    .updateTable("fin_faturamento")
+    .set({ status: todos ? "pago" : algum ? "parcialmente_pago" : "aberto", "lançamentos_id": JSON.stringify(lancamentos) })
+    .where("local_id", "=", local_id)
+    .where("numero_documento", "=", base)
+    .execute();
 }
 
 export class ContasReceberService {
@@ -101,8 +129,12 @@ export class ContasReceberService {
     });
   }
 
-  /** Registra recebimento: cria Lançamento, movimenta a conta (crédito → saldo) e atualiza status do recebível e do faturamento. */
-  async confirmarPagamento(recebivel_id: UUID, valor: Dinheiro, conta_bancaria_id: UUID, usuario: Usuario): Promise<ContaReceber> {
+  /**
+   * Registra recebimento: cria Lançamento, movimenta a conta (crédito → saldo) e atualiza a conta a receber e a fatura.
+   * Pagamento parcial exige `novoVencimento`: a conta original fica quitada pela parte paga e nasce uma nova parcela
+   * (vinculada, com o saldo e o novo vencimento). A soma das parcelas é sempre o valor original.
+   */
+  async confirmarPagamento(recebivel_id: UUID, valor: Dinheiro, conta_bancaria_id: UUID, usuario: Usuario, novoVencimento?: Date): Promise<ContaReceber> {
     if (!Number.isInteger(valor.centavos) || valor.centavos <= 0) {
       throw new ErroDominio("VALIDACAO_FALHOU", "Valor deve ser positivo.");
     }
@@ -122,6 +154,10 @@ export class ContasReceberService {
         .where("local_id", "=", rec.local_id)
         .executeTakeFirst();
       if (!conta) throw new ErroDominio("NAO_ENCONTRADO", "Conta bancária não encontrada.");
+      const parcial = valor.centavos < rec.valor_pendente!.centavos;
+      if (parcial && (!novoVencimento || Number.isNaN(novoVencimento.getTime()))) {
+        throw new ErroDominio("VALIDACAO_FALHOU", "Para receber só uma parte, informe a nova data de vencimento do saldo.");
+      }
 
       const lanc = await new LançamentoService(tx).criar({
         local_id: rec.local_id,
@@ -137,40 +173,51 @@ export class ContasReceberService {
       await new CaixaBancoService(tx).criarMovimento(lanc, conta_bancaria_id, usuario);
 
       const recebido = rec.valor_recebido.mais(valor);
-      const quitado = recebido.eh(rec.valor_original);
       const lancamentos = [...rec.lançamentos_id, lanc.id];
-      await tx.db
-        .updateTable("fin_conta_receber")
-        .set({
-          valor_recebido: recebido.centavos,
-          status: quitado ? "recebido" : "parcialmente_recebido",
-          conta_destino_id: conta_bancaria_id,
-          lançamentos_id: JSON.stringify(lancamentos),
-        })
-        .where("id", "=", recebivel_id)
-        .execute();
-
-      // Propaga ao faturamento de mesmo documento
-      const fat = await tx.db
-        .selectFrom("fin_faturamento")
-        .select("id")
-        .where("local_id", "=", rec.local_id)
-        .where("numero_documento", "=", rec.numero_documento)
-        .executeTakeFirst();
-      if (fat) {
+      const base = numeroBase(rec.numero_documento);
+      if (parcial) {
+        const resto = rec.valor_pendente!.menos(valor);
+        const n = await tx.db.selectFrom("fin_conta_receber").select(sql<number>`count(*)`.as("n")).where("local_id", "=", rec.local_id).where("numero_documento", "like", `${base}-P%`).executeTakeFirst();
+        const filhaId = novoId();
         await tx.db
-          .updateTable("fin_faturamento")
-          .set({ status: quitado ? "pago" : "parcialmente_pago", lançamentos_id: JSON.stringify(lancamentos) })
-          .where("id", "=", fat.id)
+          .insertInto("fin_conta_receber")
+          .values({
+            id: filhaId, local_id: rec.local_id, cliente_id: rec.cliente_id, numero_documento: `${base}-P${Number(n?.n ?? 0) + 1}`,
+            valor_original: resto.centavos, valor_recebido: 0, data_vencimento: novoVencimento!.toISOString(), forma_pagamento: rec.forma_pagamento,
+            status: "pendente", conta_destino_id: null, lançamentos_id: JSON.stringify([]), parcela_de: rec.id, valor_total: null,
+            criado_em: tx.relogio.agora().toISOString(),
+          })
+          .execute();
+        await tx.db
+          .updateTable("fin_conta_receber")
+          .set({
+            valor_original: recebido.centavos, valor_total: rec.valor_original.centavos, valor_recebido: recebido.centavos, status: "recebido",
+            conta_destino_id: conta_bancaria_id, lançamentos_id: JSON.stringify(lancamentos),
+          })
+          .where("id", "=", recebivel_id)
+          .execute();
+        await auditar(tx, { ator: usuario.email, acao: "fin_conta_receber.parcela_saldo", alvoTipo: "fin_conta_receber", alvoId: filhaId, dados: { parcela_de: rec.id, valor: resto.centavos, vencimento: novoVencimento!.toISOString() } });
+      } else {
+        const quitado = recebido.eh(rec.valor_original);
+        await tx.db
+          .updateTable("fin_conta_receber")
+          .set({
+            valor_recebido: recebido.centavos,
+            status: quitado ? "recebido" : "parcialmente_recebido",
+            conta_destino_id: conta_bancaria_id,
+            lançamentos_id: JSON.stringify(lancamentos),
+          })
+          .where("id", "=", recebivel_id)
           .execute();
       }
+      await atualizarFaturaDoDocumento(tx, rec.local_id, base);
 
       await auditar(tx, {
         ator: usuario.email,
         acao: "fin_conta_receber.confirmar_pagamento",
         alvoTipo: "fin_conta_receber",
         alvoId: recebivel_id,
-        dados: { valor: valor.centavos, conta_bancaria_id, lancamento_id: lanc.id },
+        dados: { valor: valor.centavos, conta_bancaria_id, lancamento_id: lanc.id, parcial },
       });
       return svc.obter(recebivel_id);
     });

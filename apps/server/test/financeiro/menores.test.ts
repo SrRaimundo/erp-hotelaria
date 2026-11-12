@@ -59,7 +59,7 @@ describe("duplo envio em ações de dinheiro (chave de idempotência)", () => {
     await ctx.db.insertInto("fin_faturamento").values({ id: "f", local_id: local.id, cliente_id: "cli", referencia_id: "r", valor_original: 10000, valor_liquido: 10000, data_vencimento: "2026-12-01T12:00:00Z", forma_cobranca: "boleto", numero_documento: null, status: "aberto", lançamentos_id: "[]", criado_em: CRIADO }).execute();
     await chamar("POST", "/faturamentos/f/fechar", { forma: "pix", data_vencimento: "2026-12-10" });
     const rec = (await ctx.db.selectFrom("fin_conta_receber").select("id").executeTakeFirstOrThrow()).id;
-    const corpo = { chave: "r1", valor: 4000, conta_bancaria_id: caixa.id };
+    const corpo = { chave: "r1", valor: 4000, conta_bancaria_id: caixa.id, novo_vencimento: "2026-12-30" };
     expect((await chamar("PUT", `/contas-receber/${rec}/confirmar-pagamento`, corpo)).status).toBe(200);
     expect((await chamar("PUT", `/contas-receber/${rec}/confirmar-pagamento`, corpo)).status).toBe(200);
     expect((await chamar("GET", `/contas?local_id=${local.id}`)).corpo[0].saldo).toBe(4000);
@@ -68,7 +68,7 @@ describe("duplo envio em ações de dinheiro (chave de idempotência)", () => {
 
 describe("outras correções", () => {
   test("estorno no mesmo dia não infla Entradas nem Saídas (o relatório mostra o líquido)", async () => {
-    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "V", tipo: "credito", valor: 10000, informado: "bruto", taxa_percentual: 0 })).corpo;
+    const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "V", tipo: "credito", valor: 10000, prazo_dias: 30, informado: "bruto", taxa_percentual: 0 })).corpo;
     await chamar("PUT", `/cartao/movimentos/${m.id}/baixar`, { conta_id: caixa.id });
     await chamar("POST", `/lancamentos/${m.lancamento_id}/estornar`, { motivo: "Engano", supervisor: SUP });
     const hoje = ctx.relogio.agora().toISOString().slice(0, 10);

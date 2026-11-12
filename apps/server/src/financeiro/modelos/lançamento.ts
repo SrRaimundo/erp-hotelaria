@@ -13,6 +13,10 @@ export type Lançamento = {
   categoria?: string;
   vencimento?: Date;
   fornecedor_id?: UUID;
+  /** Parcela de saldo de um pagamento parcial: o lançamento de origem. */
+  parcela_de?: UUID;
+  /** Pagamento parcial: valor que o lançamento tinha antes de ser dividido (soma das parcelas). */
+  valor_total?: number;
 
   // Values
   valor: Dinheiro;

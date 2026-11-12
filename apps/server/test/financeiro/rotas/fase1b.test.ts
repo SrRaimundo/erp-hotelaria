@@ -99,7 +99,7 @@ describe("Cartão de Crédito", () => {
   test("movimento a receber é baixado pelo líquido na conta escolhida", async () => {
     const { chamar, local, caixa, ctx } = await cenario();
     const criado = await chamar("POST", "/cartao/movimentos", {
-      local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 9750, informado: "liquido", taxa_percentual: 2.5,
+      local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 9750, prazo_dias: 30, informado: "liquido", taxa_percentual: 2.5,
     });
     expect(criado.status).toBe(201);
     expect(criado.corpo).toMatchObject({ valor_bruto: 10000, valor_taxa: 250, valor_liquido: 9750, status: "a_receber", previsao: "2026-12-10" });
@@ -116,7 +116,7 @@ describe("Cartão de Crédito", () => {
 
   test("valida bandeira, tipo e taxa", async () => {
     const { chamar, local } = await cenario();
-    const base = { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 1000, informado: "bruto", taxa_percentual: 2 };
+    const base = { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 1000, prazo_dias: 30, informado: "bruto", taxa_percentual: 2 };
     expect((await chamar("POST", "/cartao/movimentos", { ...base, bandeira: "" })).status).toBe(400);
     expect((await chamar("POST", "/cartao/movimentos", { ...base, tipo: "cheque" })).status).toBe(400);
     expect((await chamar("POST", "/cartao/movimentos", { ...base, taxa_percentual: 120 })).status).toBe(400);

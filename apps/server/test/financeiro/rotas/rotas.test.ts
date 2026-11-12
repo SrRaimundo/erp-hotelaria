@@ -107,11 +107,13 @@ describe("rotas do Financeiro", () => {
     const g = await fat.gerarCobranca(f.id, "pix", usuario);
     const r = await new ContasReceberService(ctx).criarRecebivel(f.id, cliente_id, local.id, g.numero_documento, Dinheiro.de(10000), g.data_vencimento, usuario);
     const url = `/api/financeiro/contas-receber/${r.id}/confirmar-pagamento`;
-    const parcial = await app.inject({ method: "PUT", url, headers: admin, payload: { valor: 4000, conta_bancaria_id: caixa_id } });
+    const semData = await app.inject({ method: "PUT", url, headers: admin, payload: { valor: 4000, conta_bancaria_id: caixa_id } });
+    expect(semData.statusCode).toBe(422);
+    const parcial = await app.inject({ method: "PUT", url, headers: admin, payload: { valor: 4000, conta_bancaria_id: caixa_id, novo_vencimento: "2026-12-30" } });
     expect(parcial.statusCode).toBe(200);
-    expect(parcial.json()).toMatchObject({ status: "parcialmente_recebido", valor_recebido: 4000, valor_pendente: 6000 });
+    expect(parcial.json()).toMatchObject({ status: "recebido", valor_recebido: 4000, valor_original: 4000 });
     const excesso = await app.inject({ method: "PUT", url, headers: admin, payload: { valor: 7000, conta_bancaria_id: caixa_id } });
-    expect(excesso.statusCode).toBe(422);
+    expect(excesso.statusCode).toBe(422); // a original já está quitada; o saldo é outra parcela
     const invalido = await app.inject({ method: "PUT", url, headers: admin, payload: { valor: -1, conta_bancaria_id: caixa_id } });
     expect(invalido.statusCode).toBe(400);
     const saldo = await app.inject({ method: "GET", url: `/api/financeiro/caixa-banco/saldo?conta_id=${caixa_id}`, headers: admin });

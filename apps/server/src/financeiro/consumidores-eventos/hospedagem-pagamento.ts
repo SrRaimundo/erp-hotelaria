@@ -105,7 +105,7 @@ export async function processarPagamentoRegistrado(ctx: Contexto, evento: Pick<E
       await new CaixaBancoService(tx).criarMovimento(lanc, conta, USUARIO_SISTEMA);
     } else {
       // Cartão: espera a operadora (previsão, taxa e baixa na tela Cartão de Crédito).
-      await new CartaoService(tx).registrarDeLancamento(lanc, forma === "debito" ? "debito" : "credito", "Não informada");
+      await new CartaoService(tx).registrarDeLancamento(lanc, forma === "debito" ? "debito" : "credito");
     }
   });
 }

@@ -71,7 +71,7 @@ test("contas a receber e cartão", async () => {
 
   const lancs = new LançamentoService(ctx);
   const lc = await lancs.criar({ local_id: local.id, data: new Date("2026-11-05T12:00:00Z"), tipo: "recebimento", origem: "manual", valor: Dinheiro.de(30000), forma_pagamento: "credito", usuario });
-  await new CartaoService(ctx).registrarDeLancamento(lc, "credito", "Visa");
+  await new CartaoService(ctx).registrarDeLancamento(lc, "credito");
   const c = (await app.inject({ method: "GET", url: `/api/financeiro/relatorios/cartao?local_id=${local.id}`, headers: h })).json();
   expect(c.aberto.quantidade + c.fechado.quantidade + c.liquidado.quantidade).toBe(1);
   expect(c.aberto.valor + c.fechado.valor + c.liquidado.valor).toBe(30000);

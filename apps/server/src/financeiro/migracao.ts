@@ -266,3 +266,33 @@ export const migracaoFinanceiroDefesas: Migracao = {
       .execute();
   },
 };
+
+/**
+ * Decisões do dono: parcelas de pagamento parcial (lançamento e conta a receber), condições de cartão por adquirente
+ * (cadastro Cobrança) e cópia (snapshot) da condição no movimento de cartão.
+ */
+export const migracaoFinanceiroDecisoes: Migracao = {
+  nome: "0760_financeiro_decisoes",
+  async up(db) {
+    await sql`ALTER TABLE fin_lancamento ADD COLUMN parcela_de text`.execute(db);
+    await sql`ALTER TABLE fin_lancamento ADD COLUMN valor_total integer`.execute(db);
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN parcela_de text`.execute(db);
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN valor_total integer`.execute(db);
+    await sql`ALTER TABLE fin_cartao_movimento ADD COLUMN adquirente text NOT NULL DEFAULT ''`.execute(db);
+    await sql`ALTER TABLE fin_cartao_movimento ADD COLUMN prazo_dias integer NOT NULL DEFAULT 0`.execute(db);
+    await sql`ALTER TABLE fin_cartao_movimento ADD COLUMN condicao_id text`.execute(db);
+    await sql`ALTER TABLE fin_cartao_movimento ADD COLUMN revisar integer NOT NULL DEFAULT 0`.execute(db);
+    await db.schema
+      .createTable("fin_condicao_cartao")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
+      .addColumn("adquirente", "text", (c) => c.notNull())
+      .addColumn("bandeira", "text", (c) => c.notNull())
+      .addColumn("tipo", "text", (c) => c.notNull()) // credito | debito | voucher
+      .addColumn("prazo_dias", "integer", (c) => c.notNull())
+      .addColumn("taxa_percentual", "real", (c) => c.notNull())
+      .addColumn("ativo", "integer", (c) => c.notNull().defaultTo(1))
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .execute();
+  },
+};

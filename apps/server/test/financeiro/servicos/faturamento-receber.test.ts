@@ -92,24 +92,27 @@ test("criarRecebivel: cria pendente a partir do faturamento; valida documento e 
 test("confirmarPagamento: parcial depois total; atualiza saldo, lançamentos e faturamento", async () => {
   const p = await preparar();
   const { f, r } = await recebivel(p);
-  const parcial = await p.rec.confirmarPagamento(r.id, Dinheiro.de(4000), p.conta_id, usuario);
-  expect(parcial.status).toBe("parcialmente_recebido");
+  await expect(p.rec.confirmarPagamento(r.id, Dinheiro.de(4000), p.conta_id, usuario)).rejects.toMatchObject({ codigo: "VALIDACAO_FALHOU" });
+  const parcial = await p.rec.confirmarPagamento(r.id, Dinheiro.de(4000), p.conta_id, usuario, new Date("2026-12-30T12:00:00Z"));
+  // a original fica quitada pela parte paga; o saldo vira uma nova parcela vinculada
+  expect(parcial.status).toBe("recebido");
   expect(parcial.valor_recebido.centavos).toBe(4000);
-  expect(parcial.valor_pendente!.centavos).toBe(6000);
+  expect(parcial.valor_original.centavos).toBe(4000);
   expect((await p.fat.obter(f.id)).status).toBe("parcialmente_pago");
+  const filha = (await p.ctx.db.selectFrom("fin_conta_receber").selectAll().where("parcela_de", "=", r.id).executeTakeFirstOrThrow()) as any;
+  expect(filha.valor_original).toBe(6000);
 
-  const total = await p.rec.confirmarPagamento(r.id, Dinheiro.de(6000), p.conta_id, usuario);
+  const total = await p.rec.confirmarPagamento(filha.id, Dinheiro.de(6000), p.conta_id, usuario);
   expect(total.status).toBe("recebido");
-  expect(total.lançamentos_id.length).toBe(2);
   expect(total.conta_destino_id).toBe(p.conta_id);
   const fat = await p.fat.obter(f.id);
   expect(fat.status).toBe("pago");
-  expect(fat.lançamentos_id).toEqual(total.lançamentos_id);
+  expect(fat.lançamentos_id.length).toBe(2);
 
   const movs = await p.ctx.db.selectFrom("fin_movimento").selectAll().where("conta_id", "=", p.conta_id).execute();
   expect(movs.length).toBe(2);
   expect(movs.map((m: any) => m.saldo_posterior).sort((a: number, b: number) => a - b)).toEqual([4000, 10000]);
-  const lanc = await p.ctx.db.selectFrom("fin_lancamento").selectAll().where("referencia_id", "=", r.id).execute();
+  const lanc = await p.ctx.db.selectFrom("fin_lancamento").selectAll().where("referencia_tipo", "=", "conta_receber").execute();
   expect(lanc.length).toBe(2);
   expect(lanc[0].tipo).toBe("recebimento");
 });

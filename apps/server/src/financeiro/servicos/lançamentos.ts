@@ -22,6 +22,7 @@ export type ParamsCriarLancamento = {
   categoria?: string;
   vencimento?: Date;
   fornecedor_id?: UUID;
+  parcela_de?: UUID;
   usuario: Usuario;
 };
 
@@ -38,6 +39,8 @@ function paraLancamento(l: any): Lançamento {
     categoria: l.categoria ?? undefined,
     vencimento: l.vencimento ? new Date(l.vencimento) : undefined,
     fornecedor_id: l.fornecedor_id ?? undefined,
+    parcela_de: l.parcela_de ?? undefined,
+    valor_total: l.valor_total ?? undefined,
     status: l.status,
     referencia_id: l.referencia_id ?? undefined,
     referencia_tipo: l.referencia_tipo ?? undefined,
@@ -84,6 +87,7 @@ export class LançamentoService {
           categoria: p.categoria ?? null,
           vencimento: p.vencimento ? p.vencimento.toISOString() : null,
           fornecedor_id: p.fornecedor_id ?? null,
+          parcela_de: p.parcela_de ?? null,
           referencia_id: p.referencia_id ?? null,
           referencia_tipo: p.referencia_tipo ?? null,
           criado_por: p.usuario.email,

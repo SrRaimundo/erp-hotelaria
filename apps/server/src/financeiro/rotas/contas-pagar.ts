@@ -15,7 +15,7 @@ const corpoCriar = z.object({
   fornecedor_id: uuid.optional(),
   forma_pagamento: z.enum(FORMAS).optional(),
 });
-const corpoBaixar = z.object({ conta_id: uuid, forma_pagamento: z.enum(FORMAS).optional() });
+const corpoBaixar = z.object({ conta_id: uuid, forma_pagamento: z.enum(FORMAS).optional(), valor: centavos.optional(), novo_vencimento: data.optional() });
 
 export function registrarRotasContasPagar(app: FastifyInstance, ctx: Contexto): void {
   app.post("/api/financeiro/contas-a-pagar", async (req, res) => {
@@ -34,7 +34,10 @@ export function registrarRotasContasPagar(app: FastifyInstance, ctx: Contexto): 
     exigirFinanceiro(req);
     const { id } = z.object({ id: uuid }).parse(req.params);
     const c = corpoBaixar.parse(req.body);
-    const l = await new ContasPagarService(ctx).baixar(id, c.conta_id, c.forma_pagamento, usuarioDe(req));
+    const l = await new ContasPagarService(ctx).baixar(id, c.conta_id, c.forma_pagamento, usuarioDe(req), {
+      valor: c.valor === undefined ? undefined : Dinheiro.de(c.valor),
+      novo_vencimento: c.novo_vencimento ? new Date(`${c.novo_vencimento}T12:00:00.000Z`) : undefined,
+    });
     return { ...l, valor: l.valor.centavos };
   });
 }
