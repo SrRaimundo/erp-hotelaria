@@ -4,6 +4,7 @@ import { iniciarAgendador } from "./agendador.js";
 import { lerConfiguracao } from "./config.js";
 import { criarApp } from "./http/app.js";
 import { Barramento } from "./infra/barramento.js";
+import { registrarConsumidoresHospedagem } from "./financeiro/consumidores-eventos/hospedagem-pagamento.js";
 import { abrirBanco, migrar } from "./shared/banco.js";
 import type { Contexto } from "./shared/contexto.js";
 import { todasMigracoes } from "./shared/migracoes.js";
@@ -16,6 +17,7 @@ async function iniciar(): Promise<void> {
   await migrar(db, todasMigracoes);
 
   const ctx: Contexto = { db, relogio: relogioSistema, barramento: new Barramento(), eventosPendentes: [] };
+  registrarConsumidoresHospedagem(ctx as any);
   const app = criarApp(ctx, { webDir: config.webDir });
   const agendador = iniciarAgendador(ctx);
 

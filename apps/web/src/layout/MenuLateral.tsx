@@ -7,6 +7,7 @@ const ITENS: { para: string; rotulo: string; permissao?: string; algumaDe?: stri
   { para: "/mapa", rotulo: "Mapa", permissao: "reservas.gerenciar" },
   { para: "/reservas", rotulo: "Reservas", permissao: "reservas.gerenciar" },
   { para: "/caixa", rotulo: "Caixa", permissao: "caixa.operar" },
+  { para: "/financeiro", rotulo: "Financeiro", permissao: "caixa.operar" },
   { para: "/governanca", rotulo: "Governança", permissao: "quartos.situacao" },
   { para: "/configuracoes", rotulo: "Configurações", algumaDe: ["config.gerenciar", "cadastros.gerenciar"] },
 ];

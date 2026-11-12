@@ -5,6 +5,7 @@ import { RotaProtegida } from "./auth/RotaProtegida";
 import { TrocarSenha } from "./auth/TrocarSenha";
 import { Shell } from "./layout/Shell";
 import { Assistente } from "./telas/assistente/Assistente";
+import { FinanceiroLayout } from "./financeiro/FinanceiroLayout";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaHoje } from "./telas/hoje/TelaHoje";
@@ -31,6 +32,7 @@ export function AppRotas() {
           <Route path="/reservas" element={<ExigePermissao permissao="reservas.gerenciar"><TelaReservas /></ExigePermissao>} />
           <Route path="/reservas/nova" element={<ExigePermissao permissao="reservas.gerenciar"><TelaNovaReserva /></ExigePermissao>} />
           <Route path="/caixa" element={<ExigePermissao permissao="caixa.operar"><TelaCaixa /></ExigePermissao>} />
+          <Route path="/financeiro" element={<ExigePermissao permissao="caixa.operar"><FinanceiroLayout /></ExigePermissao>} />
           <Route path="/governanca" element={<ExigePermissao permissao="quartos.situacao"><TelaGovernanca /></ExigePermissao>} />
           <Route path="/configuracoes" element={<ExigePermissao algumaDe={["config.gerenciar", "cadastros.gerenciar"]}><LayoutConfiguracoes /></ExigePermissao>}>
             <Route index element={<PrimeiraConfiguracao />} />
