@@ -41,6 +41,7 @@ export type MovimentoCartao = {
   prazo_dias: number; valor_taxa: number; valor_liquido: number; previsao: string; status: "a_receber" | "baixado" | "cancelado";
   /** 1 = entrou sem condição de cobrança cadastrada: precisa de revisão antes da baixa. */
   revisar: number;
+  lancamento_id: string;
 };
 export type CondicaoCartao = { id: string; local_id: string; adquirente: string; bandeira: string; tipo: TipoCartao; prazo_dias: number; taxa_percentual: number; ativo: boolean };
 export type ExtratoCobranca = {

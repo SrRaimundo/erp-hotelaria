@@ -129,6 +129,21 @@ describe("tela Cartão de Crédito", () => {
     expect(await within(painel).findByRole("alert")).toHaveTextContent("Movimento já baixado.");
   });
 
+  test("cancelar um movimento a receber exige supervisor e cancela o lançamento de origem", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(rotas({ "DELETE /api/financeiro/lancamentos/lx": { id: "lx", status: "cancelado" } }));
+    await abrirAba("cartao");
+    const linha = (await screen.findByText("Visa")).closest("tr")!;
+    await u.click(within(linha).getByRole("button", { name: "Cancelar" }));
+    const janela = await screen.findByRole("dialog", { name: "Cancelar movimento de cartão" });
+    await u.type(within(janela).getByLabelText("Motivo"), "Venda lançada em duplicidade");
+    await u.type(within(janela).getByLabelText("Login do supervisor"), "admin");
+    await u.type(within(janela).getByLabelText("Senha do supervisor"), "admin");
+    await u.click(within(janela).getByRole("button", { name: "Autorizar" }));
+    const del = await esperarChamada(chamadas, "DELETE", "/api/financeiro/lancamentos/lx");
+    expect(del.corpo).toEqual({ motivo: "Venda lançada em duplicidade", supervisor: { login: "admin", senha: "admin" } });
+  });
+
   test("lista vazia explica que o cartão da hospedagem chega sozinho", async () => {
     instalarApiFalsa(rotas({ "GET /api/financeiro/cartao/movimentos": [] }));
     await abrirAba("cartao");

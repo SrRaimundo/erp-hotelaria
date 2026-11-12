@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ligarFilaFinanceiro, processarPendentes } from "../../src/financeiro/consumidores-eventos/fila.js";
 import { LocalService } from "../../src/financeiro/servicos/locais.js";
 import { registrarPagamento } from "../../src/hospedagem/conta.js";
@@ -22,6 +22,7 @@ const movs = () => ctx.db.selectFrom("fin_movimento").selectAll().execute();
 const cursor = async () => Number((await ctx.db.selectFrom("fin_cursor").select("ultimo_seq").where("nome", "=", "hospedagem").executeTakeFirstOrThrow()).ultimo_seq);
 
 beforeEach(async () => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined); // falhas esperadas são registradas no console
   ctx = await criarContextoTeste();
   await new LocalService(ctx).criar(gerarUUID(), "Pousada", { email: "a@b.c" });
   const cat = (await criarCategoria(ctx, { nome: "Standard", maxAdultos: 2, maxCriancas: 0, comodidades: [] }, "u1")).id;

@@ -5,11 +5,12 @@ import { Cartao } from "../componentes/Cartao";
 import { ErroAcao } from "../componentes/ErroAcao";
 import { Etiqueta } from "../componentes/Etiqueta";
 import { Gaveta } from "../componentes/Gaveta";
+import { JanelaSupervisor } from "../componentes/JanelaSupervisor";
 import { formatarReais } from "../lib/dinheiro";
 import { CampoPercentual } from "../telas/tarifas/CampoPercentual";
 import { CampoTexto, dataBr, Estado, ROTULO_FORMA, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
 import {
-  dataLocal, useBaixarCartao, useCondicoesCartao, useCriarMovimentoCartao, useMovimentosCartao, type CondicaoCartao, type Conta, type MovimentoCartao,
+  dataLocal, useBaixarCartao, useCancelarLancamento, useCondicoesCartao, useCriarMovimentoCartao, useMovimentosCartao, type CondicaoCartao, type Conta, type MovimentoCartao,
 } from "./useFinanceiro";
 
 const STATUS = ["a_receber", "baixado"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_STATUS, valor) }));
@@ -110,6 +111,8 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
   const [status, setStatus] = useState("");
   const [novo, setNovo] = useState(false);
   const [alvo, setAlvo] = useState<MovimentoCartao | null>(null);
+  const [cancelar, setCancelar] = useState<MovimentoCartao | null>(null);
+  const cancelamento = useCancelarLancamento();
   const q = useMovimentosCartao(localId);
   const conds = useCondicoesCartao(localId);
   const condicoes = conds.data ?? [];
@@ -146,7 +149,10 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
                         <Etiqueta tom={tom(m.status)}>{rotulo(ROTULO_STATUS, m.status)}</Etiqueta>
                         {m.revisar === 1 && m.status === "a_receber" && <> <Etiqueta tom="terracota">Revisar condição</Etiqueta></>}
                       </td>
-                      <td className="fin__acoes">{m.status === "a_receber" && <Botao tamanho="pequeno" onClick={() => setAlvo(m)}>Baixar</Botao>}</td>
+                      <td className="fin__acoes">
+                        {m.status === "a_receber" && <Botao tamanho="pequeno" onClick={() => setAlvo(m)}>Baixar</Botao>}
+                        {m.status === "a_receber" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(m)}>Cancelar</Botao>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -155,6 +161,16 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
           </>
         )}
       </Estado>
+      <JanelaSupervisor
+        aberta={cancelar !== null}
+        titulo="Cancelar movimento de cartão"
+        aoCancelar={() => setCancelar(null)}
+        aoConfirmar={async (aut) => {
+          if (!cancelar) return;
+          await cancelamento.mutateAsync({ id: cancelar.lancamento_id, aut });
+          setCancelar(null);
+        }}
+      />
       <Gaveta aberta={novo} aoFechar={() => setNovo(false)} titulo="Novo movimento de cartão">
         {novo && <PainelNovo localId={localId} condicoes={condicoes} aoFechar={() => setNovo(false)} />}
       </Gaveta>
