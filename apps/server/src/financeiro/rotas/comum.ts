@@ -13,7 +13,7 @@ export function exigirFinanceiro(req: FastifyRequest): void {
 }
 
 export function usuarioDe(req: FastifyRequest): Usuario {
-  return { id: req.usuario.id, email: req.usuario.id, dispositivo: "web" };
+  return { id: req.usuario.id, email: req.usuario.nome, dispositivo: "web" };
 }
 
 export const uuid = z.string().trim().min(1, "Campo obrigatório").transform((s) => s as UUID);

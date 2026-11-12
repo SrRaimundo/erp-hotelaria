@@ -152,7 +152,7 @@ export class LançamentoService {
         alvoId: id,
         dados: { motivo, supervisor, estorno_id: novo.id },
       });
-      return svc.obter(novo.id);
+      return await svc.obter(novo.id);
     });
   }
 

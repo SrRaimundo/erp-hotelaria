@@ -32,7 +32,7 @@ async function resolverLocal(tx: Contexto): Promise<UUID | null> {
 
 async function contaCaixa(tx: Contexto, local_id: UUID): Promise<UUID | null> {
   const c = await tx.db.selectFrom("fin_conta_bancaria").select("id").where("local_id", "=", local_id).where("nome", "=", "Caixa").executeTakeFirst();
-  return (c?.id as UUID) ?? null;
+  return (c?.id ?? null) as UUID | null;
 }
 
 /** Cria ou reaproveita o fin_cliente (por documento, ou por nome quando sem documento). */

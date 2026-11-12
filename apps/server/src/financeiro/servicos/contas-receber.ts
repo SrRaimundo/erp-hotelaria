@@ -31,6 +31,7 @@ function paraContaReceber(c: any): ContaReceber {
     valor_pendente: original.menos(recebido),
     data_emissao: new Date(c.criado_em),
     data_vencimento: new Date(c.data_vencimento),
+    data_recebimento: c.status === "recebido" && c.atualizado_em ? new Date(c.atualizado_em) : undefined,
     forma_pagamento: c.forma_pagamento,
     conta_destino_id: c.conta_destino_id ?? undefined,
     status: c.status,
