@@ -7,6 +7,7 @@ import { TrocarSenha } from "./auth/TrocarSenha";
 import { GRUPOS_MENU, type ItemMenu } from "./layout/menu";
 import { Shell } from "./layout/Shell";
 import { Assistente } from "./telas/assistente/Assistente";
+import { FinanceiroLayout } from "./financeiro/FinanceiroLayout";
 import { TelaCaixa } from "./telas/caixa/TelaCaixa";
 import { TelaGovernanca } from "./telas/governanca/TelaGovernanca";
 import { TelaEmBreve } from "./telas/em-breve/TelaEmBreve";
@@ -42,6 +43,15 @@ const TELAS_PRONTAS: Record<string, ReactElement> = {
   "/caixa": <TelaCaixa />,
   "/governanca": <TelaGovernanca />,
   "/relatorios": <TelaRelatorios />,
+  "/financeiro/local": <FinanceiroLayout key="local" aba="local" />,
+  "/financeiro/contas-a-pagar": <FinanceiroLayout key="pagar" aba="pagar" />,
+  "/financeiro/contas-a-receber": <FinanceiroLayout key="receber" aba="receber" />,
+  "/financeiro/cartao-de-credito": <FinanceiroLayout key="cartao" aba="cartao" />,
+  "/financeiro/faturamento": <FinanceiroLayout key="faturamento" aba="faturamento" />,
+  "/financeiro/caixa-e-banco": <FinanceiroLayout key="caixa" aba="caixa" />,
+  "/financeiro/relatorios": <FinanceiroLayout key="relatorios" aba="relatorios" />,
+  "/financeiro/fila": <FinanceiroLayout key="fila" aba="fila" />,
+  "/cadastros/cobranca": <FinanceiroLayout key="cobranca" aba="cobranca" />,
   "/cadastros/produtos": <TelaProdutos />,
   "/cadastros/categorias-e-quartos": <TelaCategoriasQuartos />,
 };

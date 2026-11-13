@@ -196,7 +196,7 @@ Saldo {
 **Processamento:**
 1. Cria Lançamento (tipo: recebimento, origem: reserva)
 2. Se forma = "dinheiro" ou "pix" → Movimento em Caixa/Banco
-3. Se forma = "debito" ou "credito" → CartaoCredito
+3. Se forma = "debito" ou "credito" → movimento de cartão a receber da operadora (ver 12.2)
 
 ### Checkout Finalizado
 
@@ -206,7 +206,7 @@ Saldo {
 1. Para cada pagamento: cria Lançamento
 2. Se forma = "dinheiro" ou "pix" → Movimento em Caixa/Banco
 3. Se forma = "debito" ou "credito" → CartaoCredito
-4. Se tipo_saida = "faturado" → cria Faturamento + ContaReceber
+4. Se tipo_saida = "faturado" → cria Faturamento **aberto**. A ContaReceber só nasce quando o operador fecha a fatura (ver 12.1)
 
 ### Recebimento Faturamento
 
@@ -326,3 +326,52 @@ Posição de cartões abertos/fechados e liquidações pendentes
 - Bar/Restaurante (futuro): eventos de venda
 - Estoque (futuro): eventos de saída
 - RH (futuro): eventos de folha
+
+## 12. Decisões do dono (atualizam as seções 4 e 5)
+
+Estas decisões prevalecem sobre o texto anterior.
+
+### 12.1 Faturamento
+- O checkout faturado deixa o fechamento **aberto** em Faturamento. O operador fecha a fatura na tela.
+- **Agrupamento**: fechamentos do mesmo cliente e local podem ser reunidos numa fatura, por escolha do usuário na tela. Uma fatura = um número de documento = **uma** ContaReceber pela soma.
+- **Extrato da cobrança** (tela e impressão): lista cada fechamento agrupado (reserva, hóspede, período, valor) e o total.
+
+### 12.2 Cartão (cadastro Cobrança)
+- Condições de cartão são um **cadastro** para contas a receber, por negociação com o adquirente: adquirente, bandeira, tipo (crédito, débito, voucher), prazo D+N (qualquer N), taxa % e ativo. Fica no grupo Cadastros, item "Cobrança" (`/cadastros/cobranca`), com a permissão `financeiro.gerenciar`.
+- O movimento de cartão guarda uma **cópia** (snapshot) do prazo e da taxa na criação; mudar o cadastro depois não altera o histórico.
+- Pagamento de cartão da hospedagem sem condição única para o tipo entra **sinalizado para revisão**, sem taxa nem prazo inventados; a baixa exige escolher a condição.
+- A baixa credita só o **líquido** na conta. A taxa vira uma despesa **só de registro** em Contas a Pagar (origem "Cartão de Crédito", já liquidada), sem movimento de caixa, que nunca é paga, editada ou cancelada sozinha; estornar a baixa a remove. Entra nos relatórios como despesa à parte, fora do saldo (sem dupla contagem com o banco).
+- O modelo `CartaoCredito` (fatura de cartão do hotel) da seção 4 foi substituído por `fin_cartao_movimento` (movimentos do PDV) e `fin_condicao_cartao`.
+
+### 12.3 Pagamento parcial (contas a pagar e a receber)
+- O usuário informa o valor pago e o **novo vencimento do saldo**. O original fica quitado pela parte paga e nasce uma nova parcela agendada, ligada ao original, com histórico visível. A soma é sempre o valor original.
+- Reverter o pagamento parcial remove a parcela do saldo **somente se intocada**; senão a reversão é recusada com explicação.
+
+### 12.4 Reversão
+- Uma regra, uma rota: cancelar ou estornar devolve o saldo, restaura conta a receber, fatura e cartão ao estado anterior, uma única vez. O estorno de pagamento da hospedagem (`PagamentoEstornado`) é consumido; se o dinheiro já foi conciliado (cartão baixado, fatura fechada), abre alerta para decisão manual em vez de alterar.
+
+### 12.5 Entrega dos eventos
+- O Financeiro consome os eventos de hospedagem do `outbox` por um cursor persistido, em ordem, um evento e o avanço do cursor na mesma transação, com retentativa e alerta após falhas repetidas. Não há perda por queda do processo. A posição inicial em um banco existente é o maior `seq` presente (o histórico anterior não é reprocessado).
+- **Sincronização com a nuvem** ("sincronizar ao conectar") é o Plano C e está fora do escopo desta fase. O Financeiro ainda não publica os próprios eventos no outbox.
+
+### 12.6 Regras de reversão e origem (re-revisão)
+- Lançamento originado na hospedagem (pagamento, faturado) só se desfaz na hospedagem; o Financeiro recusa e esconde a ação. O que nasce no Financeiro (contas a pagar, contas a receber manuais, recebimentos, cartão lançado à mão) se desfaz no Financeiro.
+- Estornar o pagamento de uma conta a pagar devolve a conta a pendente com o valor cheio original; no pagamento parcial a parcela do saldo é removida (valor devolvido ao original) se intocada, senão a reversão é recusada. Idem para contas a receber.
+- Estornar a baixa do cartão devolve o recebível a "a receber" (vínculo com o pagamento da hospedagem mantido) e remove a taxa; cancelar a venda é outra ação.
+- Evento que não passa: tela "Fila do Financeiro" (config.gerenciar) com Tentar de novo e Ignorar evento (motivo, supervisor, auditado, com registro e alerta do valor).
+- Chave de idempotência presa a rota, registro e conteúdo; chave igual com conteúdo diferente devolve 409.
+
+### 12.7 Contas a Receber manual
+- Lançamento à mão, espelho de Contas a Pagar: cliente (seleção ou cadastro rápido), local, documento, vencimento, valor, categoria e observação. Edita e cancela enquanto pendente e intocada; recebe total ou parcial (novo vencimento do saldo); estorna com as regras acima. Contas de origem hospedagem (faturas) não se editam nem se cancelam no Financeiro.
+
+### 12.8 Título com várias parcelas (contas a pagar e a receber manual)
+- Ao lançar, o usuário escolhe **À vista** (uma conta, como antes) ou **Parcelado**: número de parcelas (2 a 60), primeiro vencimento e intervalo: "A cada 30 dias" (contado da primeira data: 1ª, +30, +60...), "Todo mês no mesmo dia" (o dia 31 vira 30, 28 ou 29 quando o mês não tem) ou "Datas livres" (o usuário digita cada data e cada valor).
+- Antes de salvar há uma **prévia** com data e valor editáveis. A divisão padrão põe as sobras de centavos na **primeira** parcela (R$ 1.000,00 / 3 = 333,34 + 333,33 + 333,33). Só salva se a soma for exatamente o total e as datas forem estritamente crescentes; a tela explica o que falta (Dicas) e o servidor confere de novo.
+- Cada parcela é uma conta própria (a pagar: lançamento; a receber: conta manual), listada como "<documento> – parcela 2/4", com vencimento próprio, paga ou recebida sozinha. Pagamento ou recebimento parcial dentro da parcela continua valendo; a parcela do saldo se chama "<documento> – parcela 2/4 – saldo". Parcelas de título não se editam (cancele o título e lance de novo); estornar o pagamento de uma parcela segue as regras de 12.3 e 12.6, só nela.
+- O **título** (`fin_titulo`) guarda documento, total, quantidade e intervalo, e agrupa as parcelas (`titulo_id`, `parcela_num`, `parcela_total`). Tudo é criado numa única transação, com chave de idempotência. A tela de detalhe mostra parcelas, pago, falta e histórico.
+- **Cancelar título** (motivo e supervisor): cancela só as parcelas pendentes e intocadas; as pagas ou parcialmente pagas continuam, e a confirmação avisa quais. Relatórios e a lista de contas a receber enxergam cada parcela na sua data. Só nascem títulos manuais: a origem hospedagem continua sem edição nem reversão no Financeiro.
+
+### 12.9 Reversão depois de cancelar e correção de evento ignorado
+- Estornar o pagamento (ou recebimento) de uma parcela cujo título foi cancelado devolve o dinheiro, mas a parcela **fica cancelada**. Saldo de pagamento parcial cancelado de propósito (perdoado) **não volta** ao estornar o pagamento original: a conta volta pendente só pelo que ainda era devido. Saldo removido pelo próprio estorno não conta como perdão (pagar parcial, estornar e pagar de novo volta ao valor cheio).
+- **Aplicar correção** (Fila do Financeiro, `config.gerenciar` + supervisor + motivo): para um evento ignorado, executa exatamente o que o evento teria feito (estorno desfaz o recebimento ou cancela o cartão ainda a receber; registro lança o pagamento; checkout faturado abre o faturamento). É o único caminho que dispensa a regra de origem, fica ligada ao evento, é auditada e vale uma única vez. Sem nada a desfazer (já desfeito, inexistente ou conciliado) é recusada e não gasta a única vez.
+- O alerta de evento ignorado aponta Aplicar correção (não manda mais lançar à mão). Se chega o estorno de um pagamento cujo registro foi ignorado, abre-se o alerta `financeiro_estorno_de_ignorado` ligando os dois eventos.

@@ -16,7 +16,7 @@ function Sonda() {
 
 const painel = { "GET /api/painel": criarPainel() };
 
-const tudo = ["reservas.gerenciar", "caixa.operar", "quartos.situacao", "config.gerenciar", "cadastros.gerenciar"];
+const tudo = ["reservas.gerenciar", "caixa.operar", "financeiro.gerenciar", "quartos.situacao", "config.gerenciar", "cadastros.gerenciar"];
 const nomesLinks = (el: HTMLElement) => within(el).queryAllByRole("link").map((a) => a.textContent);
 const cabecalhos = () => within(screen.getByRole("navigation", { name: "Menu principal" })).getAllByRole("button").map((b) => b.textContent);
 
@@ -33,7 +33,7 @@ describe("menu em grupos", () => {
       expect(nomesLinks(regiao)).toEqual(esperado);
     };
     await itens("Hotel", ["Hoje", "Mapa", "Reservas", "Caixa", "Governança", "Relatórios"]);
-    await itens("Financeiro", ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios"]);
+    await itens("Financeiro", ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios", "Fila do Financeiro"]);
     await itens("Estoque", ["Local", "Fiscal", "Movimento", "Requisição", "Serviço", "Compra", "Inventário", "Relatórios"]);
     await itens("Cadastros", ["Produtos", "Categorias e Quartos", "Setores", "Fornecedor", "Cobrança", "Tipo de Documento", "Grupo", "SubGrupo", "Contas Bancárias", "Locais", "Relatórios"]);
     expect(screen.getByRole("link", { name: "Cartão de Crédito" })).toHaveAttribute("href", "/financeiro/cartao-de-credito");
@@ -74,12 +74,47 @@ describe("menu em grupos", () => {
   });
 
   test("itens sem permissão somem e grupo sem itens visíveis também", async () => {
-    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "config.gerenciar"] } });
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "financeiro.gerenciar", "config.gerenciar"] } });
     await aguardarConsultas(cliente);
-    expect(cabecalhos()).toEqual(["Hotel", "Financeiro", "Estoque"]);
-    expect(screen.queryByRole("button", { name: "Cadastros" })).not.toBeInTheDocument();
+    // Cadastros aparece só pela Cobrança (permissão financeira), sem os cadastros gerais.
+    expect(cabecalhos()).toEqual(["Hotel", "Financeiro", "Estoque", "Cadastros"]);
+    await userEvent.click(screen.getByRole("button", { name: /^Cadastros/ }));
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toContain("Cobrança");
+    expect(screen.queryByRole("link", { name: "Produtos" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Governança" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Caixa" })).toBeInTheDocument();
+  });
+
+  test("sem financeiro.gerenciar, config.gerenciar vê só a Fila do Financeiro (administração) e nenhuma tela financeira", async () => {
+    const u = userEvent.setup();
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "config.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    await u.click(screen.getByRole("button", { name: /^Financeiro/ }));
+    expect(screen.getByRole("link", { name: "Fila do Financeiro" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Contas a Pagar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Caixa e Banco" })).not.toBeInTheDocument();
+  });
+
+  test("sem config.gerenciar a Fila do Financeiro não aparece, mesmo com financeiro.gerenciar", async () => {
+    const u = userEvent.setup();
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["financeiro.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    await u.click(screen.getByRole("button", { name: /^Financeiro/ }));
+    expect(screen.queryByRole("link", { name: "Fila do Financeiro" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Contas a Pagar" })).toBeInTheDocument();
+  });
+
+  test("Financeiro aparece só com financeiro.gerenciar", async () => {
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["financeiro.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    expect(cabecalhos()).toEqual(["Financeiro", "Cadastros"]);
+  });
+
+  test("Cobrança (cadastro do Financeiro) não aparece para quem só tem cadastros.gerenciar", async () => {
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { rota: "/cadastros/produtos", usuario: { permissoes: ["cadastros.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    expect(screen.queryByRole("link", { name: "Cobrança" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Produtos" })).toBeInTheDocument();
   });
 
   test("só cadastros.gerenciar: apenas o grupo Cadastros, sem engrenagem", async () => {
@@ -180,12 +215,12 @@ describe("Produtos e Categorias e Quartos em Cadastros", () => {
 describe("telas em breve", () => {
   test("item novo abre TelaEmBreve com o título e a mensagem", async () => {
     instalarApiFalsa(painel);
-    renderizar(<AppRotas />, { rota: "/financeiro/contas-a-pagar", usuario: { permissoes: tudo } });
-    expect(await screen.findByRole("heading", { level: 1, name: "Contas a Pagar" })).toBeInTheDocument();
+    renderizar(<AppRotas />, { rota: "/estoque/fiscal", usuario: { permissoes: tudo } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Fiscal" })).toBeInTheDocument();
     expect(screen.getByText("Esta tela ainda será construída.")).toBeInTheDocument();
   });
 
-  test.each(["/financeiro/relatorios", "/estoque/relatorios", "/cadastros/relatorios"])("%s é em breve, em página inteira, com a permissão do grupo", async (rota) => {
+  test.each(["/estoque/relatorios", "/cadastros/relatorios"])("%s é em breve, em página inteira, com a permissão do grupo", async (rota) => {
     instalarApiFalsa(painel);
     renderizar(<AppRotas />, { rota, usuario: { permissoes: tudo } });
     expect(await screen.findByRole("heading", { level: 1, name: "Relatórios" })).toBeInTheDocument();

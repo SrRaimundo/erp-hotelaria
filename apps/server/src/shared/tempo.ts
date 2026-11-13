@@ -49,6 +49,23 @@ export function dataLocal(instante: Date, fuso: string): Data {
   }).format(instante);
 }
 
+/** Instante UTC em que o dia `d` (AAAA-MM-DD) começa no fuso informado (00:00 local). */
+export function inicioDoDiaNoFuso(d: Data, fuso: string): Date {
+  const [a, m, dia] = d.split("-").map(Number) as [number, number, number];
+  const alvo = Date.UTC(a, m - 1, dia);
+  let t = alvo;
+  // O deslocamento do fuso depende do instante (horário de verão): refina duas vezes a partir do palpite em UTC.
+  for (let i = 0; i < 2; i++) {
+    const partes = new Intl.DateTimeFormat("en-CA", {
+      timeZone: fuso, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(t));
+    const v = (tipo: string) => Number(partes.find((p) => p.type === tipo)!.value);
+    const comoUtc = Date.UTC(v("year"), v("month") - 1, v("day"), v("hour"), v("minute"), v("second"));
+    t -= comoUtc - alvo;
+  }
+  return new Date(t);
+}
+
 export function horaLocal(instante: Date, fuso: string): string {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: fuso,

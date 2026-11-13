@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { iniciarAgendador } from "./agendador.js";
 import { lerConfiguracao } from "./config.js";
+import { aguardarFila, ligarFilaFinanceiro, processarPendentes } from "./financeiro/consumidores-eventos/fila.js";
 import { criarApp } from "./http/app.js";
 import { Barramento } from "./infra/barramento.js";
 import { abrirBanco, migrar } from "./shared/banco.js";
@@ -15,7 +16,12 @@ async function iniciar(): Promise<void> {
   const db = abrirBanco(config.arquivoBanco);
   await migrar(db, todasMigracoes);
 
-  const ctx: Contexto = { db, relogio: relogioSistema, barramento: new Barramento(), eventosPendentes: [] };
+  const barramento = new Barramento();
+  const ctx: Contexto = { db, relogio: relogioSistema, barramento, eventosPendentes: [] };
+  // O Financeiro consome os eventos de hospedagem do outbox por um cursor persistido: primeiro recupera o que ficou
+  // pendente (queda entre o commit e o consumo); depois o barramento só avisa que há evento novo.
+  await processarPendentes(ctx);
+  ligarFilaFinanceiro({ ...ctx, barramento });
   const app = criarApp(ctx, { webDir: config.webDir });
   const agendador = iniciarAgendador(ctx);
 
@@ -27,6 +33,7 @@ async function iniciar(): Promise<void> {
     agendador.parar();
     try {
       await app.close();
+      await aguardarFila(ctx);
       await db.destroy();
     } catch (erro) {
       console.error("Erro ao encerrar:", erro);

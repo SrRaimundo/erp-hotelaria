@@ -1,0 +1,45 @@
+.fin { display: flex; flex-direction: column; gap: 12px; max-width: 1040px; }
+.fin h1 { font-size: 1.5rem; }
+.fin h2 { font-size: 1.0625rem; }
+.fin__topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.fin__seletores { display: flex; gap: 12px; flex-wrap: wrap; }
+.fin select, .fin .campo input { border: 1px solid var(--borda); border-radius: var(--raio-controle); background: var(--superficie); padding: 8px 10px; }
+.fin__bloco { display: flex; flex-direction: column; gap: 10px; }
+.fin__coluna { display: flex; flex-direction: column; gap: 12px; }
+.fin__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.fin__filtros { display: flex; gap: 12px; flex-wrap: wrap; }
+.fin__suave { color: var(--texto-suave); font-size: 0.875rem; }
+.fin__destaque { font-size: 2rem; font-weight: 700; }
+.fin__rolagem { overflow-x: auto; position: relative; }
+.fin__tabela { width: 100%; border-collapse: collapse; }
+.fin__tabela th, .fin__tabela td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+.fin__tabela th { color: var(--texto-suave); font-size: 0.8125rem; }
+.fin__tabela th.fin__num, .fin__tabela td.fin__num { text-align: right; }
+.fin__oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.fin__resumo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fin__resumo li { display: flex; justify-content: space-between; gap: 12px; }
+.fin__barras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fin__barras li { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; font-size: 0.8125rem; }
+.fin__barra-trilho { background: var(--borda); border-radius: 999px; height: 10px; overflow: hidden; display: block; }
+.fin__barra { display: block; height: 100%; border-radius: 999px; }
+.fin__barra--verde { background: var(--verde); }
+.fin__barra--terracota { background: var(--terracota); }
+.fin__barra--amarelo { background: var(--amarelo); }
+.fin__acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.fin__tabela td.fin__acoes { display: table-cell; white-space: nowrap; text-align: right; }
+.fin__tabela td.fin__acoes > * + * { margin-left: 8px; }
+.fin__acao-topo { margin-left: auto; align-self: flex-end; }
+.fin__grupo { border: 1px solid var(--borda); border-radius: var(--raio-controle); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fin__grupo legend { color: var(--texto-suave); font-size: 0.8125rem; padding: 0 4px; }
+@media (max-width: 899px) { .fin__seletores, .fin__seletores .campo, .fin__seletores select { width: 100%; } }
+.extrato-cobranca h3 { font-size: 1.0625rem; margin-bottom: 4px; }
+.extrato-cobranca__acoes { margin-top: 12px; }
+/* Impressão do extrato da cobrança: só ele sai na folha. */
+@media print {
+  body:has(.extrato-cobranca) * { visibility: hidden; }
+  body:has(.extrato-cobranca) .extrato-cobranca, body:has(.extrato-cobranca) .extrato-cobranca * { visibility: visible; }
+  body:has(.extrato-cobranca) .extrato-cobranca { position: absolute; left: 0; top: 0; width: 100%; }
+  body:has(.extrato-cobranca) .extrato-cobranca__acoes { display: none; }
+}
+.fin__parcela { display: grid; grid-template-columns: 3rem 1fr 1fr; align-items: end; gap: 8px; }
+@media (max-width: 899px) { .fin__parcela { grid-template-columns: 1fr; } }

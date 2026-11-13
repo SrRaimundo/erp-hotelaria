@@ -21,6 +21,7 @@ const PERMISSOES = [
   { permissao: "reservas.gerenciar", descricao: "Criar, alterar e cancelar reservas; ver hóspedes, mapa e painel" },
   { permissao: "hospedagem.checkin", descricao: "Fazer check-in" },
   { permissao: "config.gerenciar", descricao: "Configurar a pousada, usuários, perfis e checklists" },
+  { permissao: "financeiro.gerenciar", descricao: "Operar e consultar o Financeiro" },
 ];
 
 function leiturasUsuarios(extra: Record<string, unknown> = {}) {
@@ -249,6 +250,15 @@ describe("tela Perfis", () => {
     expect(config).toBeChecked();
     expect(config).toBeDisabled();
     expect(within(painel).getByText("O perfil Administrador precisa manter esta permissão.")).toBeInTheDocument();
+  });
+
+  test("a edição de perfil lista financeiro.gerenciar, desmarcada para quem não a tem", async () => {
+    instalarApiFalsa(leiturasPerfis());
+    renderizar(<TelaPerfis />, { usuario: USUARIO });
+    const { painel } = await abrirEdicao("Recepção");
+    const fin = await within(painel).findByRole("checkbox", { name: /Operar e consultar o Financeiro/ });
+    expect(fin).not.toBeChecked();
+    expect(fin).toBeEnabled();
   });
 
   test("Excluir só para personalizado sem usuários; os demais mostram o motivo", async () => {

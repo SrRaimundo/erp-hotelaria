@@ -25,3 +25,11 @@ test("dataLocal e horaLocal usam o fuso", () => {
   expect(dataLocal(i, "America/Sao_Paulo")).toBe("2026-11-09");
   expect(horaLocal(i, "America/Sao_Paulo")).toBe("23:30");
 });
+
+import { inicioDoDiaNoFuso } from "../../src/shared/tempo.js";
+test("inicioDoDiaNoFuso: meia-noite local em UTC (com e sem horário de verão)", () => {
+  expect(inicioDoDiaNoFuso("2026-11-02", "America/Sao_Paulo").toISOString()).toBe("2026-11-02T03:00:00.000Z");
+  expect(inicioDoDiaNoFuso("2026-11-02", "UTC").toISOString()).toBe("2026-11-02T00:00:00.000Z");
+  expect(inicioDoDiaNoFuso("2026-07-01", "America/New_York").toISOString()).toBe("2026-07-01T04:00:00.000Z");
+  expect(inicioDoDiaNoFuso("2026-01-01", "America/New_York").toISOString()).toBe("2026-01-01T05:00:00.000Z");
+});

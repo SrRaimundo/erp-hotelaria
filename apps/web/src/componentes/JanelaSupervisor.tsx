@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Botao } from "./Botao";
 import { ErroAcao } from "./ErroAcao";
 import { Janela } from "./Janela";
@@ -9,9 +9,11 @@ type Props = {
   titulo: string;
   aoCancelar: () => void;
   aoConfirmar: (a: Autorizacao) => Promise<void>;
+  /** Texto de aviso mostrado acima do formulário (ex.: o que a ação vai e não vai desfazer). */
+  aviso?: ReactNode;
 };
 
-function Formulario({ aoCancelar, aoConfirmar, aoEnviando }: Pick<Props, "aoCancelar" | "aoConfirmar"> & { aoEnviando: (v: boolean) => void }) {
+function Formulario({ aoCancelar, aoConfirmar, aoEnviando, aviso }: Pick<Props, "aoCancelar" | "aoConfirmar" | "aviso"> & { aoEnviando: (v: boolean) => void }) {
   const id = useId();
   const [motivo, setMotivo] = useState("");
   const [login, setLogin] = useState("");
@@ -40,6 +42,7 @@ function Formulario({ aoCancelar, aoConfirmar, aoEnviando }: Pick<Props, "aoCanc
 
   return (
     <form onSubmit={(e) => void enviar(e)} className="formulario">
+      {aviso}
       <label htmlFor={`${id}-motivo`}>Motivo</label>
       <textarea id={`${id}-motivo`} value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} />
       <label htmlFor={`${id}-login`}>Login do supervisor</label>
@@ -59,12 +62,12 @@ function Formulario({ aoCancelar, aoConfirmar, aoEnviando }: Pick<Props, "aoCanc
   );
 }
 
-export function JanelaSupervisor({ aberta, titulo, aoCancelar, aoConfirmar }: Props) {
+export function JanelaSupervisor({ aberta, titulo, aoCancelar, aoConfirmar, aviso }: Props) {
   const [enviando, setEnviando] = useState(false);
   // Durante o envio, Esc e × não fecham a janela (evita perder o resultado da autorização).
   return (
     <Janela aberta={aberta} aoFechar={() => !enviando && aoCancelar()} titulo={titulo}>
-      <Formulario aoCancelar={aoCancelar} aoConfirmar={aoConfirmar} aoEnviando={setEnviando} />
+      <Formulario aoCancelar={aoCancelar} aoConfirmar={aoConfirmar} aoEnviando={setEnviando} aviso={aviso} />
     </Janela>
   );
 }
