@@ -10,6 +10,7 @@ import { registrarRotasLocais } from "./locais.js";
 import { registrarRotasContasReceber } from "./contas-receber.js";
 import { registrarRotasFaturamento } from "./faturamento.js";
 import { registrarRotasLancamentos } from "./lançamentos.js";
+import { registrarRotasTitulos } from "./titulos.js";
 
 export function registrarRotasFinanceiro(app: FastifyInstance, ctx: Contexto): void {
   registrarRotasLocais(app, ctx);
@@ -20,6 +21,7 @@ export function registrarRotasFinanceiro(app: FastifyInstance, ctx: Contexto): v
   registrarRotasCartao(app, ctx);
   registrarRotasFaturamento(app, ctx);
   registrarRotasContasReceber(app, ctx);
+  registrarRotasTitulos(app, ctx);
   registrarRotasCaixaBanco(app, ctx);
   registrarRotasRelatorios(app, ctx);
 }

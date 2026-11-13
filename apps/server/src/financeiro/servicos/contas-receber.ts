@@ -68,6 +68,7 @@ export async function atualizarFaturaDoDocumento(tx: Contexto, local_id: UUID, b
 
 export const CATEGORIAS_RECEBER = ["servico", "aluguel", "evento", "convenio", "outros"] as const;
 const MSG_HOSPEDAGEM = "Esta conta a receber veio da hospedagem (fatura). Corrija na hospedagem: o Financeiro não a altera nem a cancela.";
+const MSG_TITULO = "Esta conta é parcela de um título parcelado: não se edita uma parcela. Cancele o título e lance de novo.";
 const MSG_PENDENTE = "Só é possível enquanto a conta está pendente, sem nenhum recebimento nem parcela de saldo em andamento.";
 
 export type DadosManual = { cliente_id: UUID; numero_documento: string; valor: number; vencimento: Date; categoria: (typeof CATEGORIAS_RECEBER)[number]; observacao?: string; forma_pagamento?: "boleto" | "pix" | "deposito" | "dinheiro" };
@@ -160,7 +161,7 @@ export class ContasReceberService {
         .where("local_id", "=", rec.local_id)
         .executeTakeFirst();
       if (!conta) throw new ErroDominio("NAO_ENCONTRADO", "Conta bancária não encontrada.");
-      const raw = (await tx.db.selectFrom("fin_conta_receber").select(["origem", "categoria", "observacao"]).where("id", "=", recebivel_id).executeTakeFirst()) as any;
+      const raw = (await tx.db.selectFrom("fin_conta_receber").select(["origem", "categoria", "observacao", "titulo_id", "parcela_num", "parcela_total"]).where("id", "=", recebivel_id).executeTakeFirst()) as any;
       const parcial = valor.centavos < rec.valor_pendente!.centavos;
       if (parcial && (!novoVencimento || Number.isNaN(novoVencimento.getTime()))) {
         throw new ErroDominio("VALIDACAO_FALHOU", "Para receber só uma parte, informe a nova data de vencimento do saldo.");
@@ -192,7 +193,7 @@ export class ContasReceberService {
             id: filhaId, local_id: rec.local_id, cliente_id: rec.cliente_id, numero_documento: `${base}-P${Number(n?.n ?? 0) + 1}`,
             valor_original: resto.centavos, valor_recebido: 0, data_vencimento: novoVencimento!.toISOString(), forma_pagamento: rec.forma_pagamento,
             status: "pendente", conta_destino_id: null, lançamentos_id: JSON.stringify([]), parcela_de: rec.id, valor_total: null,
-            origem: raw.origem, categoria: raw.categoria, observacao: raw.observacao,
+            origem: raw.origem, categoria: raw.categoria, observacao: raw.observacao, titulo_id: raw.titulo_id, parcela_num: raw.parcela_num, parcela_total: raw.parcela_total,
             criado_em: tx.relogio.agora().toISOString(),
           })
           .execute();
@@ -231,10 +232,11 @@ export class ContasReceberService {
     });
   }
 
-  private async exigirManualEditavel(tx: Contexto, id: UUID): Promise<any> {
+  private async exigirManualEditavel(tx: Contexto, id: UUID, editar = false): Promise<any> {
     const raw = (await tx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", id).executeTakeFirst()) as any;
     if (!raw) throw new ErroDominio("NAO_ENCONTRADO", "Recebível não encontrado.");
     if (raw.origem !== "manual") throw new ErroDominio("ESTADO_INVALIDO", MSG_HOSPEDAGEM);
+    if (raw.titulo_id && editar) throw new ErroDominio("ESTADO_INVALIDO", MSG_TITULO);
     const filha = await tx.db.selectFrom("fin_conta_receber").select("id").where("parcela_de", "=", id).where("status", "!=", "cancelado").executeTakeFirst();
     if (raw.status !== "pendente" || raw.valor_recebido > 0 || raw.valor_total != null || filha) throw new ErroDominio("ESTADO_INVALIDO", MSG_PENDENTE);
     return raw;
@@ -271,7 +273,7 @@ export class ContasReceberService {
   /** Edita a conta manual enquanto pendente e intocada. */
   async editarManual(id: UUID, d: Partial<DadosManual>, usuario: Usuario): Promise<ContaReceber> {
     return emTransacao(this.ctx, async (tx) => {
-      const raw = await this.exigirManualEditavel(tx, id);
+      const raw = await this.exigirManualEditavel(tx, id, true);
       const depois = {
         cliente_id: d.cliente_id ?? raw.cliente_id, numero_documento: (d.numero_documento ?? raw.numero_documento).trim(), valor: d.valor ?? raw.valor_original,
       };

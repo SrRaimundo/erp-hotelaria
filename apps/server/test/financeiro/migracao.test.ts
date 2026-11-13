@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { sql } from "kysely";
 import { abrirBanco, migrar } from "../../src/shared/banco.js";
 
-test("financeiro: 15 tabelas criadas corretamente", async () => {
+test("financeiro: 16 tabelas criadas corretamente", async () => {
   const { todasMigracoes } = await import("../../src/shared/migracoes.js");
   const db = abrirBanco(":memory:");
   await migrar(db, todasMigracoes);
@@ -31,6 +31,7 @@ test("financeiro: 15 tabelas criadas corretamente", async () => {
     "fin_evento_ignorado",
     "fin_fornecedor",
     "fin_idempotencia",
+    "fin_titulo",
   ].sort();
 
   expect(tableNames).toEqual(expectedTables);
@@ -272,6 +273,9 @@ test("financeiro: todas as colunas estão presentes e com tipos corretos", async
     "fornecedor_id",
     "parcela_de",
     "valor_total",
+    "titulo_id",
+    "parcela_num",
+    "parcela_total",
   ]);
 
   // Check fin_movimento columns
@@ -296,5 +300,18 @@ test("financeiro: todas as colunas estão presentes e com tipos corretos", async
   const saldoColNames = saldoCols.map((c: any) => c.name);
   expect(saldoColNames).toEqual(["id", "conta_id", "data", "saldo", "criado_em"]);
 
+  await db.destroy();
+});
+
+test("financeiro: banco já migrado até a conta a receber manual recebe a migração de títulos sem perder dados", async () => {
+  const { todasMigracoes } = await import("../../src/shared/migracoes.js");
+  const db = abrirBanco(":memory:");
+  const anteriores = todasMigracoes.filter((m) => m.nome < "0790");
+  await migrar(db, anteriores);
+  await sql`INSERT INTO fin_local (id, pousada_id, nome, ativo, parametros, criado_em) VALUES ('l1', 'p', 'Local', 1, '{}', '2026-01-01T00:00:00Z')`.execute(db);
+  await sql`INSERT INTO fin_lancamento (id, local_id, data, tipo, origem, valor, forma_pagamento, status, criado_por, criado_em) VALUES ('x1', 'l1', '2026-01-01T00:00:00Z', 'pagamento', 'manual', 500, 'pix', 'pendente', 'u', '2026-01-01T00:00:00Z')`.execute(db);
+  await migrar(db, todasMigracoes);
+  const { rows } = await sql`SELECT valor, titulo_id, parcela_num, parcela_total FROM fin_lancamento WHERE id = 'x1'`.execute(db);
+  expect(rows).toEqual([{ valor: 500, titulo_id: null, parcela_num: null, parcela_total: null }]);
   await db.destroy();
 });

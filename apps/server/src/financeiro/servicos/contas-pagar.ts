@@ -77,7 +77,7 @@ export class ContasPagarService {
         await lancs.criar({
           local_id: l.local_id, data: agora, tipo: "pagamento", origem: "manual", valor: l.valor.menos(pago), forma_pagamento: forma ?? l.forma_pagamento,
           status: "pendente", descricao: l.descricao, categoria: l.categoria, vencimento: o.novo_vencimento, fornecedor_id: l.fornecedor_id,
-          referencia_tipo: "conta_pagar", parcela_de: id, usuario,
+          referencia_tipo: "conta_pagar", parcela_de: id, titulo_id: l.titulo_id, parcela_num: l.parcela_num, parcela_total: l.parcela_total, usuario,
         });
       }
       await tx.db

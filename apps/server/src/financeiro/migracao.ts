@@ -325,3 +325,30 @@ export const migracaoFinanceiroReceberManual: Migracao = {
     await sql`ALTER TABLE fin_conta_receber ADD COLUMN observacao text`.execute(db);
   },
 };
+
+/** Título (documento) com várias parcelas: cada parcela é uma conta própria (lançamento a pagar ou conta a receber) ligada ao título. */
+export const migracaoFinanceiroTitulo: Migracao = {
+  nome: "0790_financeiro_titulo",
+  async up(db) {
+    await db.schema
+      .createTable("fin_titulo")
+      .addColumn("id", "text", (c) => c.primaryKey())
+      .addColumn("local_id", "text", (c) => c.notNull().references("fin_local.id"))
+      .addColumn("tipo", "text", (c) => c.notNull()) // pagar | receber
+      .addColumn("documento", "text", (c) => c.notNull())
+      .addColumn("valor_total", "integer", (c) => c.notNull())
+      .addColumn("num_parcelas", "integer", (c) => c.notNull())
+      .addColumn("intervalo", "text", (c) => c.notNull()) // 30_dias | mensal | livre
+      .addColumn("status", "text", (c) => c.notNull().defaultTo("ativo")) // ativo | cancelado
+      .addColumn("criado_por", "text", (c) => c.notNull())
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .execute();
+    for (const t of ["fin_lancamento", "fin_conta_receber"]) {
+      await sql.raw(`ALTER TABLE ${t} ADD COLUMN titulo_id text`).execute(db);
+      await sql.raw(`ALTER TABLE ${t} ADD COLUMN parcela_num integer`).execute(db);
+      await sql.raw(`ALTER TABLE ${t} ADD COLUMN parcela_total integer`).execute(db);
+    }
+    await sql`CREATE INDEX fin_lancamento_titulo ON fin_lancamento (titulo_id)`.execute(db);
+    await sql`CREATE INDEX fin_conta_receber_titulo ON fin_conta_receber (titulo_id)`.execute(db);
+  },
+};

@@ -17,6 +17,10 @@ export type Lançamento = {
   parcela_de?: UUID;
   /** Pagamento parcial: valor que o lançamento tinha antes de ser dividido (soma das parcelas). */
   valor_total?: number;
+  /** Parcela de um título (documento parcelado): o título e a posição (n de total). */
+  titulo_id?: UUID;
+  parcela_num?: number;
+  parcela_total?: number;
 
   // Values
   valor: Dinheiro;
