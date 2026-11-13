@@ -500,3 +500,20 @@ Unique identifier (36 characters, hyphenated UUID v4).
 3. **Audit Trail**: Every Lançamento captures `criado_por`, `data_criacao`, and `dispositivo`; cancellations add `motivo_cancelamento` and `supervisor_autorizou`.
 4. **Idempotency**: Duplicate `referencia_id` + `referencia_tipo` checks prevent creating the same transaction twice (used by event consumers).
 5. **Derived Fields**: `valor_pendente` on ContaReceber and `saldo_posterior` on Movimento are calculated, not stored.
+
+## Título (parcelamento)
+
+```typescript
+Titulo {
+  id: UUID
+  local_id: UUID
+  tipo: "pagar" | "receber"
+  documento: string
+  valor_total: number            // centavos; soma exata das parcelas
+  num_parcelas: number           // 2..60
+  intervalo: "30_dias" | "mensal" | "livre"
+  status: "ativo" | "cancelado"
+}
+```
+
+Tabela `fin_titulo`. Cada parcela é um `fin_lancamento` (a pagar) ou um `fin_conta_receber` (manual) com `titulo_id`, `parcela_num` e `parcela_total`. A parcela de saldo de um pagamento parcial herda os três campos e `parcela_de`.

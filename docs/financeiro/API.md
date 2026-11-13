@@ -452,3 +452,13 @@ Pagamentos em cartão da hospedagem viram movimentos de cartão a receber (taxa 
 
 - `GET /fila`: posição, pendentes, evento bloqueado (tipo, valor, erro, tentativas) e eventos ignorados.
 - `POST /fila/tentar-novamente`; `POST /fila/ignorar` `{ seq, motivo, supervisor }` (só o evento que bloqueia a fila; auditado, com registro em `fin_evento_ignorado` e alerta com o valor).
+
+### Título com várias parcelas (contas a pagar e a receber manual)
+
+- `POST /api/financeiro/titulos` `{ chave?, tipo: "pagar"|"receber", local_id, documento, valor_total, intervalo: "30_dias"|"mensal"|"livre", categoria, fornecedor_id? (pagar), cliente_id (receber), forma_pagamento?, observacao?, parcelas: [{ vencimento: "AAAA-MM-DD", valor }] }`. Valores em centavos. 201 com o detalhe do título.
+  - Regras (422 com mensagem em português): de 2 a 60 parcelas; datas existentes e estritamente crescentes; cada valor maior que zero; a soma das parcelas é exatamente `valor_total`; documento a receber único no local. Criação numa transação; a `chave` repete a mesma resposta (409 se o conteúdo mudar).
+  - O cliente calcula a prévia (divisão com sobra de centavos na primeira parcela; intervalo `30_dias` conta da primeira data; `mensal` mantém o dia, ajustando ao último dia do mês); `intervalo` é só informativo, o servidor grava as datas e valores enviados.
+- `GET /api/financeiro/titulos/:id` devolve `{ id, tipo, documento, valor_total, num_parcelas, intervalo, status: "ativo"|"cancelado", pago, restante, parcelas: [{ id, numero, total, rotulo, vencimento_dia, valor, pago, restante, situacao: "pendente"|"parcial"|"pago"|"cancelado", saldo_de }], historico: [{ instante, ator, acao, motivo }] }`. A parcela de saldo de um pagamento parcial entra com o rótulo "... – parcela 2/4 – saldo".
+- `POST /api/financeiro/titulos/:id/cancelar` `{ motivo, supervisor }`: cancela só as parcelas pendentes e intocadas (as pagas ou parcialmente pagas ficam); 422 se não há parcela pendente ou se o título já foi cancelado.
+- Cada parcela segue as rotas de sempre: `PUT /contas-a-pagar/:id/baixar`, `PUT /contas-receber/:id/confirmar-pagamento`, `POST /lancamentos/:id/estornar`. `GET /lancamentos` traz `titulo_id`, `parcela_num` e `parcela_total`; `GET /relatorios/contas-receber` traz também `rotulo` e `cancelavel`. Parcela de título a receber não se edita (`editavel: false`); `PUT /contas-receber/:id` responde 422.
+- Migração `0790_financeiro_titulo`: tabela `fin_titulo` e as colunas `titulo_id`, `parcela_num`, `parcela_total` em `fin_lancamento` e `fin_conta_receber`.

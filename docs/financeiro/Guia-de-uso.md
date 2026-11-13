@@ -23,6 +23,9 @@ Cada local é uma ilha: lançamentos, contas e faturas não se misturam. Em **Lo
 
 Fornecedores, serviços, funcionários e contratos. **+ Nova conta a pagar**, escolha o tipo, a descrição, o valor e o vencimento. Cadastre um fornecedor novo ali mesmo, se precisar.
 
+- **Parcelado**: em **Forma**, escolha **Parcelado**, informe o número de parcelas (de 2 a 60), o **primeiro vencimento** e o intervalo: **A cada 30 dias** (contado do primeiro vencimento), **Todo mês no mesmo dia** (se o dia não existir no mês, vale o último dia dele) ou **Datas livres** (você digita cada data e cada valor). A **prévia** mostra as parcelas; dá para mudar a data e o valor de cada uma. As sobras de centavos ficam na primeira parcela (R$ 1.000,00 em 3 vezes: 333,34 + 333,33 + 333,33). O botão só libera quando a soma é exatamente o total e as datas estão em ordem crescente; a tela diz o que falta.
+- Cada parcela aparece na lista como **documento – parcela 2/4**, com o seu vencimento, e se paga sozinha (inclusive pagamento parcial: o saldo aparece como **parcela 2/4 – saldo**). **Ver título** abre as parcelas, o que já foi pago, o que falta e o histórico.
+- **Cancelar título** (em Ver título, com motivo e senha de supervisor): cancela só as parcelas pendentes. As já pagas, ou pagas em parte, continuam; a janela avisa quais.
 - **Pagar**: escolha a conta de onde sai o dinheiro e a forma. O saldo da conta diminui.
 - **Pagamento parcial**: digite o valor pago. Informe o **novo vencimento do saldo**. A conta original fica paga pela parte paga e nasce uma nova parcela, ligada a ela, com o resto. A soma é sempre o valor original.
 - **Cancelar**: só para conta ainda pendente (pede motivo e senha de supervisor).
@@ -36,6 +39,8 @@ Faturas fechadas em Faturamento e contas lançadas à mão (serviço, aluguel, e
 - **+ Nova conta a receber**: escolha o cliente (ou **+ Novo cliente** na hora), o número do documento, a categoria, o valor, o vencimento e uma observação.
 - **Editar** e **Cancelar** (motivo e supervisor) só valem para a conta lançada à mão, pendente e sem recebimento. Contas que vieram da hospedagem (faturas) não se editam nem se cancelam aqui: corrija na hospedagem.
 - **Estornar recebimento**: desfaz o último recebimento (motivo e supervisor); a conta volta ao estado anterior, com o valor cheio, e a parcela do saldo some se estiver intocada.
+
+**Parcelado** funciona como em Contas a Pagar (número de parcelas, primeiro vencimento, intervalo, prévia editável, soma exata). Cada parcela é uma conta com o nome **documento – parcela 2/4** e vencimento próprio, recebida sozinha. Parcela de título não se edita: use **Ver título** para ver o andamento e **Cancelar título** para cancelar as pendentes (as já recebidas ficam).
 
 **Confirmar pagamento** pede o valor e a conta de destino. Receber só uma parte funciona como no pagamento: informe o novo vencimento do saldo e o restante vira uma nova parcela.
 

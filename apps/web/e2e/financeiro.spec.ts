@@ -196,6 +196,59 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
   });
 
+  test("3c. Contas a Pagar: título em 4 parcelas, pagamento parcial da 2ª e cancelamento do título", async () => {
+    await irPara(page, "Contas a Pagar");
+    await page.getByRole("button", { name: "+ Nova conta a pagar" }).click();
+    let painel = page.getByRole("dialog", { name: "Nova conta a pagar" });
+    await painel.getByLabel("Descrição").fill("Compra parcelada E2E");
+    await painel.getByLabel("Valor", { exact: true }).fill("1000,00");
+    await painel.getByLabel("Forma", { exact: true }).selectOption({ label: "Parcelado" });
+    await painel.getByLabel("Número de parcelas").fill("4");
+    await painel.getByLabel("Primeiro vencimento").fill("2030-01-10");
+    await expect(painel.getByLabel("Valor da parcela 1")).toHaveValue("250,00");
+    await painel.getByLabel("Valor da parcela 2").fill("260,00");
+    await expect(painel.getByText(/A soma das parcelas/)).toBeVisible();
+    await expect(painel.getByRole("button", { name: "Lançar conta a pagar" })).toBeDisabled();
+    await painel.getByLabel("Valor da parcela 2").fill("250,00");
+    await capturar(page, "03c-titulo-parcelado");
+    await painel.getByRole("button", { name: "Lançar conta a pagar" }).click();
+    await expect(painel).toBeHidden();
+    const parcela = (n: number, saldo = false) => page.getByRole("row", { name: new RegExp(`Compra parcelada E2E – parcela ${n}/4${saldo ? " – saldo" : "(?! – saldo)"}`) });
+    for (const n of [1, 2, 3, 4]) await expect(parcela(n)).toBeVisible();
+
+    await parcela(2).getByRole("button", { name: "Pagar", exact: true }).click();
+    painel = page.getByRole("dialog", { name: "Pagar conta" });
+    const opcao = await painel.getByLabel("Pagar com a conta").locator("option", { hasText: "Banco E2E" }).textContent();
+    await painel.getByLabel("Pagar com a conta").selectOption({ label: opcao! });
+    await painel.getByLabel("Valor a pagar agora").fill("100,00");
+    await painel.getByLabel("Novo vencimento do saldo").fill("2030-02-20");
+    await painel.getByRole("button", { name: "Confirmar pagamento" }).click();
+    await expect(painel).toBeHidden();
+    await expect(parcela(2, true)).toBeVisible();
+
+    await parcela(4).getByRole("button", { name: "Ver título" }).click();
+    const detalhe = page.getByRole("dialog", { name: "Título Compra parcelada E2E" });
+    await expect(detalhe.getByText("Pago: R$ 100,00")).toBeVisible();
+    await expect(detalhe.getByText("Falta: R$ 900,00")).toBeVisible();
+    await capturar(page, "03c-titulo-detalhe");
+    await detalhe.getByRole("button", { name: "Cancelar título" }).click();
+    const janela = page.getByRole("dialog", { name: "Cancelar título" });
+    await expect(janela).toContainText("Continuam como estão, por já terem pagamento: Compra parcelada E2E – parcela 2/4");
+    await janela.getByLabel("Motivo").fill("Compra desfeita");
+    await janela.getByLabel("Login do supervisor").fill(loginSupervisor);
+    await janela.getByLabel("Senha do supervisor").fill(await senhaAdmin());
+    await janela.getByRole("button", { name: "Autorizar" }).click();
+    await expect(janela).toBeHidden();
+    await expect(detalhe.getByText("Falta: R$ 0,00")).toBeVisible();
+    await expect(detalhe.getByText("Cancelado").first()).toBeVisible();
+    await page.getByRole("button", { name: "Fechar" }).click();
+    await expect(parcela(2)).toContainText("Pago");
+    await expect(parcela(3)).toContainText("Cancelado");
+    await irPara(page, "Caixa e Banco");
+    saldoBanco -= 10000;
+    await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
+  });
+
   let faturado = 0;
   test("4. Hospedagem: check-out com valor faturado chega em Faturamento aberto", async ({ request }) => {
     const lista = await (await api(request, admin, "get", "/api/reservas?estado=hospedada&porPagina=100")).json();
