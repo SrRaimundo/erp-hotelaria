@@ -462,3 +462,9 @@ Pagamentos em cartão da hospedagem viram movimentos de cartão a receber (taxa 
 - `POST /api/financeiro/titulos/:id/cancelar` `{ motivo, supervisor }`: cancela só as parcelas pendentes e intocadas (as pagas ou parcialmente pagas ficam); 422 se não há parcela pendente ou se o título já foi cancelado.
 - Cada parcela segue as rotas de sempre: `PUT /contas-a-pagar/:id/baixar`, `PUT /contas-receber/:id/confirmar-pagamento`, `POST /lancamentos/:id/estornar`. `GET /lancamentos` traz `titulo_id`, `parcela_num` e `parcela_total`; `GET /relatorios/contas-receber` traz também `rotulo` e `cancelavel`. Parcela de título a receber não se edita (`editavel: false`); `PUT /contas-receber/:id` responde 422.
 - Migração `0790_financeiro_titulo`: tabela `fin_titulo` e as colunas `titulo_id`, `parcela_num`, `parcela_total` em `fin_lancamento` e `fin_conta_receber`.
+
+### Correção de evento ignorado (permissão `config.gerenciar`)
+
+- `POST /api/financeiro/fila/ignorados/:seq/aplicar-correcao` `{ motivo, supervisor }`: aplica exatamente o que o evento ignorado teria feito (única passagem que dispensa a regra de origem da hospedagem). Auditada (`fin_fila.aplicar_correcao`, com supervisor e motivo, ligada ao `seq`), uma vez só (422 na segunda). 422 também quando não há nada a desfazer. `GET /fila` traz `corrigido`, `correcao_em`, `correcao_por` e `correcao_motivo` em cada ignorado.
+- Alerta `financeiro_estorno_de_ignorado`: o estorno de um pagamento cujo registro foi ignorado.
+- Estornar pagamento/recebimento de parcela de título cancelado: o dinheiro volta e a parcela permanece `cancelado`. Migração `0791_financeiro_correcoes` (`saldo_desfeito`, colunas de correção em `fin_evento_ignorado`).

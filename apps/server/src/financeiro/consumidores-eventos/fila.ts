@@ -3,6 +3,7 @@ import { criarAlerta, resolverAlerta } from "../../infra/alertas.js";
 import { auditar } from "../../infra/auditoria.js";
 import { ErroDominio } from "../../shared/erros.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
+import type { Usuario } from "../servicos/locais.js";
 import { processarPagamentoEstornado, processarPagamentoRegistrado, processarValorAReceberCriado } from "./hospedagem-pagamento.js";
 
 /**
@@ -15,7 +16,7 @@ import { processarPagamentoEstornado, processarPagamentoRegistrado, processarVal
 const NOME = "hospedagem";
 export const FALHAS_PARA_ALERTA = 3;
 
-type Tratador = (tx: Contexto, e: Pick<Evento, "payload" | "criadoEm">) => Promise<void>;
+type Tratador = (tx: Contexto, e: Pick<Evento, "payload" | "criadoEm"> & { seq?: number }) => Promise<unknown>;
 const TRATADORES: Record<string, Tratador> = {
   "hospedagem.PagamentoRegistrado": processarPagamentoRegistrado,
   "hospedagem.ValorAReceberCriado": processarValorAReceberCriado,
@@ -52,7 +53,7 @@ async function varrer(ctx: Contexto): Promise<ResultadoFila> {
     try {
       await emTransacao(ctx, async (tx) => {
         if ((await lerCursor(tx.db)) >= linha.seq) return; // outro ciclo já tratou
-        await TRATADORES[linha.tipo]!(tx, { payload: JSON.parse(linha.payload), criadoEm: linha.criado_em });
+        await TRATADORES[linha.tipo]!(tx, { payload: JSON.parse(linha.payload), criadoEm: linha.criado_em, seq: linha.seq });
         await tx.db
           .updateTable("fin_cursor")
           .set({ ultimo_seq: linha.seq, falha_seq: null, falhas: 0, ultimo_erro: null })
@@ -146,7 +147,7 @@ export type EstadoFila = {
   cursor: number;
   pendentes: number;
   bloqueado: { seq: number; tipo: string; valor: number | null; erro: string; falhas: number; criado_em: string } | null;
-  ignorados: { seq: number; tipo: string; valor: number | null; motivo: string; ator: string; criado_em: string }[];
+  ignorados: { seq: number; tipo: string; valor: number | null; motivo: string; ator: string; criado_em: string; corrigido: boolean; correcao_em: string | null; correcao_por: string | null; correcao_motivo: string | null }[];
 };
 
 /** Situação da fila para a tela de administração: posição, evento bloqueado (com o erro) e o que já foi ignorado. */
@@ -163,7 +164,7 @@ export async function estadoFila(ctx: Contexto): Promise<EstadoFila> {
   const ig = (await ctx.db.selectFrom("fin_evento_ignorado").selectAll().orderBy("seq", "desc").execute()) as any[];
   return {
     cursor, pendentes: Number(pend?.n ?? 0), bloqueado,
-    ignorados: ig.map((i) => ({ seq: i.seq, tipo: i.tipo, valor: i.valor, motivo: i.motivo, ator: i.ator, criado_em: i.criado_em })),
+    ignorados: ig.map((i) => ({ seq: i.seq, tipo: i.tipo, valor: i.valor, motivo: i.motivo, ator: i.ator, criado_em: i.criado_em, corrigido: !!i.correcao_em, correcao_em: i.correcao_em ?? null, correcao_por: i.correcao_por ?? null, correcao_motivo: i.correcao_motivo ?? null })),
   };
 }
 
@@ -187,8 +188,36 @@ export async function ignorarEvento(ctx: Contexto, seq: number, o: { motivo: str
     for (const a of abertos) await resolverAlerta(tx, a.id, o.ator);
     await criarAlerta(tx, {
       tipo: "financeiro_evento_ignorado", alvoTipo: "outbox", alvoId: String(seq),
-      mensagem: `O evento ${e.tipo} (nº ${seq}${valor !== null ? `, ${reais(valor)}` : ""}) NÃO foi registrado no Financeiro: foi ignorado por decisão do administrador (${o.motivo}). Confira se o valor precisa ser lançado à mão.`,
+      mensagem: `O evento ${e.tipo} (nº ${seq}${valor !== null ? `, ${reais(valor)}` : ""}) NÃO foi registrado no Financeiro: foi ignorado por decisão do administrador (${o.motivo}). Nada foi feito por ele. Para aplicar exatamente o que o evento faria, use "Aplicar correção" na Fila do Financeiro (exige supervisor e motivo).`,
     });
     await auditar(tx, { ator: o.ator, acao: "fin_fila.ignorar", alvoTipo: "outbox", alvoId: String(seq), motivo: o.motivo, supervisorId: o.supervisorId, dados: { tipo: e.tipo, valor, erro: c.ultimo_erro } });
+  });
+}
+
+/**
+ * Correção supervisionada de um evento ignorado: aplica EXATAMENTE o que o evento teria feito (estorno desfaz o recebimento, registro
+ * lança o pagamento), ligada ao evento, uma única vez. É o único caminho que dispensa a regra de que o que nasce na hospedagem só se desfaz lá.
+ */
+export async function aplicarCorrecao(ctx: Contexto, seq: number, o: { motivo: string; supervisorId: string; ator: string }): Promise<void> {
+  await emTransacao(ctx, async (tx) => {
+    const ig = (await tx.db.selectFrom("fin_evento_ignorado").selectAll().where("seq", "=", seq).executeTakeFirst()) as any;
+    if (!ig) throw new ErroDominio("ESTADO_INVALIDO", "Este evento não está na lista de ignorados.");
+    if (ig.correcao_em) throw new ErroDominio("ESTADO_INVALIDO", `A correção deste evento já foi aplicada em ${ig.correcao_em} (por ${ig.correcao_por}). Ela só vale uma vez.`);
+    const origem = (await tx.db.selectFrom("outbox").select("criado_em").where("seq", "=", seq).executeTakeFirst()) as { criado_em: string } | undefined;
+    const evento = { payload: JSON.parse(ig.payload), criadoEm: origem?.criado_em ?? ig.criado_em, seq };
+    const usuario: Usuario = { id: o.ator, email: o.ator, dispositivo: "web" };
+    let desfecho: unknown = "aplicado";
+    if (ig.tipo === "hospedagem.PagamentoEstornado") {
+      desfecho = await processarPagamentoEstornado(tx, evento, { seq, usuario, supervisorId: o.supervisorId, motivo: `Correção do evento ignorado nº ${seq}: ${o.motivo}` });
+      if (desfecho === "sem_efeito") {
+        throw new ErroDominio("ESTADO_INVALIDO", "Não há nada a desfazer: o lançamento deste pagamento já estava desfeito, não existe no Financeiro ou o dinheiro já foi conciliado (cartão baixado, fatura fechada). Confira os alertas e decida manualmente.");
+      }
+    } else {
+      await TRATADORES[ig.tipo]!(tx, evento);
+    }
+    await tx.db.updateTable("fin_evento_ignorado").set({ correcao_em: tx.relogio.agora().toISOString(), correcao_por: o.ator, correcao_motivo: o.motivo }).where("seq", "=", seq).execute();
+    const abertos = await tx.db.selectFrom("alertas").select("id").where("tipo", "=", "financeiro_evento_ignorado").where("alvo_id", "=", String(seq)).where("resolvido_em", "is", null).execute();
+    for (const a of abertos) await resolverAlerta(tx, a.id, o.ator);
+    await auditar(tx, { ator: o.ator, acao: "fin_fila.aplicar_correcao", alvoTipo: "outbox", alvoId: String(seq), motivo: o.motivo, supervisorId: o.supervisorId, dados: { tipo: ig.tipo, desfecho } });
   });
 }

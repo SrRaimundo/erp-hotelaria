@@ -69,6 +69,8 @@ A fatura vira **uma** conta a receber pela soma. Em **Fechadas**, o botão **Ext
 
 ## Fila do Financeiro (administração)
 
+Em **Eventos ignorados**, **Aplicar correção** (motivo e senha de supervisor) faz exatamente o que o evento teria feito, uma única vez: um estorno ignorado desfaz o recebimento; um registro ignorado lança o pagamento. Se não houver nada a desfazer, o sistema explica e não gasta a correção.
+
 Visível para quem tem permissão de configuração. Mostra se a fila de eventos da hospedagem está em dia. Se um evento não consegue ser registrado, a fila para nele (os seguintes esperam, para manter a ordem) e a tela mostra o evento, o valor e o erro.
 
 - **Tentar de novo**: reprocessa agora (útil depois de corrigir a causa).

@@ -300,7 +300,10 @@ export const useEstornarBaixaCartao = () =>
 export type EstadoFila = {
   cursor: number; pendentes: number;
   bloqueado: { seq: number; tipo: string; valor: number | null; erro: string; falhas: number; criado_em: string } | null;
-  ignorados: { seq: number; tipo: string; valor: number | null; motivo: string; ator: string; criado_em: string }[];
+  ignorados: {
+    seq: number; tipo: string; valor: number | null; motivo: string; ator: string; criado_em: string;
+    corrigido: boolean; correcao_em: string | null; correcao_por: string | null; correcao_motivo: string | null;
+  }[];
 };
 export const useFila = () =>
   useQuery({ queryKey: ["financeiro", "fila"], queryFn: () => chamarApi<EstadoFila>("GET", `${BASE}/fila`), refetchInterval: 15000 });
@@ -327,3 +330,6 @@ export const useTitulo = (id: string) =>
 export const useCancelarTitulo = () =>
   useAcaoFinanceira(({ id, aut }: { id: string; aut: Autorizacao }) =>
     chamarApi("POST", `${BASE}/titulos/${encodeURIComponent(id)}/cancelar`, { motivo: aut.motivo, supervisor: aut.supervisor }));
+export const useAplicarCorrecao = () =>
+  useAcaoFinanceira(({ seq, aut }: { seq: number; aut: Autorizacao }) =>
+    chamarApi("POST", `${BASE}/fila/ignorados/${seq}/aplicar-correcao`, { motivo: aut.motivo, supervisor: aut.supervisor }));

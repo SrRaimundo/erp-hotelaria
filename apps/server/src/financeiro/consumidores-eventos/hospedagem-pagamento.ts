@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { criarAlerta } from "../../infra/alertas.js";
 import { auditar } from "../../infra/auditoria.js";
 import type { Evento } from "../../infra/barramento.js";
@@ -152,9 +153,13 @@ const alertarConciliado = (tx: Contexto, alvoId: string, mensagem: string) =>
  * faturamento aberto), uma única vez. Se o dinheiro já foi conciliado (cartão baixado, fatura fechada), não altera nada:
  * abre um alerta para decisão manual.
  */
-export async function processarPagamentoEstornado(ctx: Contexto, evento: Pick<Evento, "payload" | "criadoEm">): Promise<void> {
+export type DesfechoEstorno = "revertido" | "faturamento_cancelado" | "sem_efeito";
+/** Quem e por quê, quando o estorno é aplicado como correção supervisionada de um evento ignorado (única passagem que dispensa a regra de origem). */
+export type OpcoesEstorno = { seq?: number; usuario?: Usuario; motivo?: string; supervisorId?: string };
+
+export async function processarPagamentoEstornado(ctx: Contexto, evento: Pick<Evento, "payload" | "criadoEm">, o: OpcoesEstorno = {}): Promise<DesfechoEstorno> {
   const p = evento.payload as PagamentoEstornado;
-  await emTransacao(ctx, async (tx) => {
+  return emTransacao(ctx, async (tx): Promise<DesfechoEstorno> => {
     const l = (await tx.db
       .selectFrom("fin_lancamento")
       .select(["id", "status", "valor"])
@@ -162,24 +167,36 @@ export async function processarPagamentoEstornado(ctx: Contexto, evento: Pick<Ev
       .where("referencia_id", "=", p.pagamentoId)
       .executeTakeFirst()) as { id: UUID; status: string; valor: number } | undefined;
 
-    if (!l) return faturadoEstornado(tx, p);
+    if (!l) {
+      // O registro deste pagamento foi ignorado na Fila: o estorno não pode sumir em silêncio.
+      const ign = (await tx.db.selectFrom("fin_evento_ignorado").select("seq").where("tipo", "=", "hospedagem.PagamentoRegistrado").where(sql<string>`json_extract(payload, '$.pagamentoId')`, "=", p.pagamentoId).executeTakeFirst()) as { seq: number } | undefined;
+      if (ign) {
+        await criarAlerta(tx, {
+          tipo: "financeiro_estorno_de_ignorado", alvoTipo: "outbox", alvoId: String(ign.seq),
+          mensagem: `O pagamento ${p.pagamentoId} foi estornado na hospedagem${o.seq ? ` (evento nº ${o.seq})` : ""}, mas o registro dele (evento nº ${ign.seq}) foi ignorado na Fila e nunca entrou no Financeiro. Se algum valor foi lançado à mão por causa disso, desfaça-o também.`,
+        });
+        return "sem_efeito";
+      }
+      return faturadoEstornado(tx, p, o);
+    }
     // Já desfeito (aqui ou no Financeiro): nada a fazer, e isso NUNCA pode virar falha permanente da fila.
     const jaRevertido = l.status === "cancelado" || !!(await tx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", l.id).where("referencia_tipo", "=", "estorno").executeTakeFirst());
     if (jaRevertido) {
       await avisarEstornoDuplicado(tx, l.id);
-      return;
+      return "sem_efeito";
     }
     const cartao = (await tx.db.selectFrom("fin_cartao_movimento").select(["bandeira", "tipo", "status"]).where("lancamento_id", "=", l.id).executeTakeFirst()) as { status: string; bandeira: string; tipo: string } | undefined;
     if (cartao?.status === "baixado") {
       await alertarConciliado(tx, l.id, `O pagamento em cartão (${cartao.bandeira}, ${cartao.tipo}) de R$ ${(l.valor / 100).toFixed(2).replace(".", ",")} foi estornado na hospedagem, mas o cartão já foi baixado no Caixa e Banco. Nada foi alterado: use "Estornar baixa" em Cartão de Crédito; o cartão será cancelado em seguida.`);
-      return;
+      return "sem_efeito";
     }
     try {
-      await reverterLancamento(tx, l.id, { modo: "cancelar", motivo: "Estorno do pagamento na hospedagem", usuario: USUARIO_SISTEMA, interno: true });
+      await reverterLancamento(tx, l.id, { modo: "cancelar", motivo: o.motivo ?? "Estorno do pagamento na hospedagem", supervisorId: o.supervisorId, usuario: o.usuario ?? USUARIO_SISTEMA, interno: true });
+      return "revertido";
     } catch (erro) {
       if (erro instanceof ErroDominio && erro.codigo === "ESTADO_INVALIDO") {
         await avisarEstornoDuplicado(tx, l.id, erro.message);
-        return;
+        return "sem_efeito";
       }
       throw erro;
     }
@@ -187,9 +204,9 @@ export async function processarPagamentoEstornado(ctx: Contexto, evento: Pick<Ev
 }
 
 /** Pagamento faturado estornado: cancela o faturamento ainda aberto; fatura já fechada exige decisão manual. */
-async function faturadoEstornado(tx: Contexto, p: PagamentoEstornado): Promise<void> {
+async function faturadoEstornado(tx: Contexto, p: PagamentoEstornado, o: OpcoesEstorno): Promise<DesfechoEstorno> {
   const pag = (await tx.db.selectFrom("pagamentos").select("forma_codigo").where("id", "=", p.pagamentoId).executeTakeFirst()) as { forma_codigo: string } | undefined;
-  if (pag?.forma_codigo !== "faturado") return; // forma sem lançamento no Financeiro
+  if (pag?.forma_codigo !== "faturado") return "sem_efeito"; // forma sem lançamento no Financeiro
   const candidatos = (await tx.db
     .selectFrom("valores_a_receber as v")
     .innerJoin("fin_faturamento as f", "f.referencia_id", "v.id")
@@ -199,16 +216,17 @@ async function faturadoEstornado(tx: Contexto, p: PagamentoEstornado): Promise<v
     .where("f.status", "!=", "cancelado")
     .$if(!!p.reservaId, (q) => q.where("v.reserva_id", "=", p.reservaId!))
     .execute()) as { id: UUID; numero_documento: string | null; valor_original: number }[];
-  if (candidatos.length === 0) return;
+  if (candidatos.length === 0) return "sem_efeito";
   if (candidatos.length > 1) {
     await alertarConciliado(tx, p.pagamentoId, `Um pagamento faturado de R$ ${(-p.valor / 100).toFixed(2).replace(".", ",")} foi estornado na hospedagem, mas há mais de um faturamento com esse valor nesta conta. Nada foi alterado: cancele o faturamento correto em Faturamento.`);
-    return;
+    return "sem_efeito";
   }
   const f = candidatos[0]!;
   if (f.numero_documento) {
     await alertarConciliado(tx, f.id, `O valor faturado (documento ${f.numero_documento}, R$ ${(f.valor_original / 100).toFixed(2).replace(".", ",")}) foi estornado na hospedagem, mas a fatura já foi fechada em Contas a Receber. Nada foi alterado: decida o que fazer com a cobrança.`);
-    return;
+    return "sem_efeito";
   }
   await tx.db.updateTable("fin_faturamento").set({ status: "cancelado" }).where("id", "=", f.id).execute();
-  await auditar(tx, { ator: USUARIO_SISTEMA.email, acao: "fin_faturamento.cancelar", alvoTipo: "fin_faturamento", alvoId: f.id, motivo: "Estorno do pagamento faturado na hospedagem" });
+  await auditar(tx, { ator: (o.usuario ?? USUARIO_SISTEMA).email, acao: "fin_faturamento.cancelar", alvoTipo: "fin_faturamento", alvoId: f.id, motivo: o.motivo ?? "Estorno do pagamento faturado na hospedagem", supervisorId: o.supervisorId });
+  return "faturamento_cancelado";
 }
