@@ -195,6 +195,18 @@ Money actions started from the screen (create conta a pagar, receive, transfer, 
 accept an optional `chave` in the body. The same `chave` sent twice (double click, retry) runs once and returns the first response
 (`fin_idempotencia`). A failed attempt does not consume the key.
 
+### Poison events and the Fila screen
+
+A deterministic handler failure blocks the queue (order is preserved). The "Fila do Financeiro" screen (`config.gerenciar`) lists the blocked event and error,
+with **Tentar de novo** and **Ignorar evento** (motivo + supervisor, audited, persisted in `fin_evento_ignorado`, alert `financeiro_evento_ignorado` with the amount).
+Already-applied or already-reversed states are a no-op with an alert (`financeiro_estorno_duplicado`), never a failure.
+Reading the queue never throws: a DB error there is logged and retried, and does not stop the server from starting.
+
+### Source of truth
+
+Entries that originate in hospedagem (payments, faturado) are reversed only in hospedagem; the Financeiro refuses to reverse them. Everything created in the Financeiro
+(contas a pagar, manual contas a receber, receipts, card movements entered by hand) is reversed here with one rule (`servicos/reversao.ts`).
+
 ### Not implemented: cloud synchronization
 
 Sending Financeiro data to the cloud ("sincronizar ao conectar") is **Plan C** and is out of scope here:

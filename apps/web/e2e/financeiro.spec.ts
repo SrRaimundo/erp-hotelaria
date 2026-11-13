@@ -84,6 +84,10 @@ async function capturar(page: Page, nome: string) {
   await page.setViewportSize(original);
 }
 
+/** Senha do usuário de teste (perfil admin, também supervisor). */
+const senhaAdmin = async () => `${SENHA}x`;
+const loginSupervisor = USUARIO;
+
 const saldoDaConta = async (page: Page, conta: string) => {
   const linha = page.getByRole("list", { name: "Contas do local" }).locator("li", { hasText: conta });
   return centavos(await linha.locator("strong").innerText());
@@ -256,6 +260,73 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
     await capturar(page, "06-caixa-e-banco-depois");
   });
 
+  test("6a. Contas a Receber manual: cliente na hora, recebimento parcial, estorno e cancelamento", async () => {
+    await irPara(page, "Contas a Receber");
+    await page.getByRole("button", { name: "+ Nova conta a receber" }).click();
+    let painel = page.getByRole("dialog", { name: "Nova conta a receber" });
+    await painel.getByRole("button", { name: "+ Novo cliente" }).click();
+    const novo = page.getByRole("dialog", { name: "Novo cliente" });
+    await novo.getByLabel("Nome do cliente").fill(`Salão E2E ${SUFIXO}`);
+    await novo.getByRole("button", { name: "Cadastrar" }).click();
+    await expect(novo).toBeHidden();
+    await painel.getByLabel("Número do documento").fill(`ALU-${SUFIXO}`);
+    await painel.getByLabel("Categoria").selectOption({ label: "Aluguel" });
+    await painel.getByLabel("Valor").fill("500,00");
+    await painel.getByLabel("Observação").fill("Salão de festas");
+    await painel.getByRole("button", { name: "Lançar conta a receber" }).click();
+    await expect(painel).toBeHidden();
+    const linha = page.getByRole("row", { name: new RegExp(`ALU-${SUFIXO}`) });
+    await expect(linha).toContainText("Aluguel");
+    await expect(linha).toContainText("Salão de festas");
+    await capturar(page, "06a-conta-a-receber-manual");
+
+    // edita enquanto pendente
+    await linha.getByRole("button", { name: "Editar" }).click();
+    painel = page.getByRole("dialog", { name: "Editar conta a receber" });
+    await painel.getByLabel("Observação").fill("Salão e som");
+    await painel.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(painel).toBeHidden();
+    await expect(linha).toContainText("Salão e som");
+
+    // recebe parte, com nova data para o saldo
+    await linha.getByRole("button", { name: "Confirmar pagamento" }).click();
+    painel = page.getByRole("dialog", { name: "Confirmar pagamento" });
+    await painel.getByLabel("Valor recebido").fill("200,00");
+    await painel.getByLabel("Novo vencimento do saldo").fill("2030-02-01");
+    await painel.getByLabel("Conta de destino").selectOption({ label: "Banco E2E" });
+    await painel.getByRole("button", { name: "Confirmar" }).click();
+    await expect(painel).toBeHidden();
+    await expect(page.getByText(/saldo de recebimento parcial/)).toBeVisible();
+    await expect(page.getByText(/recebido parcial de R\$ 500,00/)).toBeVisible();
+    saldoBanco += 20000;
+
+    // estorna o recebimento: a conta volta inteira, a parcela do saldo some
+    await page.getByRole("row", { name: /recebido parcial de/ }).getByRole("button", { name: "Estornar recebimento" }).click();
+    const janela = page.getByRole("dialog", { name: "Estornar recebimento" });
+    await janela.getByLabel("Motivo").fill("Valor errado");
+    await janela.getByLabel("Login do supervisor").fill(loginSupervisor);
+    await janela.getByLabel("Senha do supervisor").fill(await senhaAdmin());
+    await janela.getByRole("button", { name: "Autorizar" }).click();
+    await expect(janela).toBeHidden();
+    saldoBanco -= 20000;
+    await expect(page.getByText(/saldo de recebimento parcial/)).toHaveCount(0);
+    const volta = page.getByRole("row", { name: new RegExp(`ALU-${SUFIXO}`) });
+    await expect(volta).toContainText("R$ 500,00");
+
+    // cancela a conta pendente
+    await volta.getByRole("button", { name: "Cancelar" }).click();
+    const cancelar = page.getByRole("dialog", { name: "Cancelar conta a receber" });
+    await cancelar.getByLabel("Motivo").fill("Evento desmarcado");
+    await cancelar.getByLabel("Login do supervisor").fill(loginSupervisor);
+    await cancelar.getByLabel("Senha do supervisor").fill(await senhaAdmin());
+    await cancelar.getByRole("button", { name: "Autorizar" }).click();
+    await expect(cancelar).toBeHidden();
+    await expect(page.getByRole("row", { name: new RegExp(`ALU-${SUFIXO}`) })).toHaveCount(0);
+
+    await irPara(page, "Caixa e Banco");
+    await expect.poll(() => saldoDaConta(page, "Banco E2E")).toBe(saldoBanco);
+  });
+
   test("6b. Cobrança: cadastra a condição do cartão no grupo Cadastros", async () => {
     await irParaCobranca(page);
     await expect(page.getByRole("heading", { name: "Cobrança", level: 1 })).toBeVisible();
@@ -320,11 +391,19 @@ test.describe.serial("financeiro: do cadastro ao saldo", () => {
   });
 
   test("9. Nenhum item do grupo Financeiro é tela provisória", async () => {
-    for (const item of ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios"]) {
+    for (const item of ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios", "Fila do Financeiro"]) {
       await irPara(page, item);
       await expect(page.getByText("Esta tela ainda será construída.")).toHaveCount(0);
       await expect(page.locator("h1").first()).toBeVisible();
     }
+  });
+
+  test("9b. Fila do Financeiro: em dia, sem evento bloqueado", async () => {
+    await irPara(page, "Fila do Financeiro");
+    await expect(page.getByRole("heading", { name: "Fila do Financeiro", level: 1 })).toBeVisible();
+    await expect(page.getByText("Fila em dia")).toBeVisible();
+    await expect(page.getByText("Nenhum evento foi ignorado.")).toBeVisible();
+    await capturar(page, "09b-fila-do-financeiro");
   });
 
   test("10. Recepção não vê o grupo Financeiro nem a API", async ({ browser, request }) => {

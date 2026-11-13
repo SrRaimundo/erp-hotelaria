@@ -353,3 +353,13 @@ Estas decisões prevalecem sobre o texto anterior.
 ### 12.5 Entrega dos eventos
 - O Financeiro consome os eventos de hospedagem do `outbox` por um cursor persistido, em ordem, um evento e o avanço do cursor na mesma transação, com retentativa e alerta após falhas repetidas. Não há perda por queda do processo. A posição inicial em um banco existente é o maior `seq` presente (o histórico anterior não é reprocessado).
 - **Sincronização com a nuvem** ("sincronizar ao conectar") é o Plano C e está fora do escopo desta fase. O Financeiro ainda não publica os próprios eventos no outbox.
+
+### 12.6 Regras de reversão e origem (re-revisão)
+- Lançamento originado na hospedagem (pagamento, faturado) só se desfaz na hospedagem; o Financeiro recusa e esconde a ação. O que nasce no Financeiro (contas a pagar, contas a receber manuais, recebimentos, cartão lançado à mão) se desfaz no Financeiro.
+- Estornar o pagamento de uma conta a pagar devolve a conta a pendente com o valor cheio original; no pagamento parcial a parcela do saldo é removida (valor devolvido ao original) se intocada, senão a reversão é recusada. Idem para contas a receber.
+- Estornar a baixa do cartão devolve o recebível a "a receber" (vínculo com o pagamento da hospedagem mantido) e remove a taxa; cancelar a venda é outra ação.
+- Evento que não passa: tela "Fila do Financeiro" (config.gerenciar) com Tentar de novo e Ignorar evento (motivo, supervisor, auditado, com registro e alerta do valor).
+- Chave de idempotência presa a rota, registro e conteúdo; chave igual com conteúdo diferente devolve 409.
+
+### 12.7 Contas a Receber manual
+- Lançamento à mão, espelho de Contas a Pagar: cliente (seleção ou cadastro rápido), local, documento, vencimento, valor, categoria e observação. Edita e cancela enquanto pendente e intocada; recebe total ou parcial (novo vencimento do saldo); estorna com as regras acima. Contas de origem hospedagem (faturas) não se editam nem se cancelam no Financeiro.

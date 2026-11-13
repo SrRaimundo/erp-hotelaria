@@ -25,16 +25,23 @@ Fornecedores, serviços, funcionários e contratos. **+ Nova conta a pagar**, es
 
 - **Pagar**: escolha a conta de onde sai o dinheiro e a forma. O saldo da conta diminui.
 - **Pagamento parcial**: digite o valor pago. Informe o **novo vencimento do saldo**. A conta original fica paga pela parte paga e nasce uma nova parcela, ligada a ela, com o resto. A soma é sempre o valor original.
-- **Cancelar**: pede motivo e a senha de um supervisor.
+- **Cancelar**: só para conta ainda pendente (pede motivo e senha de supervisor).
+- **Estornar pagamento**: numa conta paga, desfaz o pagamento (o dinheiro volta para a conta) e a conta volta a **pendente com o valor cheio**. Num pagamento parcial, a parcela do saldo some junto e o valor volta inteiro para a conta original, desde que ninguém tenha mexido nela; senão o sistema recusa e explica.
 - A **taxa do cartão** aparece aqui como despesa do "Cartão de Crédito", já liquidada. Ela é só um registro: não mexe no saldo, não se paga e não se cancela sozinha.
 
 ## Contas a Receber
 
-Faturas fechadas em Faturamento. **Confirmar pagamento** pede o valor e a conta de destino. Receber só uma parte funciona como no pagamento: informe o novo vencimento do saldo e o restante vira uma nova parcela.
+Faturas fechadas em Faturamento e contas lançadas à mão (serviço, aluguel, evento, convênio, outros).
+
+- **+ Nova conta a receber**: escolha o cliente (ou **+ Novo cliente** na hora), o número do documento, a categoria, o valor, o vencimento e uma observação.
+- **Editar** e **Cancelar** (motivo e supervisor) só valem para a conta lançada à mão, pendente e sem recebimento. Contas que vieram da hospedagem (faturas) não se editam nem se cancelam aqui: corrija na hospedagem.
+- **Estornar recebimento**: desfaz o último recebimento (motivo e supervisor); a conta volta ao estado anterior, com o valor cheio, e a parcela do saldo some se estiver intocada.
+
+**Confirmar pagamento** pede o valor e a conta de destino. Receber só uma parte funciona como no pagamento: informe o novo vencimento do saldo e o restante vira uma nova parcela.
 
 ## Cartão de Crédito
 
-Movimentos de crédito, débito e voucher. **+ Novo movimento** usa uma condição cadastrada em **Cadastros, Cobrança**; informe se o valor é bruto ou já líquido da taxa. A tela mostra bruto, taxa, líquido e a previsão (D+N). **Baixar** leva o líquido para a conta escolhida.
+Movimentos de crédito, débito e voucher. **+ Novo movimento** usa uma condição cadastrada em **Cadastros, Cobrança**; informe se o valor é bruto ou já líquido da taxa. A tela mostra bruto, taxa, líquido e a previsão (D+N). **Baixar** leva o líquido para a conta escolhida. **Estornar baixa** (motivo e supervisor) tira o dinheiro da conta, remove a taxa registrada e devolve o cartão a **a receber**, para baixar de novo na conta certa. **Cancelar** (cartão a receber lançado à mão) anula a venda. Cartão que veio da hospedagem só se desfaz na hospedagem.
 
 Pagamentos de cartão que vêm da hospedagem entram com a etiqueta **Revisar condição** quando não há uma única condição cadastrada para o tipo. Nesse caso a baixa pede que você escolha a condição.
 
@@ -44,7 +51,7 @@ As condições do cartão negociadas com cada adquirente: adquirente, bandeira, 
 
 ## Caixa e Banco
 
-Saldo de cada conta do local, movimentos dos últimos 30 dias, **+ Nova conta** (com saldo inicial) e **Transferir**. Em cada movimento, **Estornar** desfaz o lançamento de origem (pede motivo e supervisor): o saldo volta, a conta a receber e a fatura voltam ao estado anterior e o cartão é cancelado. Só se estorna uma vez. Se o lançamento foi um pagamento parcial e a parcela do saldo já foi movimentada, o sistema recusa e explica; estorne antes o que foi feito nela.
+Saldo de cada conta do local, movimentos dos últimos 30 dias, **+ Nova conta** (com saldo inicial) e **Transferir**. Em cada movimento, **Estornar** desfaz o lançamento de origem (pede motivo e supervisor): o saldo volta e a conta a pagar ou a receber volta ao estado anterior. Pagamentos que vieram da hospedagem não têm Estornar: estorne-os na hospedagem, e o Financeiro acompanha sozinho. Só se estorna uma vez. Se o lançamento foi um pagamento parcial e a parcela do saldo já foi movimentada, o sistema recusa e explica; estorne antes o que foi feito nela.
 
 ## Faturamento
 
@@ -54,6 +61,13 @@ Mostra os fechamentos marcados para faturar. Para fechar uma fatura:
 2. Confira os dados do cliente e a política (prazo, forma de cobrança), ajuste o vencimento e confirme.
 
 A fatura vira **uma** conta a receber pela soma. Em **Fechadas**, o botão **Extrato** mostra cada fechamento (reserva, hóspede, período, valor) e o total, e **Imprimir** imprime só o extrato.
+
+## Fila do Financeiro (administração)
+
+Visível para quem tem permissão de configuração. Mostra se a fila de eventos da hospedagem está em dia. Se um evento não consegue ser registrado, a fila para nele (os seguintes esperam, para manter a ordem) e a tela mostra o evento, o valor e o erro.
+
+- **Tentar de novo**: reprocessa agora (útil depois de corrigir a causa).
+- **Ignorar evento**: tira o evento da frente (exige motivo e a senha de um supervisor). O evento fica registrado em **Eventos ignorados**, com o valor, e abre um alerta: confira se o valor precisa ser lançado à mão.
 
 ## Relatórios
 

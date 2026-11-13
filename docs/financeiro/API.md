@@ -434,3 +434,21 @@ A taxa de cartão e o estorno em si não podem ser revertidos sozinhos.
   Aparece em Contas a Pagar e em `taxas_cartao` dos relatórios de fluxo e consolidado, fora do saldo.
 Checkouts faturados da hospedagem ficam em Faturamento aberto até `fechar`; só então viram Conta a Receber.
 Pagamentos em cartão da hospedagem viram movimentos de cartão a receber (taxa 0 até a baixa).
+
+### Reversão: origem e regras (atualização)
+
+- Lançamento que veio da hospedagem (`referencia_tipo: hospedagem_pagamento`) NÃO se estorna nem se cancela no Financeiro (422, "estorne-o na hospedagem"). Cartão baixado também não pela rota genérica: use `POST /cartao/movimentos/:id/estornar-baixa` `{ motivo, supervisor }`, que devolve o cartão a `a_receber` (mantendo o vínculo com o pagamento) e remove a taxa.
+- Conta a pagar paga: estornar ou cancelar desfaz o pagamento e devolve a conta a `pendente` com o valor cheio (a parcela de saldo intocada é removida; mexida, recusa). Conta pendente só se cancela (`DELETE`); estornar uma conta não paga é recusado.
+- `Idempotency`: a `chave` vale para o caminho (com o id do registro) e o conteúdo. A mesma chave com conteúdo diferente devolve 409 (`CHAVE_REUSADA`).
+
+### Conta a receber lançada à mão
+
+- `POST /contas-receber` `{ local_id, cliente_id, numero_documento, valor, vencimento, categoria, observacao?, forma_pagamento? }`. `categoria`: servico, aluguel, evento, convenio, outros.
+- `PUT /contas-receber/:id`: edita enquanto pendente e intocada. `POST /contas-receber/:id/cancelar` `{ motivo, supervisor }`. Contas de origem `faturamento` (hospedagem) são recusadas.
+- Receber (total ou parcial com `novo_vencimento`) e estornar o recebimento usam as rotas já descritas. A lista (`/relatorios/contas-receber`) traz `origem`, `categoria`, `observacao`, `editavel` e `lancamento_id` (último recebimento).
+- `POST /clientes` `{ local_id, nome, cpf_cnpj? }`: cadastro rápido (documento único por local).
+
+### Fila (permissão `config.gerenciar`)
+
+- `GET /fila`: posição, pendentes, evento bloqueado (tipo, valor, erro, tentativas) e eventos ignorados.
+- `POST /fila/tentar-novamente`; `POST /fila/ignorar` `{ seq, motivo, supervisor }` (só o evento que bloqueia a fila; auditado, com registro em `fin_evento_ignorado` e alerta com o valor).
