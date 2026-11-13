@@ -171,7 +171,7 @@ export class ContasReceberService {
         local_id: rec.local_id,
         data: tx.relogio.agora(),
         tipo: "recebimento",
-        origem: "hospedagem",
+        origem: raw.origem === "manual" ? "manual" : "hospedagem",
         valor,
         forma_pagamento: FORMA_LANCAMENTO[rec.forma_pagamento],
         referencia_id: rec.id,

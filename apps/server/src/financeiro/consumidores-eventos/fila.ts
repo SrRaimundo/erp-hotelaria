@@ -74,7 +74,8 @@ async function varrer(ctx: Contexto): Promise<ResultadoFila> {
 async function registrarFalha(ctx: Contexto, seq: number, tipo: string, mensagem: string): Promise<void> {
   try {
     await emTransacao(ctx, async (tx) => {
-      const atual = await tx.db.selectFrom("fin_cursor").select(["falha_seq", "falhas"]).where("nome", "=", NOME).executeTakeFirst();
+      const atual = await tx.db.selectFrom("fin_cursor").select(["falha_seq", "falhas", "ultimo_seq"]).where("nome", "=", NOME).executeTakeFirst();
+      if (atual && Number(atual.ultimo_seq) >= seq) return; // o evento já foi tratado ou ignorado nesse meio tempo
       const falhas = atual?.falha_seq === seq ? Number(atual.falhas) + 1 : 1;
       await tx.db.updateTable("fin_cursor").set({ falha_seq: seq, falhas, ultimo_erro: mensagem }).where("nome", "=", NOME).execute();
       if (falhas >= FALHAS_PARA_ALERTA) {

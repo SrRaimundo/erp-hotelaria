@@ -276,6 +276,7 @@ test("financeiro: todas as colunas estão presentes e com tipos corretos", async
     "titulo_id",
     "parcela_num",
     "parcela_total",
+    "saldo_desfeito",
   ]);
 
   // Check fin_movimento columns

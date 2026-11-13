@@ -352,3 +352,18 @@ export const migracaoFinanceiroTitulo: Migracao = {
     await sql`CREATE INDEX fin_conta_receber_titulo ON fin_conta_receber (titulo_id)`.execute(db);
   },
 };
+
+/**
+ * Correção de evento ignorado (Fila) e saldo desfeito: a parcela de saldo removida por um estorno é marcada `saldo_desfeito`
+ * para não ser confundida com saldo cancelado de propósito (perdoado), que não volta ao estornar o pagamento original.
+ */
+export const migracaoFinanceiroCorrecoes: Migracao = {
+  nome: "0791_financeiro_correcoes",
+  async up(db) {
+    await sql`ALTER TABLE fin_lancamento ADD COLUMN saldo_desfeito integer`.execute(db);
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN saldo_desfeito integer`.execute(db);
+    await sql`ALTER TABLE fin_evento_ignorado ADD COLUMN correcao_em text`.execute(db);
+    await sql`ALTER TABLE fin_evento_ignorado ADD COLUMN correcao_por text`.execute(db);
+    await sql`ALTER TABLE fin_evento_ignorado ADD COLUMN correcao_motivo text`.execute(db);
+  },
+};

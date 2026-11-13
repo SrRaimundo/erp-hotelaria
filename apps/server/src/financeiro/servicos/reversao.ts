@@ -97,15 +97,20 @@ async function desfazerRecebimento(tx: Contexto, l: Lançamento, o: OpcoesRevers
   if (!rec) return;
   let valorOriginal: number = rec.valor_original;
   let valorTotal: number | null = rec.valor_total ?? null;
+  let perdoado = 0;
+  const titulo = rec.titulo_id ? ((await tx.db.selectFrom("fin_titulo").select("status").where("id", "=", rec.titulo_id).executeTakeFirst()) as { status: string } | undefined) : undefined;
   if (valorTotal !== null) {
     // Pagamento parcial: a parcela do saldo só some se ninguém mexeu nela.
     const filhas = (await tx.db.selectFrom("fin_conta_receber").selectAll().where("parcela_de", "=", rec.id).where("status", "!=", "cancelado").execute()) as any[];
     for (const f of filhas) if (await parcelaTocada(tx, "fin_conta_receber", f)) throw new ErroDominio("ESTADO_INVALIDO", RECUSA_PARCELA);
+    // Saldo cancelado de propósito (perdoado) não volta: só se devolve o que ainda era devido.
+    const perdoadas = (await tx.db.selectFrom("fin_conta_receber").select("valor_original").where("parcela_de", "=", rec.id).where("status", "=", "cancelado").where((eb) => eb.or([eb("saldo_desfeito", "is", null), eb("saldo_desfeito", "=", 0)])).execute()) as { valor_original: number }[];
+    perdoado = perdoadas.reduce((s, x) => s + x.valor_original, 0);
     for (const f of filhas) {
-      await tx.db.updateTable("fin_conta_receber").set({ status: "cancelado" }).where("id", "=", f.id).execute();
+      await tx.db.updateTable("fin_conta_receber").set({ status: "cancelado", saldo_desfeito: 1 }).where("id", "=", f.id).execute();
       await auditar(tx, { ator: o.usuario.email, acao: "fin_conta_receber.cancelar_parcela", alvoTipo: "fin_conta_receber", alvoId: f.id, motivo: o.motivo });
     }
-    valorOriginal = valorTotal;
+    valorOriginal = valorTotal - perdoado;
     valorTotal = null;
   }
   const recebido = Math.max(0, rec.valor_recebido - l.valor.centavos);
@@ -113,8 +118,9 @@ async function desfazerRecebimento(tx: Contexto, l: Lançamento, o: OpcoesRevers
   await tx.db
     .updateTable("fin_conta_receber")
     .set({
-      valor_original: valorOriginal, valor_total: valorTotal, valor_recebido: recebido,
-      status: recebido === 0 ? "pendente" : recebido >= valorOriginal ? "recebido" : "parcialmente_recebido", "lançamentos_id": JSON.stringify(lista),
+      // Título cancelado: o dinheiro volta, mas a parcela fica cancelada (valor cheio só para o registro).
+      valor_original: titulo?.status === "cancelado" && recebido === 0 ? (rec.valor_total ?? valorOriginal) : valorOriginal, valor_total: valorTotal, valor_recebido: recebido,
+      status: recebido === 0 ? (titulo?.status === "cancelado" ? "cancelado" : "pendente") : recebido >= valorOriginal ? "recebido" : "parcialmente_recebido", "lançamentos_id": JSON.stringify(lista),
     })
     .where("id", "=", rec.id)
     .execute();
@@ -136,11 +142,20 @@ async function reverterContaPagar(tx: Contexto, l: Lançamento, o: OpcoesReversa
     await auditar(tx, { ator: o.usuario.email, acao: "fin_lancamento.cancelar", alvoTipo: "fin_lancamento", alvoId: l.id, motivo: o.motivo, supervisorId: o.supervisorId, dados: { dispositivo: o.usuario.dispositivo } });
     return lancs.obter(l.id);
   }
+  const titulo = l.titulo_id ? ((await tx.db.selectFrom("fin_titulo").select("status").where("id", "=", l.titulo_id).executeTakeFirst()) as { status: string } | undefined) : undefined;
+  const cancelado = titulo?.status === "cancelado";
+  // Saldo cancelado de propósito (perdoado) não volta: só se devolve o que ainda era devido.
+  const perdoadas = (await tx.db.selectFrom("fin_lancamento").select("valor").where("parcela_de", "=", l.id).where("status", "=", "cancelado").where((eb) => eb.or([eb("saldo_desfeito", "is", null), eb("saldo_desfeito", "=", 0)])).execute()) as { valor: number }[];
+  const perdoado = perdoadas.reduce((s, x) => s + x.valor, 0);
   await desfazerParcelaPagar(tx, l, o);
   await new CaixaBancoService(tx).reverterMovimentos(l.id, l.id, o.usuario);
+  const cheio = l.valor_total ?? l.valor.centavos;
   await tx.db
     .updateTable("fin_lancamento")
-    .set({ status: "pendente", valor: l.valor_total ?? l.valor.centavos, valor_total: null, motivo_cancelamento: null, atualizado_por: o.usuario.email, atualizado_em: agora })
+    // Título cancelado: o dinheiro volta, mas a conta fica cancelada (valor cheio só para o registro).
+    .set(cancelado
+      ? { status: "cancelado", valor: cheio, valor_total: null, motivo_cancelamento: o.motivo, atualizado_por: o.usuario.email, atualizado_em: agora }
+      : { status: "pendente", valor: cheio - perdoado, valor_total: null, motivo_cancelamento: null, atualizado_por: o.usuario.email, atualizado_em: agora })
     .where("id", "=", l.id)
     .execute();
   await auditar(tx, {
@@ -155,7 +170,7 @@ async function desfazerParcelaPagar(tx: Contexto, l: Lançamento, o: OpcoesRever
   const filhas = (await tx.db.selectFrom("fin_lancamento").selectAll().where("parcela_de", "=", l.id).where("status", "!=", "cancelado").execute()) as any[];
   for (const f of filhas) if (await parcelaTocada(tx, "fin_lancamento", f)) throw new ErroDominio("ESTADO_INVALIDO", RECUSA_PARCELA);
   for (const f of filhas) {
-    await tx.db.updateTable("fin_lancamento").set({ status: "cancelado", motivo_cancelamento: o.motivo, atualizado_por: o.usuario.email, atualizado_em: tx.relogio.agora().toISOString() }).where("id", "=", f.id).execute();
+    await tx.db.updateTable("fin_lancamento").set({ status: "cancelado", saldo_desfeito: 1, motivo_cancelamento: o.motivo, atualizado_por: o.usuario.email, atualizado_em: tx.relogio.agora().toISOString() }).where("id", "=", f.id).execute();
     await auditar(tx, { ator: o.usuario.email, acao: "fin_lancamento.cancelar_parcela", alvoTipo: "fin_lancamento", alvoId: f.id, motivo: o.motivo });
   }
 }

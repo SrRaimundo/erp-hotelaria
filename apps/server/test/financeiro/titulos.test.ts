@@ -171,3 +171,85 @@ describe("título a receber (espelho)", () => {
     expect((await chamar("GET", `/titulos/${t.id}`)).corpo).toMatchObject({ pago: 0, restante: 100000 });
   });
 });
+
+describe("reversão depois de cancelar (o que foi cancelado não volta)", () => {
+  const lancDoPagamento = async (id: string) => (await ctx.db.selectFrom("fin_lancamento").selectAll().where("id", "=", id).executeTakeFirstOrThrow()) as any;
+
+  test("a pagar: estornar o pagamento de parcela de título cancelado devolve o dinheiro e a parcela fica cancelada", async () => {
+    const t = (await pagar()).corpo;
+    const [, p2] = await doTitulo(t.id);
+    await baixar(p2.id, { valor: 10000, novo_vencimento: "2027-01-25" });
+    expect((await chamar("POST", `/titulos/${t.id}/cancelar`, { motivo: "Desfeito", supervisor: SUP })).status).toBe(200);
+    expect((await chamar("POST", `/lancamentos/${p2.id}/estornar`, { motivo: "Engano", supervisor: SUP })).status).toBe(200);
+    expect(await saldo()).toBe(0);
+    expect(await lancDoPagamento(p2.id)).toMatchObject({ status: "cancelado", valor: 25000 });
+    expect((await chamar("GET", `/titulos/${t.id}`)).corpo).toMatchObject({ status: "cancelado", pago: 0, restante: 0 });
+    expect((await lancs()).filter((x) => x.status === "pendente")).toHaveLength(0);
+  });
+
+  test("a pagar: saldo cancelado sozinho não volta quando o pagamento original é estornado", async () => {
+    const t = (await pagar()).corpo;
+    const [, p2] = await doTitulo(t.id);
+    await baixar(p2.id, { valor: 10000, novo_vencimento: "2027-01-25" });
+    const saldoP2 = (await doTitulo(t.id)).find((x) => x.parcela_de === p2.id);
+    expect((await chamar("DELETE", `/lancamentos/${saldoP2.id}`, { motivo: "Perdoado", supervisor: SUP })).status).toBe(200);
+    expect((await chamar("POST", `/lancamentos/${p2.id}/estornar`, { motivo: "Engano", supervisor: SUP })).status).toBe(200);
+    expect(await saldo()).toBe(0);
+    expect(await lancDoPagamento(p2.id)).toMatchObject({ status: "pendente", valor: 10000 });
+  });
+
+  test("a pagar: pagar parcial, estornar e pagar parcial de novo ainda devolve o valor cheio (saldo desfeito não é perdão)", async () => {
+    const t = (await pagar()).corpo;
+    const [, p2] = await doTitulo(t.id);
+    await baixar(p2.id, { valor: 10000, novo_vencimento: "2027-01-25" });
+    await chamar("POST", `/lancamentos/${p2.id}/estornar`, { motivo: "Engano", supervisor: SUP });
+    await baixar(p2.id, { valor: 5000, novo_vencimento: "2027-01-26" });
+    await chamar("POST", `/lancamentos/${p2.id}/estornar`, { motivo: "Engano 2", supervisor: SUP });
+    expect(await lancDoPagamento(p2.id)).toMatchObject({ status: "pendente", valor: 25000 });
+  });
+
+  test("a receber: estornar o recebimento de parcela de título cancelado devolve o dinheiro e a parcela fica cancelada", async () => {
+    const t = (await receber()).corpo;
+    const [, p2] = (await posicao()).sort((a, b) => a.parcela_num - b.parcela_num);
+    await receberParcela(p2.id, 10000, "2027-01-25");
+    expect((await chamar("POST", `/titulos/${t.id}/cancelar`, { motivo: "Desfeito", supervisor: SUP })).status).toBe(200);
+    const l = (await ctx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", p2.id).executeTakeFirstOrThrow()).id;
+    expect((await chamar("POST", `/lancamentos/${l}/estornar`, { motivo: "Engano", supervisor: SUP })).status).toBe(200);
+    expect(await saldo()).toBe(0);
+    expect(await posicao()).toHaveLength(0);
+    expect((await ctx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", p2.id).executeTakeFirstOrThrow()) as any).toMatchObject({ status: "cancelado", valor_original: 25000, valor_recebido: 0 });
+    expect((await chamar("GET", `/titulos/${t.id}`)).corpo).toMatchObject({ status: "cancelado", pago: 0, restante: 0 });
+  });
+
+  test("a receber: saldo cancelado sozinho não volta quando o recebimento original é estornado", async () => {
+    await receber();
+    const [, p2] = (await posicao()).sort((a, b) => a.parcela_num - b.parcela_num);
+    await receberParcela(p2.id, 10000, "2027-01-25");
+    const filha = (await posicao()).find((i) => i.parcela_de === p2.id);
+    expect((await chamar("POST", `/contas-receber/${filha.id}/cancelar`, { motivo: "Perdoado", supervisor: SUP })).status).toBe(200);
+    const l = (await ctx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", p2.id).executeTakeFirstOrThrow()).id;
+    expect((await chamar("POST", `/lancamentos/${l}/estornar`, { motivo: "Engano", supervisor: SUP })).status).toBe(200);
+    expect((await posicao()).find((i) => i.id === p2.id)).toMatchObject({ valor_original: 10000, valor_recebido: 0, situacao: "aberto" });
+  });
+
+  test("a receber: recebimento parcial estornado e refeito volta ao valor cheio", async () => {
+    await receber();
+    const [, p2] = (await posicao()).sort((a, b) => a.parcela_num - b.parcela_num);
+    await receberParcela(p2.id, 10000, "2027-01-25");
+    const l = (await ctx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", p2.id).executeTakeFirstOrThrow()).id;
+    await chamar("POST", `/lancamentos/${l}/estornar`, { motivo: "Engano", supervisor: SUP });
+    expect((await posicao()).find((i) => i.id === p2.id)).toMatchObject({ valor_original: 25000, valor_recebido: 0, situacao: "aberto" });
+  });
+
+  test("forma de cobrança que a conta a receber não sabe receber é recusada ao criar o título", async () => {
+    expect((await receber({ forma_pagamento: "cheque" })).status).toBe(400);
+    expect((await receber({ forma_pagamento: "pix", documento: "EV-PIX" })).status).toBe(201);
+  });
+
+  test("recebimento de conta manual aparece como manual no lançamento", async () => {
+    await receber();
+    const [p1] = (await posicao()).sort((a, b) => a.parcela_num - b.parcela_num);
+    await receberParcela(p1.id, 25000);
+    expect((await ctx.db.selectFrom("fin_lancamento").select("origem").where("referencia_id", "=", p1.id).executeTakeFirstOrThrow()).origem).toBe("manual");
+  });
+});

@@ -6,6 +6,7 @@ import { TituloService } from "../servicos/titulos.js";
 import { centavos, credencialSupervisor, data, exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
 
 const FORMAS = ["dinheiro", "pix", "debito", "credito", "cheque", "boleto", "transferencia", "deposito"] as const;
+const FORMAS_RECEBER: readonly string[] = ["boleto", "pix", "deposito", "dinheiro", "transferencia"];
 const corpoCriar = z.object({
   tipo: z.enum(["pagar", "receber"]),
   local_id: uuid,
@@ -23,7 +24,7 @@ const corpoCriar = z.object({
 export function registrarRotasTitulos(app: FastifyInstance, ctx: Contexto): void {
   app.post("/api/financeiro/titulos", async (req, res) => {
     exigirFinanceiro(req);
-    const c = corpoCriar.parse(req.body);
+    const c = corpoCriar.refine((x) => x.tipo !== "receber" || !x.forma_pagamento || FORMAS_RECEBER.includes(x.forma_pagamento), { message: "Forma de cobrança inválida para conta a receber.", path: ["forma_pagamento"] }).parse(req.body);
     return idempotente(ctx, req, res, async () => ({ status: 201, corpo: await new TituloService(ctx).criar(c, usuarioDe(req)) }));
   });
 
