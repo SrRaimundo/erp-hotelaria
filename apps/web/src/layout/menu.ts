@@ -37,6 +37,7 @@ export const GRUPOS_MENU: GrupoMenu[] = [
       financeiro("caixa-e-banco", "Caixa e Banco"),
       financeiro("faturamento", "Faturamento"),
       financeiro("relatorios", "Relatórios"),
+      { para: "/financeiro/fila", rotulo: "Fila do Financeiro", permissao: CONFIG },
     ],
   },
   {

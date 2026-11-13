@@ -33,7 +33,7 @@ describe("menu em grupos", () => {
       expect(nomesLinks(regiao)).toEqual(esperado);
     };
     await itens("Hotel", ["Hoje", "Mapa", "Reservas", "Caixa", "Governança", "Relatórios"]);
-    await itens("Financeiro", ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios"]);
+    await itens("Financeiro", ["Local", "Contas a Pagar", "Contas a Receber", "Cartão de Crédito", "Caixa e Banco", "Faturamento", "Relatórios", "Fila do Financeiro"]);
     await itens("Estoque", ["Local", "Fiscal", "Movimento", "Requisição", "Serviço", "Compra", "Inventário", "Relatórios"]);
     await itens("Cadastros", ["Produtos", "Categorias e Quartos", "Setores", "Fornecedor", "Cobrança", "Tipo de Documento", "Grupo", "SubGrupo", "Contas Bancárias", "Locais", "Relatórios"]);
     expect(screen.getByRole("link", { name: "Cartão de Crédito" })).toHaveAttribute("href", "/financeiro/cartao-de-credito");
@@ -85,11 +85,23 @@ describe("menu em grupos", () => {
     expect(screen.getByRole("link", { name: "Caixa" })).toBeInTheDocument();
   });
 
-  test("Financeiro some sem financeiro.gerenciar, mesmo com config.gerenciar e caixa.operar", async () => {
+  test("sem financeiro.gerenciar, config.gerenciar vê só a Fila do Financeiro (administração) e nenhuma tela financeira", async () => {
+    const u = userEvent.setup();
     const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["reservas.gerenciar", "caixa.operar", "config.gerenciar"] } });
     await aguardarConsultas(cliente);
-    expect(screen.queryByRole("button", { name: "Financeiro" })).not.toBeInTheDocument();
-    expect(cabecalhos()).toEqual(["Hotel", "Estoque"]);
+    await u.click(screen.getByRole("button", { name: /^Financeiro/ }));
+    expect(screen.getByRole("link", { name: "Fila do Financeiro" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Contas a Pagar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Caixa e Banco" })).not.toBeInTheDocument();
+  });
+
+  test("sem config.gerenciar a Fila do Financeiro não aparece, mesmo com financeiro.gerenciar", async () => {
+    const u = userEvent.setup();
+    const { cliente } = renderizar(<MenuLateral atencao={0} />, { usuario: { permissoes: ["financeiro.gerenciar"] } });
+    await aguardarConsultas(cliente);
+    await u.click(screen.getByRole("button", { name: /^Financeiro/ }));
+    expect(screen.queryByRole("link", { name: "Fila do Financeiro" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Contas a Pagar" })).toBeInTheDocument();
   });
 
   test("Financeiro aparece só com financeiro.gerenciar", async () => {

@@ -10,7 +10,7 @@ import { formatarReais } from "../lib/dinheiro";
 import { CampoPercentual } from "../telas/tarifas/CampoPercentual";
 import { CampoTexto, dataBr, Estado, ROTULO_FORMA, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
 import {
-  dataLocal, useBaixarCartao, useCancelarLancamento, useCondicoesCartao, useCriarMovimentoCartao, useMovimentosCartao, type CondicaoCartao, type Conta, type MovimentoCartao,
+  dataLocal, useBaixarCartao, useCancelarLancamento, useEstornarBaixaCartao, useCondicoesCartao, useCriarMovimentoCartao, useMovimentosCartao, type CondicaoCartao, type Conta, type MovimentoCartao,
 } from "./useFinanceiro";
 
 const STATUS = ["a_receber", "baixado"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_STATUS, valor) }));
@@ -112,6 +112,8 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
   const [novo, setNovo] = useState(false);
   const [alvo, setAlvo] = useState<MovimentoCartao | null>(null);
   const [cancelar, setCancelar] = useState<MovimentoCartao | null>(null);
+  const [estornarBaixa, setEstornarBaixa] = useState<MovimentoCartao | null>(null);
+  const estorno = useEstornarBaixaCartao();
   const cancelamento = useCancelarLancamento();
   const q = useMovimentosCartao(localId);
   const conds = useCondicoesCartao(localId);
@@ -151,7 +153,9 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
                       </td>
                       <td className="fin__acoes">
                         {m.status === "a_receber" && <Botao tamanho="pequeno" onClick={() => setAlvo(m)}>Baixar</Botao>}
-                        {m.status === "a_receber" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(m)}>Cancelar</Botao>}
+                        {m.status === "a_receber" && !m.origem_hospedagem && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(m)}>Cancelar</Botao>}
+                        {m.status === "baixado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setEstornarBaixa(m)}>Estornar baixa</Botao>}
+                        {m.status === "a_receber" && m.origem_hospedagem && <span className="fin__suave">pagamento da hospedagem</span>}
                       </td>
                     </tr>
                   ))}
@@ -161,6 +165,16 @@ export function CartaoCreditoTab({ localId, contas, contaInicial }: { localId: s
           </>
         )}
       </Estado>
+      <JanelaSupervisor
+        aberta={estornarBaixa !== null}
+        titulo="Estornar baixa do cartão"
+        aoCancelar={() => setEstornarBaixa(null)}
+        aoConfirmar={async (aut) => {
+          if (!estornarBaixa) return;
+          await estorno.mutateAsync({ id: estornarBaixa.id, aut });
+          setEstornarBaixa(null);
+        }}
+      />
       <JanelaSupervisor
         aberta={cancelar !== null}
         titulo="Cancelar movimento de cartão"

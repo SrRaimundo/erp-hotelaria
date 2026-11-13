@@ -42,6 +42,8 @@ export type MovimentoCartao = {
   /** 1 = entrou sem condição de cobrança cadastrada: precisa de revisão antes da baixa. */
   revisar: number;
   lancamento_id: string;
+  /** Veio de um pagamento da hospedagem: só se desfaz lá. */
+  origem_hospedagem?: boolean;
 };
 export type CondicaoCartao = { id: string; local_id: string; adquirente: string; bandeira: string; tipo: TipoCartao; prazo_dias: number; taxa_percentual: number; ativo: boolean };
 export type ExtratoCobranca = {
@@ -57,6 +59,7 @@ export type ContasReceber = {
   situacoes: Record<SituacaoReceber, Totais>;
   itens: {
     id: string; numero_documento: string; cliente_id: string; cliente_nome: string; parcela_de: string | null; valor_total: number | null; data_vencimento: string;
+    origem: string; categoria: string | null; observacao: string | null; editavel: boolean; lancamento_id: string | null;
     valor_original: number; valor_recebido: number; valor_pendente: number; situacao: SituacaoReceber;
   }[];
 };
@@ -264,3 +267,38 @@ export const useExtratoCobranca = (localId: string, numero: string) =>
     enabled: !!localId && !!numero,
     queryFn: () => chamarApi<ExtratoCobranca>("GET", `${BASE}/faturamentos/extrato${qs({ local_id: localId, numero })}`),
   });
+
+export type Cliente = { id: string; local_id: string; nome: string; cpf_cnpj: string | null };
+export const useClientes = (localId: string) =>
+  useQuery({
+    queryKey: ["financeiro", "clientes", localId],
+    enabled: !!localId,
+    queryFn: () => chamarApi<Cliente[]>("GET", `${BASE}/clientes${qs({ local_id: localId })}`),
+  });
+
+export const useCriarCliente = () =>
+  useAcaoFinanceira((c: { local_id: string; nome: string; cpf_cnpj?: string }, chave) => chamarApi<Cliente>("POST", `${BASE}/clientes`, { ...c, chave }), true);
+
+export type DadosContaReceber = { cliente_id: string; numero_documento: string; valor: number; vencimento: string; categoria: string; observacao?: string };
+export const useSalvarContaReceber = () =>
+  useAcaoFinanceira(({ id, ...corpo }: { id?: string; local_id?: string } & Partial<DadosContaReceber>, chave) =>
+    id ? chamarApi("PUT", `${BASE}/contas-receber/${encodeURIComponent(id)}`, corpo) : chamarApi("POST", `${BASE}/contas-receber`, { ...corpo, chave }), true);
+
+export const useCancelarContaReceber = () =>
+  useAcaoFinanceira(({ id, aut }: { id: string; aut: Autorizacao }) =>
+    chamarApi("POST", `${BASE}/contas-receber/${encodeURIComponent(id)}/cancelar`, { motivo: aut.motivo, supervisor: aut.supervisor }));
+
+export const useEstornarBaixaCartao = () =>
+  useAcaoFinanceira(({ id, aut }: { id: string; aut: Autorizacao }) =>
+    chamarApi("POST", `${BASE}/cartao/movimentos/${encodeURIComponent(id)}/estornar-baixa`, { motivo: aut.motivo, supervisor: aut.supervisor }));
+
+export type EstadoFila = {
+  cursor: number; pendentes: number;
+  bloqueado: { seq: number; tipo: string; valor: number | null; erro: string; falhas: number; criado_em: string } | null;
+  ignorados: { seq: number; tipo: string; valor: number | null; motivo: string; ator: string; criado_em: string }[];
+};
+export const useFila = () =>
+  useQuery({ queryKey: ["financeiro", "fila"], queryFn: () => chamarApi<EstadoFila>("GET", `${BASE}/fila`), refetchInterval: 15000 });
+export const useTentarNovamente = () => useAcaoFinanceira((_: void) => chamarApi("POST", `${BASE}/fila/tentar-novamente`, {}));
+export const useIgnorarEvento = () =>
+  useAcaoFinanceira(({ seq, aut }: { seq: number; aut: Autorizacao }) => chamarApi("POST", `${BASE}/fila/ignorar`, { seq, motivo: aut.motivo, supervisor: aut.supervisor }));

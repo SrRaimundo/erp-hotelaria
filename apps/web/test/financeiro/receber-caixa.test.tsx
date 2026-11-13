@@ -71,7 +71,7 @@ describe("tela Contas a Receber", () => {
   test("lista vazia orienta sobre Faturamento", async () => {
     instalarApiFalsa({ ...rotasBase(), "GET /api/financeiro/relatorios/contas-receber": { ...POSICAO, itens: [] } });
     await abrirAba("receber");
-    expect(await screen.findByText(/Faturas fechadas em Faturamento aparecem aqui/)).toBeInTheDocument();
+    expect(await screen.findByText(/Faturas fechadas em Faturamento e contas lançadas aqui/)).toBeInTheDocument();
   });
 });
 

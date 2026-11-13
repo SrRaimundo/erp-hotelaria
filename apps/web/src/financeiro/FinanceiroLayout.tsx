@@ -7,13 +7,14 @@ import { CartaoCreditoTab } from "./CartaoCreditoTab";
 import { ContasPagarTab } from "./ContasPagarTab";
 import { ContasReceberTab } from "./ContasReceberTab";
 import { FaturamentoTab } from "./FaturamentoTab";
+import { FilaTab } from "./FilaTab";
 import { LocalTab } from "./LocalTab";
 import { RelatoriosTab } from "./RelatoriosTab";
 import { Selecao } from "./comuns";
 import { useContas, useLocais } from "./useFinanceiro";
 import "./financeiro.css";
 
-export type AbaId = "local" | "pagar" | "receber" | "cartao" | "caixa" | "faturamento" | "relatorios" | "cobranca";
+export type AbaId = "local" | "pagar" | "receber" | "cartao" | "caixa" | "faturamento" | "relatorios" | "cobranca" | "fila";
 
 const TITULOS: Record<AbaId, string> = {
   local: "Local",
@@ -24,6 +25,7 @@ const TITULOS: Record<AbaId, string> = {
   faturamento: "Faturamento",
   relatorios: "Relatórios do Financeiro",
   cobranca: "Cobrança",
+  fila: "Fila do Financeiro",
 };
 
 const CHAVE_LOCAL = "erp.financeiro.local";
@@ -46,21 +48,21 @@ export function FinanceiroLayout({ aba }: { aba: AbaId }) {
   const ativos = (locais.data ?? []).filter((l) => l.ativo);
   // O local lembrado só vale se ainda existir e estiver ativo; senão, o primeiro da lista.
   const localId = ativos.find((l) => l.id === localSalvo)?.id ?? ativos[0]?.id ?? "";
-  const contas = useContas(aba === "local" ? "" : localId);
+  const contas = useContas(aba === "local" || aba === "fila" ? "" : localId);
   const listaContas = contas.data ?? [];
   const contaId = listaContas.find((c) => c.id === contaSalva)?.id ?? listaContas[0]?.id ?? "";
 
   useEffect(() => { if (localId) gravar(CHAVE_LOCAL, localId); }, [localId]);
   useEffect(() => { if (contaId) gravar(CHAVE_CONTA, contaId); }, [contaId]);
 
-  const semLocal = aba !== "local" && !locais.isLoading && !locais.error && ativos.length === 0;
+  const semLocal = aba !== "local" && aba !== "fila" && !locais.isLoading && !locais.error && ativos.length === 0;
   return (
     <div className="fin">
       {/* A tela Local traz o próprio título na lista. */}
       {aba !== "local" && (
       <header className="fin__topo">
         <h1>{TITULOS[aba]}</h1>
-        {ativos.length > 0 && (
+        {aba !== "fila" && ativos.length > 0 && (
           <div className="fin__seletores">
             <Selecao rotulo="Local" valor={localId} aoMudar={setLocalSalvo} opcoes={ativos.map((l) => ({ valor: l.id, rotulo: l.nome }))} />
             {USA_CONTA.includes(aba) && (
@@ -78,7 +80,8 @@ export function FinanceiroLayout({ aba }: { aba: AbaId }) {
         ) : (
           <>
             {aba === "local" && <LocalTab />}
-            {aba !== "local" && !localId ? null : (
+            {aba === "fila" && <FilaTab />}
+            {aba === "local" || aba === "fila" || !localId ? null : (
               <>
                 {aba === "pagar" && <ContasPagarTab localId={localId} contas={listaContas} />}
                 {aba === "receber" && <ContasReceberTab localId={localId} contas={listaContas} contaInicial={contaId} />}

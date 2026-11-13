@@ -10,7 +10,7 @@ import { JanelaSupervisor } from "../componentes/JanelaSupervisor";
 import { formatarReais } from "../lib/dinheiro";
 import { CampoTexto, dataBr, Estado, ROTULO_FORMA, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
 import {
-  dataLocal, useBaixarContaPagar, useCancelarLancamento, useCriarContaPagar, useCriarFornecedor, useFornecedores, useLancamentos,
+  dataLocal, useBaixarContaPagar, useCancelarLancamento, useEstornarLancamento, useCriarContaPagar, useCriarFornecedor, useFornecedores, useLancamentos,
   type Conta, type Lancamento,
 } from "./useFinanceiro";
 
@@ -139,10 +139,13 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
   const [novo, setNovo] = useState(false);
   const [pagar, setPagar] = useState<Lancamento | null>(null);
   const [cancelar, setCancelar] = useState<Lancamento | null>(null);
+  const [estornar, setEstornar] = useState<Lancamento | null>(null);
+  const estorno = useEstornarLancamento();
   const q = useLancamentos(localId, { inicio, fim }, "pagamento");
   const cancelamento = useCancelarLancamento();
 
-  const linhas = useMemo(() => (q.data ?? []).filter((l) => !status || l.status === status), [q.data, status]);
+  // Os lançamentos de estorno (contrapartida de uma reversão) não são contas a pagar.
+  const linhas = useMemo(() => (q.data ?? []).filter((l) => l.referencia_tipo !== "estorno" && (!status || l.status === status)), [q.data, status]);
   const pendente = linhas.filter((l) => l.status === "pendente").reduce((s, l) => s + l.valor, 0);
 
   return (
@@ -173,7 +176,8 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
                       <td><Etiqueta tom={tom(l.status)}>{rotulo(ROTULO_STATUS, l.status)}</Etiqueta></td>
                       <td className="fin__acoes">
                         {l.categoria !== "taxa_cartao" && l.status === "pendente" && <Botao tamanho="pequeno" onClick={() => setPagar(l)}>Pagar</Botao>}
-                        {l.categoria !== "taxa_cartao" && l.status !== "cancelado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(l)}>Cancelar</Botao>}
+                        {l.categoria !== "taxa_cartao" && l.status === "pendente" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(l)}>Cancelar</Botao>}
+                        {l.categoria !== "taxa_cartao" && l.status === "confirmado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setEstornar(l)}>Estornar pagamento</Botao>}
                       </td>
                     </tr>
                   ))}
@@ -189,6 +193,16 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
       <Gaveta aberta={pagar !== null} aoFechar={() => setPagar(null)} titulo="Pagar conta">
         {pagar && <PainelPagar item={pagar} contas={contas} aoFechar={() => setPagar(null)} />}
       </Gaveta>
+      <JanelaSupervisor
+        aberta={estornar !== null}
+        titulo="Estornar pagamento"
+        aoCancelar={() => setEstornar(null)}
+        aoConfirmar={async (aut) => {
+          if (!estornar) return;
+          await estorno.mutateAsync({ id: estornar.id, aut });
+          setEstornar(null);
+        }}
+      />
       <JanelaSupervisor
         aberta={cancelar !== null}
         titulo="Cancelar lançamento"

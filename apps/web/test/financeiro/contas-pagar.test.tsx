@@ -122,10 +122,10 @@ describe("tela Contas a Pagar", () => {
 
   test("cancelar exige motivo e senha de supervisor, e o erro fica na janela", async () => {
     const u = userEvent.setup();
-    instalarApiFalsa(rotas({ "DELETE /api/financeiro/lancamentos/p2": { __status: 422, codigo: "SUPERVISOR_INVALIDO", mensagem: "Senha do supervisor incorreta." } }));
+    instalarApiFalsa(rotas({ "DELETE /api/financeiro/lancamentos/p1": { __status: 422, codigo: "SUPERVISOR_INVALIDO", mensagem: "Senha do supervisor incorreta." } }));
     await abrirAba("pagar");
-    await screen.findByText("Luz de outubro");
-    const linha = screen.getByText("Luz de outubro").closest("tr")!;
+    await screen.findByText("Pães de novembro");
+    const linha = screen.getByText("Pães de novembro").closest("tr")!;
     await u.click(within(linha).getByRole("button", { name: "Cancelar" }));
     const janela = await screen.findByRole("dialog", { name: "Cancelar lançamento" });
     await u.type(within(janela).getByLabelText("Motivo"), "Lançado em duplicidade");
@@ -208,5 +208,28 @@ describe("tela Contas a Pagar", () => {
     const [a, b] = chamadas.filter((c) => c.metodo === "POST").map((c) => (c.corpo as { chave: string }).chave);
     expect(a).toBeTruthy();
     expect(a).toBe(b);
+  });
+
+  test("conta paga oferece Estornar pagamento (não Cancelar); o erro de reversão fica na janela", async () => {
+    const u = userEvent.setup();
+    instalarApiFalsa(rotas({ "POST /api/financeiro/lancamentos/p2/estornar": { __status: 422, codigo: "ESTADO_INVALIDO", mensagem: "A parcela do saldo deste pagamento parcial já teve movimento." } }));
+    await abrirAba("pagar");
+    const linha = (await screen.findByText("Luz de outubro")).closest("tr")!;
+    expect(within(linha).queryByRole("button", { name: "Cancelar" })).not.toBeInTheDocument();
+    await u.click(within(linha).getByRole("button", { name: "Estornar pagamento" }));
+    const janela = await screen.findByRole("dialog", { name: "Estornar pagamento" });
+    await u.type(within(janela).getByLabelText("Motivo"), "Conta errada");
+    await u.type(within(janela).getByLabelText("Login do supervisor"), "admin");
+    await u.type(within(janela).getByLabelText("Senha do supervisor"), "admin");
+    await u.click(within(janela).getByRole("button", { name: "Autorizar" }));
+    expect(await within(janela).findByText(/A parcela do saldo deste pagamento parcial/)).toBeInTheDocument();
+    expect(chamadas.find((c) => c.metodo === "POST")!.corpo).toEqual({ motivo: "Conta errada", supervisor: { login: "admin", senha: "admin" } });
+  });
+
+  test("lançamentos de estorno (contrapartida) não aparecem como conta a pagar", async () => {
+    instalarApiFalsa(rotas({ "GET /api/financeiro/lancamentos": [PENDENTE, { ...PAGO, id: "e1", descricao: "", referencia_tipo: "estorno" }] }));
+    await abrirAba("pagar");
+    await screen.findByText("Pães de novembro");
+    expect(screen.getAllByRole("row")).toHaveLength(2); // cabeçalho + 1
   });
 });
