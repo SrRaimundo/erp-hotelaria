@@ -19,6 +19,10 @@ export type Lancamento = {
   referencia_tipo?: string;
   parcela_de?: string;
   valor_total?: number;
+  /** Parcela de um título (documento parcelado). */
+  titulo_id?: string | null;
+  parcela_num?: number | null;
+  parcela_total?: number | null;
   fornecedor_id?: string;
   fornecedor_nome?: string | null;
   status: "pendente" | "confirmado" | "liquidado" | "cancelado";
@@ -59,7 +63,8 @@ export type ContasReceber = {
   situacoes: Record<SituacaoReceber, Totais>;
   itens: {
     id: string; numero_documento: string; cliente_id: string; cliente_nome: string; parcela_de: string | null; valor_total: number | null; data_vencimento: string;
-    origem: string; categoria: string | null; observacao: string | null; editavel: boolean; lancamento_id: string | null;
+    titulo_id?: string | null; parcela_num?: number | null; parcela_total?: number | null; rotulo?: string;
+    origem: string; categoria: string | null; observacao: string | null; editavel: boolean; cancelavel?: boolean; lancamento_id: string | null;
     valor_original: number; valor_recebido: number; valor_pendente: number; situacao: SituacaoReceber;
   }[];
 };
@@ -302,3 +307,23 @@ export const useFila = () =>
 export const useTentarNovamente = () => useAcaoFinanceira((_: void) => chamarApi("POST", `${BASE}/fila/tentar-novamente`, {}));
 export const useIgnorarEvento = () =>
   useAcaoFinanceira(({ seq, aut }: { seq: number; aut: Autorizacao }) => chamarApi("POST", `${BASE}/fila/ignorar`, { seq, motivo: aut.motivo, supervisor: aut.supervisor }));
+
+export type TituloDetalhe = {
+  id: string; tipo: "pagar" | "receber"; local_id: string; documento: string; valor_total: number; num_parcelas: number; intervalo: string; status: "ativo" | "cancelado";
+  pago: number; restante: number;
+  parcelas: { id: string; numero: number; total: number; rotulo: string; vencimento_dia: string; valor: number; pago: number; restante: number; situacao: "pendente" | "parcial" | "pago" | "cancelado"; saldo_de: string | null }[];
+  historico: { instante: string; ator: string; acao: string; motivo: string | null }[];
+};
+export type CorpoTitulo = {
+  tipo: "pagar" | "receber"; local_id: string; documento: string; valor_total: number; intervalo: string; categoria: string; fornecedor_id?: string; cliente_id?: string;
+  observacao?: string; parcelas: { vencimento: string; valor: number }[];
+};
+export const useCriarTitulo = () =>
+  useAcaoFinanceira((c: CorpoTitulo, chave) => chamarApi<TituloDetalhe>("POST", `${BASE}/titulos`, { ...c, chave }), true);
+
+export const useTitulo = (id: string) =>
+  useQuery({ queryKey: ["financeiro", "titulo", id], enabled: !!id, queryFn: () => chamarApi<TituloDetalhe>("GET", `${BASE}/titulos/${encodeURIComponent(id)}`) });
+
+export const useCancelarTitulo = () =>
+  useAcaoFinanceira(({ id, aut }: { id: string; aut: Autorizacao }) =>
+    chamarApi("POST", `${BASE}/titulos/${encodeURIComponent(id)}/cancelar`, { motivo: aut.motivo, supervisor: aut.supervisor }));

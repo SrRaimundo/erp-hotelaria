@@ -8,9 +8,11 @@ import { Gaveta } from "../componentes/Gaveta";
 import { Janela } from "../componentes/Janela";
 import { JanelaSupervisor } from "../componentes/JanelaSupervisor";
 import { formatarReais } from "../lib/dinheiro";
+import { SecaoParcelamento, useParcelamento } from "./Parcelamento";
+import { TituloDetalhe } from "./TituloDetalhe";
 import { CampoTexto, dataBr, Estado, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
 import {
-  dataLocal, useCancelarContaReceber, useClientes, useConfirmarPagamento, useContasReceber, useCriarCliente, useEstornarLancamento, useSalvarContaReceber,
+  dataLocal, useCancelarContaReceber, useClientes, useConfirmarPagamento, useContasReceber, useCriarCliente, useCriarTitulo, useEstornarLancamento, useSalvarContaReceber,
   type Conta, type ContasReceber, type SituacaoReceber,
 } from "./useFinanceiro";
 
@@ -57,6 +59,8 @@ function PainelManual({ localId, item, aoFechar }: { localId: string; item: Item
   const [observacao, setObservacao] = useState(item?.observacao ?? "");
   const [novoCliente, setNovoCliente] = useState(false);
   const salvar = useSalvarContaReceber();
+  const criarTitulo = useCriarTitulo();
+  const parc = useParcelamento(item ? null : valor, vencimento);
   const motivos = [
     ...(!clienteId ? ["Escolha o cliente."] : []),
     ...(!documento.trim() ? ["Informe o número do documento."] : []),
@@ -67,7 +71,11 @@ function PainelManual({ localId, item, aoFechar }: { localId: string; item: Item
     <>
       <form className="formulario" onSubmit={(e) => {
         e.preventDefault();
-        if (motivos.length > 0 || valor === null) return;
+        if (motivos.length > 0 || parc.motivos.length > 0 || valor === null) return;
+        if (!item && parc.parcelado) {
+          criarTitulo.mutate({ tipo: "receber", local_id: localId, documento: documento.trim(), categoria, valor_total: valor, cliente_id: clienteId, observacao: observacao.trim() || undefined, ...parc.corpo() }, { onSuccess: aoFechar });
+          return;
+        }
         salvar.mutate(
           { id: item?.id, ...(item ? {} : { local_id: localId }), cliente_id: clienteId, numero_documento: documento.trim(), valor, vencimento, categoria, observacao: observacao.trim() || undefined },
           { onSuccess: aoFechar },
@@ -78,12 +86,14 @@ function PainelManual({ localId, item, aoFechar }: { localId: string; item: Item
         <CampoTexto rotulo="Número do documento" valor={documento} aoMudar={setDocumento} />
         <Selecao rotulo="Categoria" valor={categoria} aoMudar={setCategoria} opcoes={CATEGORIAS} />
         <CampoDinheiro rotulo="Valor" valor={valor} aoMudar={setValor} />
-        <CampoTexto rotulo="Vencimento" tipo="date" valor={vencimento} aoMudar={setVencimento} />
+        {item ? <CampoTexto rotulo="Vencimento" tipo="date" valor={vencimento} aoMudar={setVencimento} /> : (
+          <SecaoParcelamento p={parc} total={valor} vencimento={<CampoTexto rotulo={parc.parcelado ? "Primeiro vencimento" : "Vencimento"} tipo="date" valor={vencimento} aoMudar={setVencimento} />} />
+        )}
         <CampoTexto rotulo="Observação" valor={observacao} aoMudar={setObservacao} />
         {motivos.length > 0 && <p className="fin__suave">{motivos[0]}</p>}
-        <ErroAcao erro={salvar.error} />
+        <ErroAcao erro={salvar.error ?? criarTitulo.error} />
         <div className="formulario__acoes">
-          <Botao type="submit" disabled={motivos.length > 0 || salvar.isPending}>{item ? "Salvar alterações" : "Lançar conta a receber"}</Botao>
+          <Botao type="submit" disabled={motivos.length > 0 || parc.motivos.length > 0 || salvar.isPending || criarTitulo.isPending}>{item ? "Salvar alterações" : "Lançar conta a receber"}</Botao>
         </div>
       </form>
       {novoCliente && <NovoCliente localId={localId} aoCriar={setClienteId} aoFechar={() => setNovoCliente(false)} />}
@@ -128,6 +138,7 @@ export function ContasReceberTab({ localId, contas, contaInicial }: { localId: s
   const [manual, setManual] = useState<{ item: Item | null } | null>(null);
   const [cancelar, setCancelar] = useState<Item | null>(null);
   const [estornar, setEstornar] = useState<Item | null>(null);
+  const [titulo, setTitulo] = useState<Item | null>(null);
   const cancelamento = useCancelarContaReceber();
   const estorno = useEstornarLancamento();
   const q = useContasReceber(localId);
@@ -146,15 +157,16 @@ export function ContasReceberTab({ localId, contas, contaInicial }: { localId: s
               <tbody>
                 {linhas.map((i) => (
                   <tr key={i.id}>
-                    <td>{i.numero_documento}{i.valor_total ? <span className="fin__suave"> · recebido parcial de {formatarReais(i.valor_total)}</span> : null}{i.parcela_de ? <span className="fin__suave"> · saldo de recebimento parcial</span> : null}</td><td>{i.cliente_nome}</td><td>{i.categoria ? rotulo(ROTULO_CATEGORIA, i.categoria) : i.origem === "faturamento" ? "Hospedagem (fatura)" : "—"}{i.observacao ? <span className="fin__suave"> · {i.observacao}</span> : null}</td>
+                    <td>{i.rotulo ?? i.numero_documento}{i.valor_total ? <span className="fin__suave"> · recebido parcial de {formatarReais(i.valor_total)}</span> : null}{i.parcela_de && !i.titulo_id ? <span className="fin__suave"> · saldo de recebimento parcial</span> : null}</td><td>{i.cliente_nome}</td><td>{i.categoria ? rotulo(ROTULO_CATEGORIA, i.categoria) : i.origem === "faturamento" ? "Hospedagem (fatura)" : "—"}{i.observacao ? <span className="fin__suave"> · {i.observacao}</span> : null}</td>
                     <td className="fin__num">{formatarReais(i.valor_original)}</td>
                     <td className="fin__num">{formatarReais(i.valor_pendente)}</td>
                     <td><Etiqueta tom={tom(i.situacao)}>{rotulo(ROTULO_STATUS, i.situacao)}</Etiqueta></td>
                     <td>{dataBr(i.data_vencimento)}</td>
                     <td className="fin__acoes">
+                      {i.titulo_id && <Botao variante="contorno" tamanho="pequeno" onClick={() => setTitulo(i)}>Ver título</Botao>}
                       {i.situacao !== "recebido" && <Botao tamanho="pequeno" onClick={() => setAlvo(i)}>Confirmar pagamento</Botao>}
                       {i.editavel && <Botao variante="contorno" tamanho="pequeno" onClick={() => setManual({ item: i })}>Editar</Botao>}
-                      {i.editavel && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(i)}>Cancelar</Botao>}
+                      {(i.cancelavel ?? i.editavel) && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(i)}>Cancelar</Botao>}
                       {i.lancamento_id && i.valor_recebido > 0 && <Botao variante="contorno" tamanho="pequeno" onClick={() => setEstornar(i)}>Estornar recebimento</Botao>}
                     </td>
                   </tr>
@@ -187,6 +199,9 @@ export function ContasReceberTab({ localId, contas, contaInicial }: { localId: s
           setEstornar(null);
         }}
       />
+      <Gaveta aberta={titulo !== null} aoFechar={() => setTitulo(null)} titulo={`Título ${titulo ? titulo.numero_documento.replace(/-P\d+$/, "") : ""}`}>
+        {titulo?.titulo_id && <TituloDetalhe id={titulo.titulo_id} />}
+      </Gaveta>
       <Gaveta aberta={alvo !== null} aoFechar={() => setAlvo(null)} titulo="Confirmar pagamento">
         {alvo && <PainelReceber item={alvo} contas={contas} contaInicial={contaInicial} aoFechar={() => setAlvo(null)} />}
       </Gaveta>

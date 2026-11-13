@@ -8,9 +8,11 @@ import { Gaveta } from "../componentes/Gaveta";
 import { Janela } from "../componentes/Janela";
 import { JanelaSupervisor } from "../componentes/JanelaSupervisor";
 import { formatarReais } from "../lib/dinheiro";
+import { SecaoParcelamento, useParcelamento } from "./Parcelamento";
+import { TituloDetalhe } from "./TituloDetalhe";
 import { CampoTexto, dataBr, Estado, ROTULO_FORMA, ROTULO_STATUS, rotulo, Selecao } from "./comuns";
 import {
-  dataLocal, useBaixarContaPagar, useCancelarLancamento, useEstornarLancamento, useCriarContaPagar, useCriarFornecedor, useFornecedores, useLancamentos,
+  dataLocal, useBaixarContaPagar, useCancelarLancamento, useEstornarLancamento, useCriarContaPagar, useCriarTitulo, useCriarFornecedor, useFornecedores, useLancamentos,
   type Conta, type Lancamento,
 } from "./useFinanceiro";
 
@@ -25,6 +27,9 @@ const ROTULO_TAXA_CARTAO = "Cartão de Crédito (taxa)";
 const ROTULO_CATEGORIA: Record<string, string> = { ...Object.fromEntries(CATEGORIAS.map((c) => [c.valor, c.rotulo])), taxa_cartao: ROTULO_TAXA_CARTAO };
 const FORMAS_PAGAR = ["pix", "boleto", "dinheiro", "transferencia", "cheque", "debito", "credito"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_FORMA, valor) }));
 const STATUS = ["pendente", "confirmado", "liquidado", "cancelado"].map((valor) => ({ valor, rotulo: rotulo(ROTULO_STATUS, valor) }));
+/** Parcela de título: "<documento> – parcela 2/4" (e "– saldo" na parcela do saldo de um pagamento parcial). */
+const rotuloConta = (l: Lancamento) =>
+  l.titulo_id && l.parcela_num && l.parcela_total ? `${l.descricao} – parcela ${l.parcela_num}/${l.parcela_total}${l.parcela_de ? " – saldo" : ""}` : l.descricao || "—";
 const tom = (s: string) => (s === "cancelado" ? "terracota" : s === "pendente" ? "amarelo" : "verde");
 
 function NovoFornecedor({ localId, aoCriar, aoFechar }: { localId: string; aoCriar: (id: string) => void; aoFechar: () => void }) {
@@ -61,6 +66,8 @@ function PainelNova({ localId, aoFechar }: { localId: string; aoFechar: () => vo
   const [novoFornecedor, setNovoFornecedor] = useState(false);
   const fornecedores = useFornecedores(localId);
   const criar = useCriarContaPagar();
+  const criarTitulo = useCriarTitulo();
+  const parc = useParcelamento(valor, vencimento);
   const motivos = [
     ...(descricao.trim() === "" ? ["Informe a descrição."] : []),
     ...(!valor ? ["Informe o valor."] : []),
@@ -70,7 +77,11 @@ function PainelNova({ localId, aoFechar }: { localId: string; aoFechar: () => vo
     <>
     <form className="formulario" onSubmit={(e) => {
       e.preventDefault();
-      if (motivos.length > 0 || valor === null) return;
+      if (motivos.length > 0 || parc.motivos.length > 0 || valor === null) return;
+      if (parc.parcelado) {
+        criarTitulo.mutate({ tipo: "pagar", local_id: localId, documento: descricao.trim(), categoria, valor_total: valor, fornecedor_id: fornecedorId || undefined, ...parc.corpo() }, { onSuccess: aoFechar });
+        return;
+      }
       criar.mutate({ local_id: localId, descricao: descricao.trim(), categoria, valor, vencimento, fornecedor_id: fornecedorId || undefined }, { onSuccess: aoFechar });
     }}>
       <Selecao rotulo="Tipo" valor={categoria} aoMudar={setCategoria} opcoes={CATEGORIAS} />
@@ -84,11 +95,11 @@ function PainelNova({ localId, aoFechar }: { localId: string; aoFechar: () => vo
       />
       <div><Botao variante="contorno" tamanho="pequeno" onClick={() => setNovoFornecedor(true)}>+ Novo fornecedor</Botao></div>
       <CampoDinheiro rotulo="Valor" valor={valor} aoMudar={setValor} />
-      <CampoTexto rotulo="Vencimento" tipo="date" valor={vencimento} aoMudar={setVencimento} />
+      <SecaoParcelamento p={parc} total={valor} vencimento={<CampoTexto rotulo={parc.parcelado ? "Primeiro vencimento" : "Vencimento"} tipo="date" valor={vencimento} aoMudar={setVencimento} />} />
       {motivos.length > 0 && <p className="fin__suave">{motivos[0]}</p>}
-      <ErroAcao erro={criar.error} />
+      <ErroAcao erro={criar.error ?? criarTitulo.error} />
       <div className="formulario__acoes">
-        <Botao type="submit" disabled={motivos.length > 0 || criar.isPending}>Lançar conta a pagar</Botao>
+        <Botao type="submit" disabled={motivos.length > 0 || parc.motivos.length > 0 || criar.isPending || criarTitulo.isPending}>Lançar conta a pagar</Botao>
       </div>
     </form>
     {novoFornecedor && <NovoFornecedor localId={localId} aoCriar={setFornecedorId} aoFechar={() => setNovoFornecedor(false)} />}
@@ -140,6 +151,7 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
   const [pagar, setPagar] = useState<Lancamento | null>(null);
   const [cancelar, setCancelar] = useState<Lancamento | null>(null);
   const [estornar, setEstornar] = useState<Lancamento | null>(null);
+  const [titulo, setTitulo] = useState<Lancamento | null>(null);
   const estorno = useEstornarLancamento();
   const q = useLancamentos(localId, { inicio, fim }, "pagamento");
   const cancelamento = useCancelarLancamento();
@@ -169,12 +181,13 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
                   {linhas.map((l) => (
                     <tr key={l.id}>
                       <td>{dataBr(l.vencimento_dia ?? l.dia)}</td>
-                      <td>{l.descricao || "—"}{l.valor_total ? <span className="fin__suave"> · pago parcial ({formatarReais(l.valor)} de {formatarReais(l.valor_total)})</span> : null}{l.parcela_de ? <span className="fin__suave"> · saldo de pagamento parcial</span> : null}</td>
+                      <td>{rotuloConta(l)}{l.valor_total ? <span className="fin__suave"> · pago parcial ({formatarReais(l.valor)} de {formatarReais(l.valor_total)})</span> : null}{l.parcela_de && !l.titulo_id ? <span className="fin__suave"> · saldo de pagamento parcial</span> : null}</td>
                       <td>{l.categoria ? rotulo(ROTULO_CATEGORIA, l.categoria) : "—"}</td>
                       <td>{l.fornecedor_nome ?? "—"}</td>
                       <td className="fin__num">{formatarReais(l.valor)}</td>
                       <td><Etiqueta tom={tom(l.status)}>{rotulo(ROTULO_STATUS, l.status)}</Etiqueta></td>
                       <td className="fin__acoes">
+                        {l.titulo_id && <Botao variante="contorno" tamanho="pequeno" onClick={() => setTitulo(l)}>Ver título</Botao>}
                         {l.categoria !== "taxa_cartao" && l.status === "pendente" && <Botao tamanho="pequeno" onClick={() => setPagar(l)}>Pagar</Botao>}
                         {l.categoria !== "taxa_cartao" && l.status === "pendente" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setCancelar(l)}>Cancelar</Botao>}
                         {l.categoria !== "taxa_cartao" && l.status === "confirmado" && <Botao variante="contorno" tamanho="pequeno" onClick={() => setEstornar(l)}>Estornar pagamento</Botao>}
@@ -189,6 +202,9 @@ export function ContasPagarTab({ localId, contas }: { localId: string; contas: C
       </Estado>
       <Gaveta aberta={novo} aoFechar={() => setNovo(false)} titulo="Nova conta a pagar">
         {novo && <PainelNova localId={localId} aoFechar={() => setNovo(false)} />}
+      </Gaveta>
+      <Gaveta aberta={titulo !== null} aoFechar={() => setTitulo(null)} titulo={`Título ${titulo?.descricao ?? ""}`}>
+        {titulo?.titulo_id && <TituloDetalhe id={titulo.titulo_id} />}
       </Gaveta>
       <Gaveta aberta={pagar !== null} aoFechar={() => setPagar(null)} titulo="Pagar conta">
         {pagar && <PainelPagar item={pagar} contas={contas} aoFechar={() => setPagar(null)} />}

@@ -41,3 +41,5 @@
   body:has(.extrato-cobranca) .extrato-cobranca { position: absolute; left: 0; top: 0; width: 100%; }
   body:has(.extrato-cobranca) .extrato-cobranca__acoes { display: none; }
 }
+.fin__parcela { display: grid; grid-template-columns: 3rem 1fr 1fr; align-items: end; gap: 8px; }
+@media (max-width: 899px) { .fin__parcela { grid-template-columns: 1fr; } }
