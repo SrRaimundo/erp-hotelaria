@@ -90,6 +90,25 @@ export class CadastrosFinanceiroService {
     }));
   }
 
+  /** Cadastro rápido de cliente (documento único por local). */
+  async criarCliente(p: { local_id: UUID; nome: string; cpf_cnpj?: string }, usuario: Usuario): Promise<ClienteFin> {
+    return emTransacao(this.ctx, async (tx) => {
+      await this.exigirLocal(tx, p.local_id);
+      const doc = p.cpf_cnpj?.trim() || null;
+      if (doc) {
+        const dup = await tx.db.selectFrom("fin_cliente").select("id").where("local_id", "=", p.local_id).where("cpf_cnpj", "=", doc).executeTakeFirst();
+        if (dup) throw new ErroDominio("VALIDACAO_FALHOU", "Já existe um cliente com este documento neste local.");
+      }
+      const id = novoId();
+      const digitos = (doc ?? "").replace(/\D/g, "");
+      await tx.db.insertInto("fin_cliente").values({
+        id, local_id: p.local_id, nome: p.nome.trim(), cpf_cnpj: doc, tipo: digitos.length === 14 ? "pessoa_juridica" : "pessoa_fisica", contato: null, criado_em: tx.relogio.agora().toISOString(),
+      }).execute();
+      await auditar(tx, { ator: usuario.email, acao: "fin_cliente.criar", alvoTipo: "fin_cliente", alvoId: id, dados: p });
+      return (await new CadastrosFinanceiroService(tx).listarClientes(p.local_id)).find((c) => c.id === id)!;
+    });
+  }
+
   /** Dados de contato e política de faturamento do cliente (usados ao fechar a fatura). */
   async atualizarCliente(id: UUID, dados: { contato?: ContatoCliente; politica?: PoliticaCliente }, usuario: Usuario): Promise<void> {
     await emTransacao(this.ctx, async (tx) => {

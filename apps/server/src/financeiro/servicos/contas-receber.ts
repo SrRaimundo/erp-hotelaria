@@ -66,6 +66,12 @@ export async function atualizarFaturaDoDocumento(tx: Contexto, local_id: UUID, b
     .execute();
 }
 
+export const CATEGORIAS_RECEBER = ["servico", "aluguel", "evento", "convenio", "outros"] as const;
+const MSG_HOSPEDAGEM = "Esta conta a receber veio da hospedagem (fatura). Corrija na hospedagem: o Financeiro não a altera nem a cancela.";
+const MSG_PENDENTE = "Só é possível enquanto a conta está pendente, sem nenhum recebimento nem parcela de saldo em andamento.";
+
+export type DadosManual = { cliente_id: UUID; numero_documento: string; valor: number; vencimento: Date; categoria: (typeof CATEGORIAS_RECEBER)[number]; observacao?: string; forma_pagamento?: "boleto" | "pix" | "deposito" | "dinheiro" };
+
 export class ContasReceberService {
   constructor(private ctx: Contexto) {}
 
@@ -154,6 +160,7 @@ export class ContasReceberService {
         .where("local_id", "=", rec.local_id)
         .executeTakeFirst();
       if (!conta) throw new ErroDominio("NAO_ENCONTRADO", "Conta bancária não encontrada.");
+      const raw = (await tx.db.selectFrom("fin_conta_receber").select(["origem", "categoria", "observacao"]).where("id", "=", recebivel_id).executeTakeFirst()) as any;
       const parcial = valor.centavos < rec.valor_pendente!.centavos;
       if (parcial && (!novoVencimento || Number.isNaN(novoVencimento.getTime()))) {
         throw new ErroDominio("VALIDACAO_FALHOU", "Para receber só uma parte, informe a nova data de vencimento do saldo.");
@@ -185,6 +192,7 @@ export class ContasReceberService {
             id: filhaId, local_id: rec.local_id, cliente_id: rec.cliente_id, numero_documento: `${base}-P${Number(n?.n ?? 0) + 1}`,
             valor_original: resto.centavos, valor_recebido: 0, data_vencimento: novoVencimento!.toISOString(), forma_pagamento: rec.forma_pagamento,
             status: "pendente", conta_destino_id: null, lançamentos_id: JSON.stringify([]), parcela_de: rec.id, valor_total: null,
+            origem: raw.origem, categoria: raw.categoria, observacao: raw.observacao,
             criado_em: tx.relogio.agora().toISOString(),
           })
           .execute();
@@ -220,6 +228,72 @@ export class ContasReceberService {
         dados: { valor: valor.centavos, conta_bancaria_id, lancamento_id: lanc.id, parcial },
       });
       return svc.obter(recebivel_id);
+    });
+  }
+
+  private async exigirManualEditavel(tx: Contexto, id: UUID): Promise<any> {
+    const raw = (await tx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", id).executeTakeFirst()) as any;
+    if (!raw) throw new ErroDominio("NAO_ENCONTRADO", "Recebível não encontrado.");
+    if (raw.origem !== "manual") throw new ErroDominio("ESTADO_INVALIDO", MSG_HOSPEDAGEM);
+    const filha = await tx.db.selectFrom("fin_conta_receber").select("id").where("parcela_de", "=", id).where("status", "!=", "cancelado").executeTakeFirst();
+    if (raw.status !== "pendente" || raw.valor_recebido > 0 || raw.valor_total != null || filha) throw new ErroDominio("ESTADO_INVALIDO", MSG_PENDENTE);
+    return raw;
+  }
+
+  private async validarManual(tx: Contexto, local_id: UUID, d: { cliente_id: UUID; numero_documento: string; valor: number }, exceto?: UUID): Promise<void> {
+    if (!Number.isInteger(d.valor) || d.valor <= 0) throw new ErroDominio("VALIDACAO_FALHOU", "Valor deve ser positivo.");
+    if (!d.numero_documento.trim()) throw new ErroDominio("VALIDACAO_FALHOU", "Número do documento é obrigatório.");
+    const c = await tx.db.selectFrom("fin_cliente").select("id").where("id", "=", d.cliente_id).where("local_id", "=", local_id).executeTakeFirst();
+    if (!c) throw new ErroDominio("NAO_ENCONTRADO", "Cliente não encontrado neste local.");
+    let q = tx.db.selectFrom("fin_conta_receber").select("id").where("local_id", "=", local_id).where("numero_documento", "=", d.numero_documento.trim()).where("status", "!=", "cancelado");
+    if (exceto) q = q.where("id", "!=", exceto);
+    if (await q.executeTakeFirst()) throw new ErroDominio("VALIDACAO_FALHOU", "Já existe uma conta a receber com este número de documento neste local.");
+  }
+
+  /** Lançamento manual de conta a receber (serviço, aluguel, evento...): espelho de Contas a Pagar. */
+  async criarManual(local_id: UUID, d: DadosManual, usuario: Usuario): Promise<ContaReceber> {
+    return emTransacao(this.ctx, async (tx) => {
+      const l = await tx.db.selectFrom("fin_local").select("id").where("id", "=", local_id).executeTakeFirst();
+      if (!l) throw new ErroDominio("NAO_ENCONTRADO", "Local não encontrado.");
+      await this.validarManual(tx, local_id, d);
+      const id = novoId();
+      await tx.db.insertInto("fin_conta_receber").values({
+        id, local_id, cliente_id: d.cliente_id, numero_documento: d.numero_documento.trim(), valor_original: d.valor, valor_recebido: 0,
+        data_vencimento: d.vencimento.toISOString(), forma_pagamento: d.forma_pagamento ?? "boleto", status: "pendente", conta_destino_id: null,
+        lançamentos_id: JSON.stringify([]), origem: "manual", categoria: d.categoria, observacao: d.observacao?.trim() || null,
+        criado_em: tx.relogio.agora().toISOString(),
+      }).execute();
+      await auditar(tx, { ator: usuario.email, acao: "fin_conta_receber.criar_manual", alvoTipo: "fin_conta_receber", alvoId: id, dados: { ...d, vencimento: d.vencimento.toISOString() } });
+      return new ContasReceberService(tx).obter(id);
+    });
+  }
+
+  /** Edita a conta manual enquanto pendente e intocada. */
+  async editarManual(id: UUID, d: Partial<DadosManual>, usuario: Usuario): Promise<ContaReceber> {
+    return emTransacao(this.ctx, async (tx) => {
+      const raw = await this.exigirManualEditavel(tx, id);
+      const depois = {
+        cliente_id: d.cliente_id ?? raw.cliente_id, numero_documento: (d.numero_documento ?? raw.numero_documento).trim(), valor: d.valor ?? raw.valor_original,
+      };
+      await this.validarManual(tx, raw.local_id, depois, id);
+      await tx.db.updateTable("fin_conta_receber").set({
+        cliente_id: depois.cliente_id, numero_documento: depois.numero_documento, valor_original: depois.valor,
+        data_vencimento: d.vencimento ? d.vencimento.toISOString() : raw.data_vencimento, categoria: d.categoria ?? raw.categoria,
+        observacao: d.observacao === undefined ? raw.observacao : d.observacao.trim() || null, forma_pagamento: d.forma_pagamento ?? raw.forma_pagamento,
+      }).where("id", "=", id).execute();
+      await auditar(tx, { ator: usuario.email, acao: "fin_conta_receber.editar_manual", alvoTipo: "fin_conta_receber", alvoId: id, dados: { antes: raw, depois: { ...d, vencimento: d.vencimento?.toISOString() } } });
+      return new ContasReceberService(tx).obter(id);
+    });
+  }
+
+  /** Cancela a conta manual pendente e intocada. */
+  async cancelarManual(id: UUID, o: { motivo: string; supervisorId?: string }, usuario: Usuario): Promise<ContaReceber> {
+    if (!o.motivo?.trim()) throw new ErroDominio("VALIDACAO_FALHOU", "Motivo é obrigatório.");
+    return emTransacao(this.ctx, async (tx) => {
+      await this.exigirManualEditavel(tx, id);
+      await tx.db.updateTable("fin_conta_receber").set({ status: "cancelado" }).where("id", "=", id).execute();
+      await auditar(tx, { ator: usuario.email, acao: "fin_conta_receber.cancelar_manual", alvoTipo: "fin_conta_receber", alvoId: id, motivo: o.motivo, supervisorId: o.supervisorId });
+      return new ContasReceberService(tx).obter(id);
     });
   }
 

@@ -57,6 +57,11 @@ export function registrarRotasCadastros(app: FastifyInstance, ctx: Contexto): vo
     exigirFinanceiro(req);
     return svc().listarClientes(porLocal.parse(req.query).local_id);
   });
+  app.post("/api/financeiro/clientes", async (req, res) => {
+    exigirFinanceiro(req);
+    const c = z.object({ local_id: uuid, nome: texto("Informe o nome do cliente."), cpf_cnpj: z.string().trim().optional() }).parse(req.body);
+    return idempotente(ctx, req, res, async () => ({ status: 201, corpo: await svc().criarCliente(c, usuarioDe(req)) }));
+  });
   app.put("/api/financeiro/clientes/:id", async (req) => {
     exigirFinanceiro(req);
     const { id } = z.object({ id: uuid }).parse(req.params);

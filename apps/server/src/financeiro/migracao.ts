@@ -315,3 +315,13 @@ export const migracaoFinanceiroFilaAdmin: Migracao = {
     await sql`ALTER TABLE fin_idempotencia ADD COLUMN hash text`.execute(db);
   },
 };
+
+/** Conta a receber lançada à mão (espelho de Contas a Pagar): origem, categoria e observação. */
+export const migracaoFinanceiroReceberManual: Migracao = {
+  nome: "0780_financeiro_receber_manual",
+  async up(db) {
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN origem text NOT NULL DEFAULT 'faturamento'`.execute(db);
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN categoria text`.execute(db);
+    await sql`ALTER TABLE fin_conta_receber ADD COLUMN observacao text`.execute(db);
+  },
+};
