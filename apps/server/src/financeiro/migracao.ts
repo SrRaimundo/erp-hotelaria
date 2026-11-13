@@ -296,3 +296,22 @@ export const migracaoFinanceiroDecisoes: Migracao = {
       .execute();
   },
 };
+
+/** Saída para evento da fila que não passa (registro do que foi ignorado) e conteúdo da chave de idempotência. */
+export const migracaoFinanceiroFilaAdmin: Migracao = {
+  nome: "0770_financeiro_fila_admin",
+  async up(db) {
+    await db.schema
+      .createTable("fin_evento_ignorado")
+      .addColumn("seq", "integer", (c) => c.primaryKey())
+      .addColumn("tipo", "text", (c) => c.notNull())
+      .addColumn("payload", "text", (c) => c.notNull())
+      .addColumn("valor", "integer")
+      .addColumn("erro", "text")
+      .addColumn("motivo", "text", (c) => c.notNull())
+      .addColumn("ator", "text", (c) => c.notNull())
+      .addColumn("criado_em", "text", (c) => c.notNull())
+      .execute();
+    await sql`ALTER TABLE fin_idempotencia ADD COLUMN hash text`.execute(db);
+  },
+};

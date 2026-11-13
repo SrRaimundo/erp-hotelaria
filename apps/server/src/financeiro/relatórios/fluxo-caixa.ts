@@ -32,6 +32,8 @@ export async function fluxoCaixaDiario(ctx: Contexto, local_id: UUID, data: stri
     // Reversão no período abate o lado oposto (cancelar um recebimento não vira receita mais despesa): o líquido do dia.
     else if (m.reversao && m.tipo === "debito") r.credito -= m.valor;
     else if (m.reversao && m.tipo === "credito") r.debito -= m.valor;
+    else if (m.reversao && m.tipo === "transferencia_in") r.transferencia_out -= m.valor;
+    else if (m.reversao && m.tipo === "transferencia_out") r.transferencia_in -= m.valor;
     else r[m.tipo] += m.valor;
   }
   const taxas = (await ctx.db

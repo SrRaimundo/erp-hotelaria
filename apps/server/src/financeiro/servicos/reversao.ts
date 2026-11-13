@@ -33,9 +33,19 @@ export async function reverterLancamento(ctx: Contexto, id: UUID, o: OpcoesRever
     if (l.referencia_tipo === "taxa_cartao" && !o.interno) {
       throw new ErroDominio("ESTADO_INVALIDO", "A taxa do cartão é um registro automático: ela some quando a baixa do cartão for estornada.");
     }
+    if (!o.interno) {
+      if (l.referencia_tipo === "hospedagem_pagamento") {
+        throw new ErroDominio("ESTADO_INVALIDO", "Este pagamento veio da hospedagem. Estorne-o na hospedagem (conta do hóspede): o Financeiro acompanha sozinho.");
+      }
+      const cm = (await tx.db.selectFrom("fin_cartao_movimento").select("status").where("lancamento_id", "=", id).executeTakeFirst()) as { status: string } | undefined;
+      if (cm?.status === "baixado") {
+        throw new ErroDominio("ESTADO_INVALIDO", "Este cartão já foi baixado. Use \"Estornar baixa\" em Cartão de Crédito para devolvê-lo a \"a receber\".");
+      }
+    }
     if (l.status === "cancelado") throw new ErroDominio("ESTADO_INVALIDO", "Lançamento já cancelado.");
     const jaEstornado = await tx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", id).where("referencia_tipo", "=", "estorno").executeTakeFirst();
     if (jaEstornado) throw new ErroDominio("ESTADO_INVALIDO", "Lançamento já estornado.");
+    if (l.referencia_tipo === "conta_pagar") return reverterContaPagar(tx, l, o);
 
     const agora = tx.relogio.agora().toISOString();
     let destino: UUID = id;
@@ -59,7 +69,6 @@ export async function reverterLancamento(ctx: Contexto, id: UUID, o: OpcoesRever
 
     await new CaixaBancoService(tx).reverterMovimentos(id, destino, o.usuario);
     if (l.referencia_tipo === "conta_receber" && l.referencia_id) await desfazerRecebimento(tx, l, o);
-    if (l.referencia_tipo === "conta_pagar" && l.valor_total !== undefined) await desfazerParcelaPagar(tx, l, o);
     await desfazerCartao(tx, id, o);
 
     await auditar(tx, {
@@ -110,6 +119,35 @@ async function desfazerRecebimento(tx: Contexto, l: Lançamento, o: OpcoesRevers
     .where("id", "=", rec.id)
     .execute();
   await atualizarFaturaDoDocumento(tx, rec.local_id, numeroBase(rec.numero_documento));
+}
+
+/**
+ * Conta a pagar: estornar/cancelar a conta PAGA desfaz o pagamento (o dinheiro volta) e a conta volta a pendente com o valor cheio original;
+ * num pagamento parcial a parcela do saldo é removida (se intocada) e seu valor volta ao original. Conta ainda pendente só se cancela.
+ */
+async function reverterContaPagar(tx: Contexto, l: Lançamento, o: OpcoesReversao): Promise<Lançamento> {
+  const lancs = new LançamentoService(tx);
+  const agora = tx.relogio.agora().toISOString();
+  if (l.status !== "confirmado") {
+    if (o.modo === "estornar") {
+      throw new ErroDominio("ESTADO_INVALIDO", "Esta conta ainda não foi paga: não há pagamento para estornar. Use Cancelar se ela não é mais devida.");
+    }
+    await tx.db.updateTable("fin_lancamento").set({ status: "cancelado", motivo_cancelamento: o.motivo, atualizado_por: o.usuario.email, atualizado_em: agora }).where("id", "=", l.id).execute();
+    await auditar(tx, { ator: o.usuario.email, acao: "fin_lancamento.cancelar", alvoTipo: "fin_lancamento", alvoId: l.id, motivo: o.motivo, supervisorId: o.supervisorId, dados: { dispositivo: o.usuario.dispositivo } });
+    return lancs.obter(l.id);
+  }
+  await desfazerParcelaPagar(tx, l, o);
+  await new CaixaBancoService(tx).reverterMovimentos(l.id, l.id, o.usuario);
+  await tx.db
+    .updateTable("fin_lancamento")
+    .set({ status: "pendente", valor: l.valor_total ?? l.valor.centavos, valor_total: null, motivo_cancelamento: null, atualizado_por: o.usuario.email, atualizado_em: agora })
+    .where("id", "=", l.id)
+    .execute();
+  await auditar(tx, {
+    ator: o.usuario.email, acao: "fin_conta_pagar.estornar_pagamento", alvoTipo: "fin_lancamento", alvoId: l.id, motivo: o.motivo, supervisorId: o.supervisorId,
+    dados: { valor_pago: l.valor.centavos, valor_devido: l.valor_total ?? l.valor.centavos },
+  });
+  return lancs.obter(l.id);
 }
 
 /** Pagamento parcial de conta a pagar: a parcela do saldo é removida junto, se intocada; senão, recusa. */

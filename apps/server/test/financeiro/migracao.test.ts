@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { sql } from "kysely";
 import { abrirBanco, migrar } from "../../src/shared/banco.js";
 
-test("financeiro: 14 tabelas criadas corretamente", async () => {
+test("financeiro: 15 tabelas criadas corretamente", async () => {
   const { todasMigracoes } = await import("../../src/shared/migracoes.js");
   const db = abrirBanco(":memory:");
   await migrar(db, todasMigracoes);
@@ -28,6 +28,7 @@ test("financeiro: 14 tabelas criadas corretamente", async () => {
     "fin_moeda",
     "fin_movimento",
     "fin_saldo",
+    "fin_evento_ignorado",
     "fin_fornecedor",
     "fin_idempotencia",
   ].sort();

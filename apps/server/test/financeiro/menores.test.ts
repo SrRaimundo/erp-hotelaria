@@ -70,7 +70,7 @@ describe("outras correções", () => {
   test("estorno no mesmo dia não infla Entradas nem Saídas (o relatório mostra o líquido)", async () => {
     const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "V", tipo: "credito", valor: 10000, prazo_dias: 30, informado: "bruto", taxa_percentual: 0 })).corpo;
     await chamar("PUT", `/cartao/movimentos/${m.id}/baixar`, { conta_id: caixa.id });
-    await chamar("POST", `/lancamentos/${m.lancamento_id}/estornar`, { motivo: "Engano", supervisor: SUP });
+    await chamar("POST", `/cartao/movimentos/${m.id}/estornar-baixa`, { motivo: "Engano", supervisor: SUP });
     const hoje = ctx.relogio.agora().toISOString().slice(0, 10);
     const f = (await chamar("GET", `/relatorios/fluxo-caixa?local_id=${local.id}&data=${hoje}`)).corpo;
     expect(f).toMatchObject({ entradas: 0, saidas: 0, saldo_final: 0 });

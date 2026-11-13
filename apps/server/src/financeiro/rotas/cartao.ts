@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../../shared/contexto.js";
 import { CartaoService, CondicoesCartaoService, TIPOS_CARTAO } from "../servicos/cartao.js";
-import { centavos, data, exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
+import { autorizarSupervisor } from "../../nucleo/supervisor.js";
+import { centavos, credencialSupervisor, data, exigirFinanceiro, idempotente, usuarioDe, uuid } from "./comum.js";
 
 const taxa = z.number().min(0, "A taxa não pode ser negativa.").max(99.99, "A taxa deve ser menor que 100%.");
 const prazo = z.number().int("O prazo é em dias inteiros.").min(0, "O prazo não pode ser negativo.").max(3650, "Prazo longo demais.");
@@ -60,6 +61,15 @@ export function registrarRotasCartao(app: FastifyInstance, ctx: Contexto): void 
     const { id } = z.object({ id: uuid }).parse(req.params);
     const c = corpoBaixar.parse(req.body);
     return new CartaoService(ctx).baixar(id, c.conta_id, { taxa_percentual: c.taxa_percentual, condicao_id: c.condicao_id }, usuarioDe(req));
+  });
+
+  // Estorna só a baixa: o cartão volta a "a receber" e pode ser baixado de novo na conta certa.
+  app.post("/api/financeiro/cartao/movimentos/:id/estornar-baixa", async (req) => {
+    exigirFinanceiro(req);
+    const { id } = z.object({ id: uuid }).parse(req.params);
+    const c = z.object({ motivo: z.string(), supervisor: credencialSupervisor.optional() }).parse(req.body ?? {});
+    const aut = await autorizarSupervisor(ctx, c.supervisor, c.motivo);
+    return new CartaoService(ctx).estornarBaixa(id, { motivo: aut.motivo, supervisorId: aut.supervisorId }, usuarioDe(req));
   });
 
   // Cadastro Cobrança: condições do cartão por adquirente.

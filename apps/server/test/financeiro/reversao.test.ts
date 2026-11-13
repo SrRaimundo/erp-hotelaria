@@ -98,16 +98,18 @@ describe("estorno de recebimento (uma regra, uma rota, uma vez)", () => {
     expect((await ctx.db.selectFrom("fin_conta_receber").selectAll().where("id", "=", filha.id).executeTakeFirstOrThrow() as any)).toMatchObject({ valor_original: 60000, valor_recebido: 0, status: "pendente" });
   });
 
-  test("estornar cartão já baixado cancela o movimento e tira do liquidado", async () => {
+  test("estornar a baixa do cartão devolve a a receber (sai do liquidado); cancelar a venda é outra ação", async () => {
     const m = (await chamar("POST", "/cartao/movimentos", { local_id: local.id, data: "2026-11-10", bandeira: "Visa", tipo: "credito", valor: 10000, prazo_dias: 30, informado: "bruto", taxa_percentual: 2 })).corpo;
     await chamar("PUT", `/cartao/movimentos/${m.id}/baixar`, { conta_id: caixa.id });
     expect(await saldo()).toBe(9800);
-    const r = await chamar("POST", `/lancamentos/${m.lancamento_id}/estornar`, { motivo: "Venda desfeita", supervisor: SUP });
+    const r = await chamar("POST", `/cartao/movimentos/${m.id}/estornar-baixa`, { motivo: "Conta errada", supervisor: SUP });
     expect(r.status).toBe(200);
     expect(await saldo()).toBe(0);
-    expect((await chamar("GET", `/cartao/movimentos?local_id=${local.id}`)).corpo[0].status).toBe("cancelado");
+    expect((await chamar("GET", `/cartao/movimentos?local_id=${local.id}`)).corpo[0].status).toBe("a_receber");
     const rel = (await chamar("GET", `/relatorios/cartao?local_id=${local.id}`)).corpo;
     expect(rel.liquidado).toEqual({ quantidade: 0, valor: 0 });
+    expect((await chamar("DELETE", `/lancamentos/${m.lancamento_id}`, { motivo: "Venda desfeita", supervisor: SUP })).status).toBe(200);
+    expect((await chamar("GET", `/cartao/movimentos?local_id=${local.id}`)).corpo[0].status).toBe("cancelado");
   });
 
   test("senha de supervisor errada ou motivo vazio não estorna", async () => {
@@ -230,7 +232,7 @@ describe("taxa do cartão como despesa só de registro", () => {
 
   test("estornar a baixa remove a taxa, o saldo e o relatório", async () => {
     const m = await baixado();
-    await chamar("POST", `/lancamentos/${m.lancamento_id}/estornar`, { motivo: "Venda desfeita", supervisor: SUP });
+    await chamar("POST", `/cartao/movimentos/${m.id}/estornar-baixa`, { motivo: "Conta errada", supervisor: SUP });
     expect(await saldo()).toBe(0);
     expect((await taxasNaLista()).filter((t: any) => t.status !== "cancelado")).toHaveLength(0);
     const hoje = ctx.relogio.agora().toISOString().slice(0, 10);

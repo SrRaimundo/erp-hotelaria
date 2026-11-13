@@ -1,3 +1,4 @@
+import { resolverAlerta } from "../../infra/alertas.js";
 import { auditar } from "../../infra/auditoria.js";
 import { obterConfig } from "../../nucleo/pousada.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
@@ -9,6 +10,7 @@ import type { Lançamento } from "../modelos/lançamento.js";
 import { CaixaBancoService } from "./caixa-banco.js";
 import { LançamentoService } from "./lançamentos.js";
 import type { Usuario } from "./locais.js";
+import { reverterLancamento } from "./reversao.js";
 
 export const TIPOS_CARTAO = ["credito", "debito", "voucher"] as const;
 export type TipoCartao = (typeof TIPOS_CARTAO)[number];
@@ -190,8 +192,8 @@ export class CartaoService {
         taxa = c.taxa_percentual;
         condicao = c.id;
         previsao = somarDias(m.data, c.prazo_dias);
-      } else if (m.revisar && o.taxa_percentual === undefined) {
-        throw new ErroDominio("ESTADO_INVALIDO", "Este movimento entrou sem condição de cobrança cadastrada. Escolha a condição (ou informe a taxa) antes de baixar.");
+      } else if (m.revisar) {
+        throw new ErroDominio("ESTADO_INVALIDO", "Este movimento entrou sem condição de cobrança cadastrada. Escolha a condição de cobrança antes de baixar.");
       }
       const v = calcularCartao(m.valor_bruto, "bruto", taxa);
       const agora = tx.relogio.agora();
@@ -217,8 +219,49 @@ export class CartaoService {
     });
   }
 
-  async listar(local_id: UUID): Promise<MovimentoCartao[]> {
-    return (await this.ctx.db.selectFrom("fin_cartao_movimento").selectAll().where("local_id", "=", local_id).orderBy("previsao").orderBy("id").execute()) as MovimentoCartao[];
+  async listar(local_id: UUID): Promise<(MovimentoCartao & { origem_hospedagem: boolean })[]> {
+    const linhas = (await this.ctx.db
+      .selectFrom("fin_cartao_movimento as m")
+      .innerJoin("fin_lancamento as l", "l.id", "m.lancamento_id")
+      .selectAll("m")
+      .select("l.referencia_tipo as origem_tipo")
+      .where("m.local_id", "=", local_id)
+      .orderBy("m.previsao")
+      .orderBy("m.id")
+      .execute()) as any[];
+    return linhas.map(({ origem_tipo, ...m }) => ({ ...m, origem_hospedagem: origem_tipo === "hospedagem_pagamento" }));
+  }
+
+  /**
+   * Estorna só a baixa: o dinheiro sai da conta, a taxa registrada some e o cartão volta a "a receber" (mantendo o vínculo com
+   * o pagamento da hospedagem), podendo ser baixado de novo, na conta certa. Se a hospedagem já estornou o pagamento
+   * (alerta aberto), o cartão é cancelado em seguida e o alerta é resolvido.
+   */
+  async estornarBaixa(id: UUID, o: { motivo: string; supervisorId?: string }, usuario: Usuario): Promise<MovimentoCartao> {
+    if (!o.motivo?.trim()) throw new ErroDominio("VALIDACAO_FALHOU", "Motivo é obrigatório.");
+    return emTransacao(this.ctx, async (tx) => {
+      const svc = new CartaoService(tx);
+      const m = await svc.obter(id);
+      if (m.status !== "baixado") throw new ErroDominio("ESTADO_INVALIDO", m.status === "cancelado" ? "Movimento cancelado." : "Este cartão não está baixado.");
+      const agora = tx.relogio.agora().toISOString();
+      await new CaixaBancoService(tx).reverterMovimentos(m.lancamento_id, m.lancamento_id, usuario);
+      await tx.db
+        .updateTable("fin_lancamento")
+        .set({ status: "cancelado", motivo_cancelamento: o.motivo, atualizado_por: usuario.email, atualizado_em: agora })
+        .where("referencia_tipo", "=", "taxa_cartao")
+        .where("referencia_id", "=", id)
+        .where("status", "!=", "cancelado")
+        .execute();
+      await tx.db.updateTable("fin_lancamento").set({ status: "confirmado", atualizado_por: usuario.email, atualizado_em: agora }).where("id", "=", m.lancamento_id).execute();
+      await tx.db.updateTable("fin_cartao_movimento").set({ status: "a_receber", conta_destino_id: null, baixado_em: null }).where("id", "=", id).execute();
+      await auditar(tx, { ator: usuario.email, acao: "fin_cartao.estornar_baixa", alvoTipo: "fin_cartao_movimento", alvoId: id, motivo: o.motivo, supervisorId: o.supervisorId, dados: { conta_id: m.conta_destino_id } });
+      const alerta = await tx.db.selectFrom("alertas").select("id").where("tipo", "=", "financeiro_estorno_conciliado").where("alvo_id", "=", m.lancamento_id).where("resolvido_em", "is", null).executeTakeFirst();
+      if (alerta) {
+        await reverterLancamento(tx, m.lancamento_id, { modo: "cancelar", motivo: "Estorno do pagamento na hospedagem (baixa estornada)", usuario, supervisorId: o.supervisorId, interno: true });
+        await resolverAlerta(tx, alerta.id, usuario.email);
+      }
+      return svc.obter(id);
+    });
   }
 
   async obter(id: UUID): Promise<MovimentoCartao> {

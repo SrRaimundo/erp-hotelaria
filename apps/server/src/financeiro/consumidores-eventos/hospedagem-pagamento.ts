@@ -2,6 +2,7 @@ import { criarAlerta } from "../../infra/alertas.js";
 import { auditar } from "../../infra/auditoria.js";
 import type { Evento } from "../../infra/barramento.js";
 import { emTransacao, type Contexto } from "../../shared/contexto.js";
+import { ErroDominio } from "../../shared/erros.js";
 import { Dinheiro } from "../../shared/dinheiro.js";
 import { novoId, type UUID } from "../../shared/ids.js";
 import type { Lançamento } from "../modelos/lançamento.js";
@@ -137,6 +138,12 @@ export async function processarValorAReceberCriado(ctx: Contexto, evento: Pick<E
 
 export type PagamentoEstornado = { pagamentoId: string; estornoId: string; contaId: string; reservaId: string | null; valor: number };
 
+const avisarEstornoDuplicado = (tx: Contexto, alvoId: string, detalhe = "") =>
+  criarAlerta(tx, {
+    tipo: "financeiro_estorno_duplicado", alvoTipo: "fin_lancamento", alvoId,
+    mensagem: `O estorno de um pagamento chegou da hospedagem, mas o lançamento correspondente já estava desfeito no Financeiro. Nada foi alterado.${detalhe ? ` (${detalhe})` : ""}`,
+  });
+
 const alertarConciliado = (tx: Contexto, alvoId: string, mensagem: string) =>
   criarAlerta(tx, { tipo: "financeiro_estorno_conciliado", alvoTipo: "fin_lancamento", alvoId, mensagem });
 
@@ -156,13 +163,26 @@ export async function processarPagamentoEstornado(ctx: Contexto, evento: Pick<Ev
       .executeTakeFirst()) as { id: UUID; status: string; valor: number } | undefined;
 
     if (!l) return faturadoEstornado(tx, p);
-    if (l.status === "cancelado") return; // já desfeito: o mesmo estorno não age de novo
-    const cartao = (await tx.db.selectFrom("fin_cartao_movimento").select(["bandeira", "tipo", "status"]).where("lancamento_id", "=", l.id).executeTakeFirst()) as { status: string; bandeira: string; tipo: string } | undefined;
-    if (cartao?.status === "baixado") {
-      await alertarConciliado(tx, l.id, `O pagamento em cartão (${cartao.bandeira}, ${cartao.tipo}) de R$ ${(l.valor / 100).toFixed(2).replace(".", ",")} foi estornado na hospedagem, mas o cartão já foi baixado no Caixa e Banco. Nada foi alterado: decida se estorna a baixa em Caixa e Banco.`);
+    // Já desfeito (aqui ou no Financeiro): nada a fazer, e isso NUNCA pode virar falha permanente da fila.
+    const jaRevertido = l.status === "cancelado" || !!(await tx.db.selectFrom("fin_lancamento").select("id").where("referencia_id", "=", l.id).where("referencia_tipo", "=", "estorno").executeTakeFirst());
+    if (jaRevertido) {
+      await avisarEstornoDuplicado(tx, l.id);
       return;
     }
-    await reverterLancamento(tx, l.id, { modo: "cancelar", motivo: "Estorno do pagamento na hospedagem", usuario: USUARIO_SISTEMA, interno: true });
+    const cartao = (await tx.db.selectFrom("fin_cartao_movimento").select(["bandeira", "tipo", "status"]).where("lancamento_id", "=", l.id).executeTakeFirst()) as { status: string; bandeira: string; tipo: string } | undefined;
+    if (cartao?.status === "baixado") {
+      await alertarConciliado(tx, l.id, `O pagamento em cartão (${cartao.bandeira}, ${cartao.tipo}) de R$ ${(l.valor / 100).toFixed(2).replace(".", ",")} foi estornado na hospedagem, mas o cartão já foi baixado no Caixa e Banco. Nada foi alterado: use "Estornar baixa" em Cartão de Crédito; o cartão será cancelado em seguida.`);
+      return;
+    }
+    try {
+      await reverterLancamento(tx, l.id, { modo: "cancelar", motivo: "Estorno do pagamento na hospedagem", usuario: USUARIO_SISTEMA, interno: true });
+    } catch (erro) {
+      if (erro instanceof ErroDominio && erro.codigo === "ESTADO_INVALIDO") {
+        await avisarEstornoDuplicado(tx, l.id, erro.message);
+        return;
+      }
+      throw erro;
+    }
   });
 }
 

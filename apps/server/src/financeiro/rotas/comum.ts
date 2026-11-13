@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { exigirPermissao } from "../../nucleo/permissoes.js";
@@ -31,7 +32,15 @@ export const fimDoDia = async (ctx: Contexto, d: string) =>
 export { data };
 
 type Resposta = { status: number; corpo: unknown };
-const emVoo = new Map<string, Promise<Resposta>>();
+const emVoo = new Map<string, { hash: string; promessa: Promise<Resposta> }>();
+
+/** Impressão do conteúdo da ação (sem a própria chave), com as chaves em ordem estável. */
+function hashDoCorpo(corpo: unknown): string {
+  const ordenar = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(ordenar) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as object).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, ordenar(x)])) : v;
+  const { chave: _ignorada, ...resto } = (corpo ?? {}) as Record<string, unknown>;
+  return createHash("sha256").update(JSON.stringify(ordenar(resto))).digest("hex");
+}
 
 /**
  * Ação de dinheiro (ou cadastro) protegida contra envio duplicado: com `chave` no corpo, a segunda chamada devolve a resposta da
@@ -43,18 +52,23 @@ export async function idempotente(ctx: Contexto, req: FastifyRequest, res: Fasti
     const r = await fn();
     return res.status(r.status).send(r.corpo);
   }
-  const k = `${req.method} ${req.routeOptions.url} ${chave.trim()}`;
-  const gravada = await ctx.db.selectFrom("fin_idempotencia").select(["status", "resposta"]).where("chave", "=", k).executeTakeFirst();
-  if (gravada) return res.status(gravada.status).send(JSON.parse(gravada.resposta));
+  // A chave vale para ESTE caminho (com o id do registro) e ESTE conteúdo: outra operação com a mesma chave não repete resposta alheia.
+  const k = `${req.method} ${req.url.split("?")[0]} ${chave.trim()}`;
+  const hash = hashDoCorpo(req.body);
+  const reusada = () => res.status(409).send({ codigo: "CHAVE_REUSADA", mensagem: "Esta chave de envio já foi usada para uma operação diferente. Recarregue a tela e refaça a ação." });
+  const gravada = await ctx.db.selectFrom("fin_idempotencia").select(["status", "resposta", "hash"]).where("chave", "=", k).executeTakeFirst();
+  if (gravada) return gravada.hash && gravada.hash !== hash ? reusada() : res.status(gravada.status).send(JSON.parse(gravada.resposta));
   let p = emVoo.get(k);
+  if (p && p.hash !== hash) return reusada();
   if (!p) {
-    p = (async () => {
+    const promessa = (async () => {
       const r = await fn();
-      await ctx.db.insertInto("fin_idempotencia").values({ chave: k, status: r.status, resposta: JSON.stringify(r.corpo ?? null), criado_em: ctx.relogio.agora().toISOString() }).onConflict((oc) => oc.doNothing()).execute();
+      await ctx.db.insertInto("fin_idempotencia").values({ chave: k, status: r.status, resposta: JSON.stringify(r.corpo ?? null), hash, criado_em: ctx.relogio.agora().toISOString() }).onConflict((oc) => oc.doNothing()).execute();
       return r;
     })().finally(() => emVoo.delete(k));
+    p = { hash, promessa };
     emVoo.set(k, p);
   }
-  const r = await p;
+  const r = await p.promessa;
   return res.status(r.status).send(r.corpo);
 }

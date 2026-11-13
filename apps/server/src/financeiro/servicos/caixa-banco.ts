@@ -113,17 +113,20 @@ export class CaixaBancoService {
   async reverterMovimentos(origem_id: UUID, para_id: UUID, usuario: Usuario): Promise<void> {
     await emTransacao(this.ctx, async (tx) => {
       const movs = (await tx.db.selectFrom("fin_movimento").selectAll().where("lancamento_id", "=", origem_id).execute()) as any[];
-      const liquido = new Map<string, { local_id: UUID; valor: number }>();
+      const liquido = new Map<string, { local_id: UUID; valor: number; transferencia: boolean }>();
       for (const m of movs) {
-        const atual = liquido.get(m.conta_id) ?? { local_id: m.local_id, valor: 0 };
+        const atual = liquido.get(m.conta_id) ?? { local_id: m.local_id, valor: 0, transferencia: false };
         atual.valor += SINAL[m.tipo as Movimento["tipo"]] * m.valor;
+        if (String(m.tipo).startsWith("transferencia")) atual.transferencia = true;
         liquido.set(m.conta_id, atual);
       }
-      for (const [conta_id, { local_id, valor }] of liquido) {
+      for (const [conta_id, { local_id, valor, transferencia }] of liquido) {
         if (valor === 0) continue;
         const conta = await this.obterConta(tx, conta_id as UUID);
         const mov = await this.inserir(tx, {
-          local_id, conta_id: conta_id as UUID, lancamento_id: para_id, tipo: valor > 0 ? "debito" : "credito",
+          local_id, conta_id: conta_id as UUID, lancamento_id: para_id,
+          // a reversão de uma transferência continua sendo transferência (não vira receita nem despesa)
+          tipo: transferencia ? (valor > 0 ? "transferencia_out" : "transferencia_in") : valor > 0 ? "debito" : "credito",
           valor: Dinheiro.de(Math.abs(valor)), data: tx.relogio.agora(), saldo_inicial: conta.saldo_inicial, reversao: true,
         });
         await auditar(tx, {
